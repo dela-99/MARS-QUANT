@@ -1,0 +1,596 @@
+--- Backtest Results ---
+Start                     2024-03-25 05:00...
+End                       2025-10-13 06:00...
+Duration                    567 days 01:00:00
+Exposure Time [%]                    99.72767
+Equity Final [$]                  15099.38622
+Equity Peak [$]                   15123.03278
+Commissions [$]                    1699.46391
+Return [%]                           50.99386
+Buy & Hold Return [%]                86.67189
+Return (Ann.) [%]                    29.28448
+Volatility (Ann.) [%]                20.03431
+CAGR [%]                             20.09685
+Sharpe Ratio                          1.46172
+Sortino Ratio                           2.848
+Calmar Ratio                          2.67159
+Alpha [%]                            -28.2515
+Beta                                  0.91431
+Max. Drawdown [%]                   -10.96144
+Avg. Drawdown [%]                    -0.65691
+Max. Drawdown Duration      153 days 03:00:00
+Avg. Drawdown Duration        4 days 03:00:00
+# Trades                                  398
+Win Rate [%]                         55.02513
+Best Trade [%]                        3.70712
+Worst Trade [%]                      -3.99172
+Avg. Trade [%]                        0.11216
+Max. Trade Duration           5 days 00:00:00
+Avg. Trade Duration           1 days 11:00:00
+Profit Factor                         1.37114
+Expectancy [%]                        0.11707
+SQN                                   2.19052
+Kelly Criterion                       0.14379
+_strategy                          MLStrategy
+_equity_curve                             ...
+_trades                        Size  Entry...
+dtype: object
+
+---------------------------------------------
+
+HYPERPARMETER TUNED MODEL RESULTS - PAPER
+
+--- Backtest Results ---
+Start                     2024-03-08 22:00...
+End                       2025-09-24 08:00...
+Duration                    564 days 10:00:00
+Exposure Time [%]                    99.87939
+Equity Final [$]                   14088.6279
+Equity Peak [$]                   14122.84971
+Commissions [$]                    1654.48119
+Return [%]                           40.88628
+Buy & Hold Return [%]                73.37905
+Return (Ann.) [%]                    24.10443
+Volatility (Ann.) [%]                18.98476
+CAGR [%]                             16.53777
+Sharpe Ratio                          1.26967
+Sortino Ratio                         2.34339
+Calmar Ratio                          2.19997
+Alpha [%]                           -25.91408
+Beta                                  0.91035
+Max. Drawdown [%]                   -10.95669
+Avg. Drawdown [%]                    -0.73473
+Max. Drawdown Duration      154 days 03:00:00
+Avg. Drawdown Duration        4 days 23:00:00
+# Trades                                  396
+Win Rate [%]                         54.29293
+Best Trade [%]                        3.70712
+Worst Trade [%]                      -3.99172
+Avg. Trade [%]                        0.09832
+Max. Trade Duration           5 days 00:00:00
+Avg. Trade Duration           1 days 11:00:00
+Profit Factor                         1.32383
+Expectancy [%]                        0.10318
+SQN                                   1.90549
+Kelly Criterion                       0.12611
+_strategy                          MLStrategy
+_equity_curve                             ...
+_trades                        Size  Entry...
+dtype: object
+
+
+
+
+HYPERPARMETER TUNED MODEL RESULTS
+
+--- Backtest Results ---
+Start                     2024-03-08 22:00...
+End                       2025-09-24 08:00...
+Duration                    564 days 10:00:00
+Exposure Time [%]                    99.87939
+Equity Final [$]                   13810.9182
+Equity Peak [$]                   14436.49431
+Commissions [$]                     1654.1609
+Return [%]                           38.10918
+Buy & Hold Return [%]                73.37905
+Return (Ann.) [%]                    22.55759
+Volatility (Ann.) [%]                16.25293
+CAGR [%]                             15.50649
+Sharpe Ratio                          1.38791
+Sortino Ratio                         2.51721
+Calmar Ratio                          1.67838
+Alpha [%]                            24.25254
+Beta                                  0.18884
+Max. Drawdown [%]                   -13.44007
+Avg. Drawdown [%]                    -0.64939
+Max. Drawdown Duration      169 days 11:00:00
+Avg. Drawdown Duration        3 days 18:00:00
+# Trades                                  396
+Win Rate [%]                         55.55556
+Best Trade [%]                         3.9133
+Worst Trade [%]                      -3.88363
+Avg. Trade [%]                        0.09658
+Max. Trade Duration           5 days 00:00:00
+Avg. Trade Duration           1 days 11:00:00
+Profit Factor                         1.31779
+Expectancy [%]                        0.10144
+SQN                                   1.80028
+Kelly Criterion                       0.12159
+_strategy                          MLStrategy
+_equity_curve                             ...
+_trades                        Size  Entry...
+dtype: object
+
+
+
+OLD MODEL
+--- Backtest Results ---
+Start                     2024-03-08 22:00...
+End                       2025-09-24 08:00...
+Duration                    564 days 10:00:00
+Exposure Time [%]                    99.87939
+Equity Final [$]                  10903.28043
+Equity Peak [$]                     11739.208
+Commissions [$]                     1371.2523
+Return [%]                             9.0328
+Buy & Hold Return [%]                73.37905
+Return (Ann.) [%]                      5.5993
+Volatility (Ann.) [%]                14.63578
+CAGR [%]                              3.93659
+Sharpe Ratio                          0.38258
+Sortino Ratio                         0.55636
+Calmar Ratio                          0.40095
+Alpha [%]                             9.70395
+Beta                                 -0.00915
+Max. Drawdown [%]                   -13.96499
+Avg. Drawdown [%]                     -1.3056
+Max. Drawdown Duration      207 days 16:00:00
+Avg. Drawdown Duration       12 days 05:00:00
+# Trades                                  396
+Win Rate [%]                         52.77778
+Best Trade [%]                         3.9133
+Worst Trade [%]                      -3.88363
+Avg. Trade [%]                         0.0309
+Max. Trade Duration           5 days 00:00:00
+Avg. Trade Duration           1 days 11:00:00
+Profit Factor                         1.10152
+Expectancy [%]                        0.03585
+SQN                                   0.50194
+Kelly Criterion                       0.03529
+_strategy                          MLStrategy
+_equity_curve                             ...
+_trades                        Size  Entry...
+dtype: object
+
+
+xgboost
+=== Model Training Results ===
+Date: 2025-09-21 11:05:17
+Hypothesis: hyp_a
+Year: 2015
+Symbol: xauusd
+Timeframe: h1
+
+Dataset Information:
+Total samples: 2754
+Training samples: 2203
+Testing samples: 551
+
+=== Classification Model Results ===
+Classification Report:
+              precision    recall  f1-score   support
+
+ Bearish (0)       0.48      0.39      0.43       263
+ Bullish (1)       0.52      0.61      0.56       288
+
+    accuracy                           0.50       551
+   macro avg       0.50      0.50      0.50       551
+weighted avg       0.50      0.50      0.50       551
+
+
+=== Regression Model Results ===
+Mean Absolute Error (MAE): 0.005311
+R-squared (R2 Score): -0.4444
+
+MAE: Average prediction error in percentage points
+R2: Proportion of variance explained by the model (0 to 1, higher is better)
+
+=== Feature Importance ===
+
+Top Features for Regression Model:
+             Feature  Importance
+3  atr_at_asia_close    0.163552
+6        ema200_dist    0.157627
+5         ema50_dist    0.156932
+1        asia_return    0.147244
+4  rsi_at_asia_close    0.140568
+2         asia_range    0.137337
+0        day_of_week    0.096740
+
+=== Model File Locations ===
+Classification model: ../models/xgb_classifier_hyp_a_xauusd_h1_2015_present.joblib
+Regression model: ../models/xgb_regressor_hyp_a_xauusd_h1_2015_present.joblib
+
+=== Model Training Results ===
+Date: 2025-09-21 11:18:43
+Hypothesis: hyp_a
+Year: 2018
+Symbol: xauusd
+Timeframe: h1
+
+Dataset Information:
+Total samples: 1984
+Training samples: 1587
+Testing samples: 397
+
+=== Classification Model Results ===
+Classification Report:
+              precision    recall  f1-score   support
+
+ Bearish (0)       0.51      0.45      0.48       184
+ Bullish (1)       0.57      0.62      0.59       213
+
+    accuracy                           0.54       397
+   macro avg       0.54      0.54      0.53       397
+weighted avg       0.54      0.54      0.54       397
+
+
+=== Regression Model Results ===
+Mean Absolute Error (MAE): 0.005979
+R-squared (R2 Score): -0.7396
+
+MAE: Average prediction error in percentage points
+R2: Proportion of variance explained by the model (0 to 1, higher is better)
+
+=== Feature Importance ===
+
+Top Features for Regression Model:
+             Feature  Importance
+3  atr_at_asia_close    0.202409
+5         ema50_dist    0.149442
+1        asia_return    0.145932
+4  rsi_at_asia_close    0.137248
+6        ema200_dist    0.136162
+2         asia_range    0.128810
+0        day_of_week    0.099995
+
+=== Model File Locations ===
+Classification model: ../models/xgb_classifier_hyp_a_xauusd_h1_2018_present.joblib
+Regression model: ../models/xgb_regressor_hyp_a_xauusd_h1_2018_present.joblib
+
+=== Model Training Results ===
+Date: 2025-09-21 11:36:45
+Hypothesis: hyp_a
+Year: 2020
+Symbol: xauusd
+Timeframe: h1
+
+Dataset Information:
+Total samples: 1468
+Training samples: 1174
+Testing samples: 294
+
+=== Classification Model Results ===
+Classification Report:
+              precision    recall  f1-score   support
+
+ Bearish (0)       0.50      0.45      0.47       140
+ Bullish (1)       0.54      0.59      0.57       154
+
+    accuracy                           0.52       294
+   macro avg       0.52      0.52      0.52       294
+weighted avg       0.52      0.52      0.52       294
+
+
+=== Regression Model Results ===
+Mean Absolute Error (MAE): 0.005773
+R-squared (R2 Score): -0.3840
+
+MAE: Average prediction error in percentage points
+R2: Proportion of variance explained by the model (0 to 1, higher is better)
+
+=== Feature Importance ===
+
+Top Features for Regression Model:
+             Feature  Importance
+3  atr_at_asia_close    0.178740
+5         ema50_dist    0.158475
+6        ema200_dist    0.149483
+1        asia_return    0.138231
+4  rsi_at_asia_close    0.134286
+2         asia_range    0.134142
+0        day_of_week    0.106643
+
+=== Model File Locations ===
+Classification model: ../models/xgb_classifier_hyp_a_xauusd_h1_2020_present.joblib
+Regression model: ../models/xgb_regressor_hyp_a_xauusd_h1_2020_present.joblib
+
+-----------------------
+lstm & transformer
+-----------------------
+=== Model Training Results ===
+Date: 2025-09-26 21:16:28
+Hypothesis: hyp_a
+Year: 2015
+Symbol: xauusd
+Timeframe: h1
+
+Dataset Information:
+Total samples: 2767
+Training samples: 2213
+Testing samples: 554
+
+=== LSTM Classification Model Results ===
+              precision    recall  f1-score   support
+
+ Bearish (0)       0.46      0.57      0.51       259
+ Bullish (1)       0.53      0.42      0.47       295
+
+    accuracy                           0.49       554
+   macro avg       0.49      0.49      0.49       554
+weighted avg       0.50      0.49      0.49       554
+
+
+=== Model File Locations ===
+Classification model: ../models/hyp_a_xauusd_h1_2015_pytorch_lstm_classifier.pth
+
+=== Model Training Results ===
+Date: 2025-09-26 21:17:22
+Hypothesis: hyp_a
+Year: 2015
+Symbol: xauusd
+Timeframe: h1
+
+Dataset Information:
+Total samples: 2767
+Training samples: 2213
+Testing samples: 554
+
+=== LSTM Classification Model Results ===
+
+f'
+Mean Absolute Error (MAE) on test data: 0.004454'
+This means our model's return prediction is off by this amount on average.
+    
+
+=== Model File Locations ===
+Classification model: ../models/hyp_a_xauusd_h1_2015_pytorch_lstm_regressor.pth
+
+=== Model Training Results ===
+Date: 2025-09-26 21:26:54
+Hypothesis: hyp_a
+Year: 2015
+Symbol: xauusd
+Timeframe: h1
+
+Dataset Information:
+Total samples: 2767
+Training samples: 2213
+Testing samples: 554
+
+=== Transformer Classification Model Results ===
+              precision    recall  f1-score   support
+
+ Bearish (0)       0.45      0.64      0.53       259
+ Bullish (1)       0.51      0.33      0.40       295
+
+    accuracy                           0.47       554
+   macro avg       0.48      0.48      0.46       554
+weighted avg       0.48      0.47      0.46       554
+
+
+=== Model File Locations ===
+Classification model: ../models/hyp_a_xauusd_h1_2015_pytorch_transformer_classifier.pth
+
+=== Model Training Results ===
+Date: 2025-09-26 21:36:15
+Hypothesis: hyp_a
+Year: 2015
+Symbol: XAUUSD
+Timeframe: H1
+
+Dataset Information:
+Total samples: 2767
+Training samples: 2213
+Testing samples: 554
+
+=== Transformer Regression Model Results ===
+
+f'
+Mean Absolute Error (MAE) on test data: 0.004801'
+This means our model's return prediction is off by this amount on average.
+    
+
+=== Model File Locations ===
+Classification model: ../models/hyp_a_xauusd_h1_2015_pytorch_transformer_regressor.pth
+
+=== Model Training Results ===
+Date: 2025-09-26 22:07:40
+Hypothesis: hyp_a
+Year: 2018
+Symbol: xauusd
+Timeframe: h1
+
+Dataset Information:
+Total samples: 1995
+Training samples: 1596
+Testing samples: 399
+
+=== LSTM Classification Model Results ===
+              precision    recall  f1-score   support
+
+ Bearish (0)       0.54      0.28      0.37       201
+ Bullish (1)       0.51      0.75      0.61       198
+
+    accuracy                           0.52       399
+   macro avg       0.52      0.52      0.49       399
+weighted avg       0.52      0.52      0.49       399
+
+
+=== Model File Locations ===
+Classification model: ../models/hyp_a_xauusd_h1_2018_pytorch_lstm_classifier.pth
+
+=== Model Training Results ===
+Date: 2025-09-26 22:08:13
+Hypothesis: hyp_a
+Year: 2018
+Symbol: xauusd
+Timeframe: h1
+
+Dataset Information:
+Total samples: 1995
+Training samples: 1596
+Testing samples: 399
+
+=== LSTM Regression Model Results ===
+
+f'
+Mean Absolute Error (MAE) on test data: 0.004213'
+This means our model's return prediction is off by this amount on average.
+    
+
+=== Model File Locations ===
+Classification model: ../models/hyp_a_xauusd_h1_2018_pytorch_lstm_regressor.pth
+
+=== Model Training Results ===
+Date: 2025-09-26 22:12:29
+Hypothesis: hyp_a
+Year: 2018
+Symbol: xauusd
+Timeframe: h1
+
+Dataset Information:
+Total samples: 1995
+Training samples: 1596
+Testing samples: 399
+
+=== Transformer Classification Model Results ===
+              precision    recall  f1-score   support
+
+ Bearish (0)       0.50      0.16      0.25       201
+ Bullish (1)       0.50      0.83      0.62       198
+
+    accuracy                           0.50       399
+   macro avg       0.50      0.50      0.43       399
+weighted avg       0.50      0.50      0.43       399
+
+
+=== Model File Locations ===
+Classification model: ../models/hyp_a_xauusd_h1_2018_pytorch_transformer_classifier.pth
+
+=== Model Training Results ===
+Date: 2025-09-26 22:17:06
+Hypothesis: hyp_a
+Year: 2018
+Symbol: XAUUSD
+Timeframe: H1
+
+Dataset Information:
+Total samples: 1995
+Training samples: 1596
+Testing samples: 399
+
+=== Transformer Regression Model Results ===
+
+f'
+Mean Absolute Error (MAE) on test data: 0.004218'
+This means our model's return prediction is off by this amount on average.
+    
+
+=== Model File Locations ===
+Classification model: ../models/hyp_a_xauusd_h1_2018_pytorch_transformer_regressor.pth
+
+=== Model Training Results ===
+Date: 2025-09-26 21:50:13
+Hypothesis: hyp_a
+Year: 2020
+Symbol: xauusd
+Timeframe: h1
+
+Dataset Information:
+Total samples: 1479
+Training samples: 1183
+Testing samples: 296
+
+=== LSTM Classification Model Results ===
+              precision    recall  f1-score   support
+
+ Bearish (0)       0.59      0.39      0.47       148
+ Bullish (1)       0.55      0.74      0.63       148
+
+    accuracy                           0.56       296
+   macro avg       0.57      0.56      0.55       296
+weighted avg       0.57      0.56      0.55       296
+
+
+=== Model File Locations ===
+Classification model: ../models/hyp_a_xauusd_h1_2020_pytorch_lstm_classifier.pth
+
+=== Model Training Results ===
+Date: 2025-09-26 21:52:29
+Hypothesis: hyp_a
+Year: 2020
+Symbol: xauusd
+Timeframe: h1
+
+Dataset Information:
+Total samples: 1479
+Training samples: 1183
+Testing samples: 296
+
+=== LSTM Regression Model Results ===
+
+f'
+Mean Absolute Error (MAE) on test data: 0.005554'
+This means our model's return prediction is off by this amount on average.
+    
+
+=== Model File Locations ===
+Classification model: ../models/hyp_a_xauusd_h1_2020_pytorch_lstm_regressor.pth
+
+=== Model Training Results ===
+Date: 2025-09-26 21:55:30
+Hypothesis: hyp_a
+Year: 2020
+Symbol: xauusd
+Timeframe: h1
+
+Dataset Information:
+Total samples: 1479
+Training samples: 1183
+Testing samples: 296
+
+=== Transformer Classification Model Results ===
+              precision    recall  f1-score   support
+
+ Bearish (0)       0.53      0.11      0.18       148
+ Bullish (1)       0.50      0.91      0.65       148
+
+    accuracy                           0.51       296
+   macro avg       0.52      0.51      0.41       296
+weighted avg       0.52      0.51      0.41       296
+
+
+=== Model File Locations ===
+Classification model: ../models/hyp_a_xauusd_h1_2020_pytorch_transformer_classifier.pth
+=== Model Training Results ===
+Date: 2025-09-26 22:02:06
+Hypothesis: hyp_a
+Year: 2020
+Symbol: XAUUSD
+Timeframe: H1
+
+Dataset Information:
+Total samples: 1479
+Training samples: 1183
+Testing samples: 296
+
+=== Transformer Regression Model Results ===
+
+f'
+Mean Absolute Error (MAE) on test data: 0.005115'
+This means our model's return prediction is off by this amount on average.
+    
+
+=== Model File Locations ===
+Classification model: ../models/hyp_a_xauusd_h1_2020_pytorch_transformer_regressor.pth

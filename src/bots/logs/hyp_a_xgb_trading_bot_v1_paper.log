@@ -1,0 +1,988 @@
+2025-10-06 06:59:04,701 - INFO - Starting trading bot...
+2025-10-06 06:59:04,713 - INFO - MT5 connection successful.
+2025-10-06 06:59:05,020 - INFO - New trading day: 2025-10-06. Ready for signals.
+2025-10-06 07:00:05,022 - INFO - London session open. Attempting to place trade.
+2025-10-06 07:00:05,023 - INFO - No open positions to close.
+2025-10-06 07:00:05,024 - INFO - Generating new trade signal...
+2025-10-06 07:00:11,033 - INFO - Signal generated successfully. Prediction: BULLISH
+2025-10-06 07:00:11,189 - INFO - Order successful: BUY 0.1 XAUUSD at 3933.25. Order #4959021518
+2025-10-06 16:00:28,228 - INFO - London session close. Closing all open positions.
+2025-10-06 16:00:28,233 - INFO - Found 1 total open positions. Checking for bot trades...
+2025-10-06 16:00:28,235 - INFO - Preparing to CLOSE BUY position #4959021518 with a SELL order.
+2025-10-06 16:00:28,378 - INFO - Successfully sent close order for position #4959021518. Result: Request executed
+2025-10-06 16:00:28,380 - INFO - Finished closing 1 positions.
+2025-10-06 16:00:28,403 - INFO - No trades managed by this bot were closed today.
+2025-10-06 16:00:28,405 - INFO - End of day procedure complete. Waiting for next trading day.
+2025-10-06 16:01:28,406 - INFO - London session open. Attempting to place trade.
+2025-10-06 16:01:28,407 - INFO - No open positions to close.
+2025-10-06 16:01:28,407 - INFO - Generating new trade signal...
+2025-10-06 16:01:34,895 - INFO - Signal generated successfully. Prediction: BULLISH
+2025-10-06 16:01:35,030 - INFO - Order successful: BUY 0.1 XAUUSD at 3963.41. Order #4968150178
+2025-10-06 16:01:35,031 - INFO - London session close. Closing all open positions.
+2025-10-06 16:01:35,031 - INFO - Found 1 total open positions. Checking for bot trades...
+2025-10-06 16:01:35,031 - INFO - Preparing to CLOSE BUY position #4968150178 with a SELL order.
+2025-10-06 16:01:35,193 - INFO - Successfully sent close order for position #4968150178. Result: Request executed
+2025-10-06 16:01:35,193 - INFO - Finished closing 1 positions.
+2025-10-06 16:01:35,194 - INFO - No trades managed by this bot were closed today.
+2025-10-06 16:01:35,194 - INFO - End of day procedure complete. Waiting for next trading day.
+2025-10-06 16:02:35,195 - INFO - London session open. Attempting to place trade.
+2025-10-06 16:02:35,196 - INFO - No open positions to close.
+2025-10-06 16:02:35,197 - INFO - Generating new trade signal...
+2025-10-06 16:02:41,122 - INFO - Signal generated successfully. Prediction: BULLISH
+2025-10-06 16:02:41,275 - INFO - Order successful: BUY 0.1 XAUUSD at 3963.67. Order #4968168473
+2025-10-06 16:02:41,276 - INFO - London session close. Closing all open positions.
+2025-10-06 16:02:41,276 - INFO - Found 1 total open positions. Checking for bot trades...
+2025-10-06 16:02:41,277 - INFO - Preparing to CLOSE BUY position #4968168473 with a SELL order.
+2025-10-06 16:02:41,444 - INFO - Successfully sent close order for position #4968168473. Result: Request executed
+2025-10-06 16:02:41,444 - INFO - Finished closing 1 positions.
+2025-10-06 16:02:41,448 - INFO - No trades managed by this bot were closed today.
+2025-10-06 16:02:41,449 - INFO - End of day procedure complete. Waiting for next trading day.
+2025-10-06 16:03:41,450 - INFO - London session open. Attempting to place trade.
+2025-10-06 16:03:41,451 - INFO - No open positions to close.
+2025-10-06 16:03:41,451 - INFO - Generating new trade signal...
+2025-10-06 16:03:46,826 - INFO - Signal generated successfully. Prediction: BULLISH
+2025-10-06 16:03:46,967 - INFO - Order successful: BUY 0.1 XAUUSD at 3964.06. Order #4968181258
+2025-10-06 16:03:46,968 - INFO - London session close. Closing all open positions.
+2025-10-06 16:03:46,968 - INFO - Found 1 total open positions. Checking for bot trades...
+2025-10-06 16:03:46,968 - INFO - Preparing to CLOSE BUY position #4968181258 with a SELL order.
+2025-10-06 16:03:47,114 - INFO - Successfully sent close order for position #4968181258. Result: Request executed
+2025-10-06 16:03:47,114 - INFO - Finished closing 1 positions.
+2025-10-06 16:03:47,115 - INFO - No trades managed by this bot were closed today.
+2025-10-06 16:03:47,115 - INFO - End of day procedure complete. Waiting for next trading day.
+2025-10-06 16:04:03,405 - INFO - Bot stopped by user.
+2025-10-07 06:58:56,466 - INFO - Starting trading bot...
+2025-10-07 06:58:56,477 - INFO - MT5 connection successful.
+2025-10-07 06:58:56,773 - INFO - New trading day: 2025-10-07. Ready for signals.
+2025-10-07 07:00:56,775 - INFO - London session open. Attempting to place trade.
+2025-10-07 07:00:56,775 - INFO - No open positions to close.
+2025-10-07 07:00:56,775 - INFO - Generating new trade signal...
+2025-10-07 07:01:01,873 - INFO - Indicators calculated and missing values filled.
+2025-10-07 07:01:04,117 - INFO - Signal generated successfully. Prediction: BULLISH
+2025-10-07 07:01:04,292 - INFO - Order successful: BUY 0.1 XAUUSD at 3951.8. Order #4975677912
+2025-10-07 16:00:35,202 - INFO - London session close. Closing all open positions.
+2025-10-07 16:00:35,208 - INFO - Found 1 total open positions. Checking for bot trades...
+2025-10-07 16:00:35,209 - INFO - Preparing to CLOSE BUY position #4975677912 with a SELL order.
+2025-10-07 16:00:35,397 - INFO - Successfully sent close order for position #4975677912. Result: Request executed
+2025-10-07 16:00:35,398 - INFO - Finished closing 1 positions.
+2025-10-07 16:00:35,407 - INFO - No trades managed by this bot were closed today.
+2025-10-07 16:00:35,407 - INFO - End of day procedure complete. Waiting for next trading day.
+2025-10-07 16:01:35,408 - INFO - London session open. Attempting to place trade.
+2025-10-07 16:01:35,409 - INFO - No open positions to close.
+2025-10-07 16:01:35,409 - INFO - Generating new trade signal...
+2025-10-07 16:01:42,076 - INFO - Indicators calculated and missing values filled.
+2025-10-07 16:01:42,144 - INFO - Signal generated successfully. Prediction: BULLISH
+2025-10-07 16:01:42,298 - INFO - Order successful: BUY 0.1 XAUUSD at 3968.28. Order #4984329586
+2025-10-07 16:01:42,298 - INFO - London session close. Closing all open positions.
+2025-10-07 16:01:42,299 - INFO - Found 1 total open positions. Checking for bot trades...
+2025-10-07 16:01:42,299 - INFO - Preparing to CLOSE BUY position #4984329586 with a SELL order.
+2025-10-07 16:01:42,458 - INFO - Successfully sent close order for position #4984329586. Result: Request executed
+2025-10-07 16:01:42,458 - INFO - Finished closing 1 positions.
+2025-10-07 16:01:42,459 - INFO - No trades managed by this bot were closed today.
+2025-10-07 16:01:42,459 - INFO - End of day procedure complete. Waiting for next trading day.
+2025-10-07 16:02:42,460 - INFO - London session open. Attempting to place trade.
+2025-10-07 16:02:42,461 - INFO - No open positions to close.
+2025-10-07 16:02:42,461 - INFO - Generating new trade signal...
+2025-10-07 16:02:48,794 - INFO - Indicators calculated and missing values filled.
+2025-10-07 16:02:48,824 - INFO - Signal generated successfully. Prediction: BULLISH
+2025-10-07 16:02:48,990 - INFO - Order successful: BUY 0.1 XAUUSD at 3967.39. Order #4984346287
+2025-10-07 16:02:48,990 - INFO - London session close. Closing all open positions.
+2025-10-07 16:02:48,991 - INFO - Found 1 total open positions. Checking for bot trades...
+2025-10-07 16:02:48,991 - INFO - Preparing to CLOSE BUY position #4984346287 with a SELL order.
+2025-10-07 16:02:49,146 - INFO - Successfully sent close order for position #4984346287. Result: Request executed
+2025-10-07 16:02:49,146 - INFO - Finished closing 1 positions.
+2025-10-07 16:02:49,147 - INFO - No trades managed by this bot were closed today.
+2025-10-07 16:02:49,148 - INFO - End of day procedure complete. Waiting for next trading day.
+2025-10-07 16:03:49,149 - INFO - London session open. Attempting to place trade.
+2025-10-07 16:03:49,149 - INFO - No open positions to close.
+2025-10-07 16:03:49,149 - INFO - Generating new trade signal...
+2025-10-07 16:03:57,833 - INFO - Indicators calculated and missing values filled.
+2025-10-07 16:03:57,878 - INFO - Signal generated successfully. Prediction: BULLISH
+2025-10-07 16:03:58,036 - INFO - Order successful: BUY 0.1 XAUUSD at 3970.31. Order #4984365173
+2025-10-07 16:03:58,036 - INFO - London session close. Closing all open positions.
+2025-10-07 16:03:58,037 - INFO - Found 1 total open positions. Checking for bot trades...
+2025-10-07 16:03:58,037 - INFO - Preparing to CLOSE BUY position #4984365173 with a SELL order.
+2025-10-07 16:03:58,204 - INFO - Successfully sent close order for position #4984365173. Result: Request executed
+2025-10-07 16:03:58,205 - INFO - Finished closing 1 positions.
+2025-10-07 16:03:58,206 - INFO - No trades managed by this bot were closed today.
+2025-10-07 16:03:58,206 - INFO - End of day procedure complete. Waiting for next trading day.
+2025-10-07 16:04:58,207 - INFO - London session open. Attempting to place trade.
+2025-10-07 16:04:58,208 - INFO - No open positions to close.
+2025-10-07 16:04:58,208 - INFO - Generating new trade signal...
+2025-10-07 16:05:07,878 - INFO - Indicators calculated and missing values filled.
+2025-10-07 16:05:07,908 - INFO - Signal generated successfully. Prediction: BULLISH
+2025-10-07 16:05:08,159 - INFO - Order successful: BUY 0.1 XAUUSD at 3971.48. Order #4984389287
+2025-10-07 16:05:08,159 - INFO - London session close. Closing all open positions.
+2025-10-07 16:05:08,160 - INFO - Found 1 total open positions. Checking for bot trades...
+2025-10-07 16:05:08,160 - INFO - Preparing to CLOSE BUY position #4984389287 with a SELL order.
+2025-10-07 16:05:08,563 - INFO - Successfully sent close order for position #4984389287. Result: Request executed
+2025-10-07 16:05:08,564 - INFO - Finished closing 1 positions.
+2025-10-07 16:05:08,565 - INFO - No trades managed by this bot were closed today.
+2025-10-07 16:05:08,565 - INFO - End of day procedure complete. Waiting for next trading day.
+2025-10-07 16:06:08,566 - INFO - London session open. Attempting to place trade.
+2025-10-07 16:06:08,567 - INFO - No open positions to close.
+2025-10-07 16:06:08,567 - INFO - Generating new trade signal...
+2025-10-07 16:06:15,534 - INFO - Indicators calculated and missing values filled.
+2025-10-07 16:06:15,565 - INFO - Signal generated successfully. Prediction: BULLISH
+2025-10-07 16:06:15,713 - INFO - Order successful: BUY 0.1 XAUUSD at 3971.41. Order #4984408922
+2025-10-07 16:06:15,713 - INFO - London session close. Closing all open positions.
+2025-10-07 16:06:15,714 - INFO - Found 1 total open positions. Checking for bot trades...
+2025-10-07 16:06:15,714 - INFO - Preparing to CLOSE BUY position #4984408922 with a SELL order.
+2025-10-07 16:06:15,864 - INFO - Successfully sent close order for position #4984408922. Result: Request executed
+2025-10-07 16:06:15,865 - INFO - Finished closing 1 positions.
+2025-10-07 16:06:15,866 - INFO - No trades managed by this bot were closed today.
+2025-10-07 16:06:15,866 - INFO - End of day procedure complete. Waiting for next trading day.
+2025-10-07 16:07:15,867 - INFO - London session open. Attempting to place trade.
+2025-10-07 16:07:15,867 - INFO - No open positions to close.
+2025-10-07 16:07:15,868 - INFO - Generating new trade signal...
+2025-10-07 16:07:23,462 - INFO - Indicators calculated and missing values filled.
+2025-10-07 16:07:23,491 - INFO - Signal generated successfully. Prediction: BULLISH
+2025-10-07 16:07:23,650 - INFO - Order successful: BUY 0.1 XAUUSD at 3974.35. Order #4984439248
+2025-10-07 16:07:23,650 - INFO - London session close. Closing all open positions.
+2025-10-07 16:07:23,651 - INFO - Found 1 total open positions. Checking for bot trades...
+2025-10-07 16:07:23,651 - INFO - Preparing to CLOSE BUY position #4984439248 with a SELL order.
+2025-10-07 16:07:23,807 - INFO - Successfully sent close order for position #4984439248. Result: Request executed
+2025-10-07 16:07:23,807 - INFO - Finished closing 1 positions.
+2025-10-07 16:07:23,808 - INFO - No trades managed by this bot were closed today.
+2025-10-07 16:07:23,809 - INFO - End of day procedure complete. Waiting for next trading day.
+2025-10-07 16:08:23,810 - INFO - London session open. Attempting to place trade.
+2025-10-07 16:08:23,810 - INFO - No open positions to close.
+2025-10-07 16:08:23,811 - INFO - Generating new trade signal...
+2025-10-07 16:08:29,150 - INFO - Indicators calculated and missing values filled.
+2025-10-07 16:08:29,169 - INFO - Signal generated successfully. Prediction: BULLISH
+2025-10-07 16:08:29,321 - INFO - Order successful: BUY 0.1 XAUUSD at 3974.55. Order #4984461790
+2025-10-07 16:08:29,321 - INFO - London session close. Closing all open positions.
+2025-10-07 16:08:29,321 - INFO - Found 1 total open positions. Checking for bot trades...
+2025-10-07 16:08:29,322 - INFO - Preparing to CLOSE BUY position #4984461790 with a SELL order.
+2025-10-07 16:08:29,461 - INFO - Successfully sent close order for position #4984461790. Result: Request executed
+2025-10-07 16:08:29,462 - INFO - Finished closing 1 positions.
+2025-10-07 16:08:29,462 - INFO - No trades managed by this bot were closed today.
+2025-10-07 16:08:29,463 - INFO - End of day procedure complete. Waiting for next trading day.
+2025-10-07 16:09:29,463 - INFO - London session open. Attempting to place trade.
+2025-10-07 16:09:29,464 - INFO - No open positions to close.
+2025-10-07 16:09:29,464 - INFO - Generating new trade signal...
+2025-10-07 16:09:36,383 - INFO - Indicators calculated and missing values filled.
+2025-10-07 16:09:36,410 - INFO - Signal generated successfully. Prediction: BULLISH
+2025-10-07 16:09:36,585 - INFO - Order successful: BUY 0.1 XAUUSD at 3974.63. Order #4984478497
+2025-10-07 16:09:36,586 - INFO - London session close. Closing all open positions.
+2025-10-07 16:09:36,586 - INFO - Found 1 total open positions. Checking for bot trades...
+2025-10-07 16:09:36,587 - INFO - Preparing to CLOSE BUY position #4984478497 with a SELL order.
+2025-10-07 16:09:36,758 - INFO - Successfully sent close order for position #4984478497. Result: Request executed
+2025-10-07 16:09:36,759 - INFO - Finished closing 1 positions.
+2025-10-07 16:09:36,760 - INFO - No trades managed by this bot were closed today.
+2025-10-07 16:09:36,760 - INFO - End of day procedure complete. Waiting for next trading day.
+2025-10-07 16:10:36,761 - INFO - London session open. Attempting to place trade.
+2025-10-07 16:10:36,761 - INFO - No open positions to close.
+2025-10-07 16:10:36,761 - INFO - Generating new trade signal...
+2025-10-07 16:10:43,782 - INFO - Indicators calculated and missing values filled.
+2025-10-07 16:10:43,802 - INFO - Signal generated successfully. Prediction: BULLISH
+2025-10-07 16:10:43,956 - INFO - Order successful: BUY 0.1 XAUUSD at 3973.34. Order #4984496314
+2025-10-07 16:10:43,956 - INFO - London session close. Closing all open positions.
+2025-10-07 16:10:43,957 - INFO - Found 1 total open positions. Checking for bot trades...
+2025-10-07 16:10:43,957 - INFO - Preparing to CLOSE BUY position #4984496314 with a SELL order.
+2025-10-07 16:10:44,106 - INFO - Successfully sent close order for position #4984496314. Result: Request executed
+2025-10-07 16:10:44,107 - INFO - Finished closing 1 positions.
+2025-10-07 16:10:44,107 - INFO - No trades managed by this bot were closed today.
+2025-10-07 16:10:44,108 - INFO - End of day procedure complete. Waiting for next trading day.
+2025-10-07 16:11:44,108 - INFO - London session open. Attempting to place trade.
+2025-10-07 16:11:44,108 - INFO - No open positions to close.
+2025-10-07 16:11:44,109 - INFO - Generating new trade signal...
+2025-10-07 16:11:50,504 - INFO - Indicators calculated and missing values filled.
+2025-10-07 16:11:50,534 - INFO - Signal generated successfully. Prediction: BULLISH
+2025-10-07 16:11:50,692 - INFO - Order successful: BUY 0.1 XAUUSD at 3971.27. Order #4984514786
+2025-10-07 16:11:50,692 - INFO - London session close. Closing all open positions.
+2025-10-07 16:11:50,693 - INFO - Found 1 total open positions. Checking for bot trades...
+2025-10-07 16:11:50,693 - INFO - Preparing to CLOSE BUY position #4984514786 with a SELL order.
+2025-10-07 16:11:50,844 - INFO - Successfully sent close order for position #4984514786. Result: Request executed
+2025-10-07 16:11:50,845 - INFO - Finished closing 1 positions.
+2025-10-07 16:11:50,846 - INFO - No trades managed by this bot were closed today.
+2025-10-07 16:11:50,846 - INFO - End of day procedure complete. Waiting for next trading day.
+2025-10-07 16:12:50,847 - INFO - London session open. Attempting to place trade.
+2025-10-07 16:12:50,847 - INFO - No open positions to close.
+2025-10-07 16:12:50,847 - INFO - Generating new trade signal...
+2025-10-07 16:12:56,484 - INFO - Indicators calculated and missing values filled.
+2025-10-07 16:12:56,505 - INFO - Signal generated successfully. Prediction: BULLISH
+2025-10-07 16:12:56,654 - INFO - Order successful: BUY 0.1 XAUUSD at 3968.75. Order #4984534139
+2025-10-07 16:12:56,654 - INFO - London session close. Closing all open positions.
+2025-10-07 16:12:56,655 - INFO - Found 1 total open positions. Checking for bot trades...
+2025-10-07 16:12:56,655 - INFO - Preparing to CLOSE BUY position #4984534139 with a SELL order.
+2025-10-07 16:12:56,795 - INFO - Successfully sent close order for position #4984534139. Result: Request executed
+2025-10-07 16:12:56,795 - INFO - Finished closing 1 positions.
+2025-10-07 16:12:56,796 - INFO - No trades managed by this bot were closed today.
+2025-10-07 16:12:56,797 - INFO - End of day procedure complete. Waiting for next trading day.
+2025-10-07 16:13:56,798 - INFO - London session open. Attempting to place trade.
+2025-10-07 16:13:56,798 - INFO - No open positions to close.
+2025-10-07 16:13:56,798 - INFO - Generating new trade signal...
+2025-10-07 16:14:04,395 - INFO - Indicators calculated and missing values filled.
+2025-10-07 16:14:04,425 - INFO - Signal generated successfully. Prediction: BULLISH
+2025-10-07 16:14:04,587 - INFO - Order successful: BUY 0.1 XAUUSD at 3965.83. Order #4984554007
+2025-10-07 16:14:04,587 - INFO - London session close. Closing all open positions.
+2025-10-07 16:14:04,588 - INFO - Found 1 total open positions. Checking for bot trades...
+2025-10-07 16:14:04,588 - INFO - Preparing to CLOSE BUY position #4984554007 with a SELL order.
+2025-10-07 16:14:04,743 - INFO - Successfully sent close order for position #4984554007. Result: Request executed
+2025-10-07 16:14:04,743 - INFO - Finished closing 1 positions.
+2025-10-07 16:14:04,744 - INFO - No trades managed by this bot were closed today.
+2025-10-07 16:14:04,745 - INFO - End of day procedure complete. Waiting for next trading day.
+2025-10-07 16:15:04,746 - INFO - London session open. Attempting to place trade.
+2025-10-07 16:15:04,746 - INFO - No open positions to close.
+2025-10-07 16:15:04,747 - INFO - Generating new trade signal...
+2025-10-07 16:15:11,898 - INFO - Indicators calculated and missing values filled.
+2025-10-07 16:15:11,933 - INFO - Signal generated successfully. Prediction: BULLISH
+2025-10-07 16:15:12,092 - INFO - Order successful: BUY 0.1 XAUUSD at 3964.9. Order #4984577592
+2025-10-07 16:15:12,099 - INFO - London session close. Closing all open positions.
+2025-10-07 16:15:12,100 - INFO - Found 1 total open positions. Checking for bot trades...
+2025-10-07 16:15:12,141 - INFO - Preparing to CLOSE BUY position #4984577592 with a SELL order.
+2025-10-07 16:15:12,295 - INFO - Successfully sent close order for position #4984577592. Result: Request executed
+2025-10-07 16:15:12,296 - INFO - Finished closing 1 positions.
+2025-10-07 16:15:12,297 - INFO - No trades managed by this bot were closed today.
+2025-10-07 16:15:12,297 - INFO - End of day procedure complete. Waiting for next trading day.
+2025-10-07 16:16:12,298 - INFO - London session open. Attempting to place trade.
+2025-10-07 16:16:12,299 - INFO - No open positions to close.
+2025-10-07 16:16:12,299 - INFO - Generating new trade signal...
+2025-10-07 16:16:19,790 - INFO - Indicators calculated and missing values filled.
+2025-10-07 16:16:19,824 - INFO - Signal generated successfully. Prediction: BULLISH
+2025-10-07 16:16:19,974 - INFO - Order successful: BUY 0.1 XAUUSD at 3964.92. Order #4984594464
+2025-10-07 16:16:19,975 - INFO - London session close. Closing all open positions.
+2025-10-07 16:16:19,976 - INFO - Found 1 total open positions. Checking for bot trades...
+2025-10-07 16:16:19,977 - INFO - Preparing to CLOSE BUY position #4984594464 with a SELL order.
+2025-10-07 16:16:20,131 - INFO - Successfully sent close order for position #4984594464. Result: Request executed
+2025-10-07 16:16:20,132 - INFO - Finished closing 1 positions.
+2025-10-07 16:16:20,133 - INFO - No trades managed by this bot were closed today.
+2025-10-07 16:16:20,133 - INFO - End of day procedure complete. Waiting for next trading day.
+2025-10-07 16:17:20,134 - INFO - London session open. Attempting to place trade.
+2025-10-07 16:17:20,135 - INFO - No open positions to close.
+2025-10-07 16:17:20,135 - INFO - Generating new trade signal...
+2025-10-07 16:17:28,179 - INFO - Indicators calculated and missing values filled.
+2025-10-07 16:17:28,212 - INFO - Signal generated successfully. Prediction: BULLISH
+2025-10-07 16:17:28,381 - INFO - Order successful: BUY 0.1 XAUUSD at 3966.05. Order #4984610139
+2025-10-07 16:17:28,381 - INFO - London session close. Closing all open positions.
+2025-10-07 16:17:28,382 - INFO - Found 1 total open positions. Checking for bot trades...
+2025-10-07 16:17:28,382 - INFO - Preparing to CLOSE BUY position #4984610139 with a SELL order.
+2025-10-07 16:17:28,554 - INFO - Successfully sent close order for position #4984610139. Result: Request executed
+2025-10-07 16:17:28,554 - INFO - Finished closing 1 positions.
+2025-10-07 16:17:28,555 - INFO - No trades managed by this bot were closed today.
+2025-10-07 16:17:28,556 - INFO - End of day procedure complete. Waiting for next trading day.
+2025-10-07 16:18:28,557 - INFO - London session open. Attempting to place trade.
+2025-10-07 16:18:28,557 - INFO - No open positions to close.
+2025-10-07 16:18:28,558 - INFO - Generating new trade signal...
+2025-10-07 16:18:37,401 - INFO - Indicators calculated and missing values filled.
+2025-10-07 16:18:37,427 - INFO - Signal generated successfully. Prediction: BULLISH
+2025-10-07 16:18:37,585 - INFO - Order successful: BUY 0.1 XAUUSD at 3965.97. Order #4984626271
+2025-10-07 16:18:37,586 - INFO - London session close. Closing all open positions.
+2025-10-07 16:18:37,586 - INFO - Found 1 total open positions. Checking for bot trades...
+2025-10-07 16:18:37,587 - INFO - Preparing to CLOSE BUY position #4984626271 with a SELL order.
+2025-10-07 16:18:37,744 - INFO - Successfully sent close order for position #4984626271. Result: Request executed
+2025-10-07 16:18:37,745 - INFO - Finished closing 1 positions.
+2025-10-07 16:18:37,746 - INFO - No trades managed by this bot were closed today.
+2025-10-07 16:18:37,746 - INFO - End of day procedure complete. Waiting for next trading day.
+2025-10-07 16:19:37,747 - INFO - London session open. Attempting to place trade.
+2025-10-07 16:19:37,748 - INFO - No open positions to close.
+2025-10-07 16:19:37,748 - INFO - Generating new trade signal...
+2025-10-07 16:19:44,824 - INFO - Indicators calculated and missing values filled.
+2025-10-07 16:19:44,852 - INFO - Signal generated successfully. Prediction: BULLISH
+2025-10-07 16:19:45,016 - INFO - Order successful: BUY 0.1 XAUUSD at 3966.56. Order #4984641333
+2025-10-07 16:19:45,016 - INFO - London session close. Closing all open positions.
+2025-10-07 16:19:45,017 - INFO - Found 1 total open positions. Checking for bot trades...
+2025-10-07 16:19:45,018 - INFO - Preparing to CLOSE BUY position #4984641333 with a SELL order.
+2025-10-07 16:19:45,179 - INFO - Successfully sent close order for position #4984641333. Result: Request executed
+2025-10-07 16:19:45,180 - INFO - Finished closing 1 positions.
+2025-10-07 16:19:45,181 - INFO - No trades managed by this bot were closed today.
+2025-10-07 16:19:45,181 - INFO - End of day procedure complete. Waiting for next trading day.
+2025-10-07 16:20:45,182 - INFO - London session open. Attempting to place trade.
+2025-10-07 16:20:45,182 - INFO - No open positions to close.
+2025-10-07 16:20:45,183 - INFO - Generating new trade signal...
+2025-10-07 16:20:52,506 - INFO - Indicators calculated and missing values filled.
+2025-10-07 16:20:52,542 - INFO - Signal generated successfully. Prediction: BULLISH
+2025-10-07 16:20:52,703 - INFO - Order successful: BUY 0.1 XAUUSD at 3966.68. Order #4984661896
+2025-10-07 16:20:52,704 - INFO - London session close. Closing all open positions.
+2025-10-07 16:20:52,704 - INFO - Found 1 total open positions. Checking for bot trades...
+2025-10-07 16:20:52,705 - INFO - Preparing to CLOSE BUY position #4984661896 with a SELL order.
+2025-10-07 16:20:52,861 - INFO - Successfully sent close order for position #4984661896. Result: Request executed
+2025-10-07 16:20:52,862 - INFO - Finished closing 1 positions.
+2025-10-07 16:20:52,863 - INFO - No trades managed by this bot were closed today.
+2025-10-07 16:20:52,863 - INFO - End of day procedure complete. Waiting for next trading day.
+2025-10-07 16:21:52,864 - INFO - London session open. Attempting to place trade.
+2025-10-07 16:21:52,865 - INFO - No open positions to close.
+2025-10-07 16:21:52,865 - INFO - Generating new trade signal...
+2025-10-07 16:22:01,548 - INFO - Indicators calculated and missing values filled.
+2025-10-07 16:22:01,588 - INFO - Signal generated successfully. Prediction: BULLISH
+2025-10-07 16:22:01,745 - INFO - Order successful: BUY 0.1 XAUUSD at 3970.49. Order #4984685021
+2025-10-07 16:22:01,745 - INFO - London session close. Closing all open positions.
+2025-10-07 16:22:01,746 - INFO - Found 1 total open positions. Checking for bot trades...
+2025-10-07 16:22:01,746 - INFO - Preparing to CLOSE BUY position #4984685021 with a SELL order.
+2025-10-07 16:22:01,893 - INFO - Successfully sent close order for position #4984685021. Result: Request executed
+2025-10-07 16:22:01,893 - INFO - Finished closing 1 positions.
+2025-10-07 16:22:01,895 - INFO - No trades managed by this bot were closed today.
+2025-10-07 16:22:01,895 - INFO - End of day procedure complete. Waiting for next trading day.
+2025-10-07 16:23:01,896 - INFO - London session open. Attempting to place trade.
+2025-10-07 16:23:01,897 - INFO - No open positions to close.
+2025-10-07 16:23:01,897 - INFO - Generating new trade signal...
+2025-10-07 16:23:14,688 - INFO - Indicators calculated and missing values filled.
+2025-10-07 16:23:14,752 - INFO - Signal generated successfully. Prediction: BULLISH
+2025-10-07 16:23:15,003 - INFO - Order successful: BUY 0.1 XAUUSD at 3971.33. Order #4984703970
+2025-10-07 16:23:15,004 - INFO - London session close. Closing all open positions.
+2025-10-07 16:23:15,004 - INFO - Found 1 total open positions. Checking for bot trades...
+2025-10-07 16:23:15,006 - INFO - Preparing to CLOSE BUY position #4984703970 with a SELL order.
+2025-10-07 16:23:15,206 - INFO - Successfully sent close order for position #4984703970. Result: Request executed
+2025-10-07 16:23:15,209 - INFO - Finished closing 1 positions.
+2025-10-07 16:23:15,210 - INFO - No trades managed by this bot were closed today.
+2025-10-07 16:23:15,211 - INFO - End of day procedure complete. Waiting for next trading day.
+2025-10-07 16:24:15,212 - INFO - London session open. Attempting to place trade.
+2025-10-07 16:24:15,212 - INFO - No open positions to close.
+2025-10-07 16:24:15,213 - INFO - Generating new trade signal...
+2025-10-07 16:24:27,716 - INFO - Indicators calculated and missing values filled.
+2025-10-07 16:24:27,765 - INFO - Signal generated successfully. Prediction: BULLISH
+2025-10-07 16:24:27,933 - INFO - Order successful: BUY 0.1 XAUUSD at 3972.1. Order #4984720388
+2025-10-07 16:24:27,934 - INFO - London session close. Closing all open positions.
+2025-10-07 16:24:27,935 - INFO - Found 1 total open positions. Checking for bot trades...
+2025-10-07 16:24:27,936 - INFO - Preparing to CLOSE BUY position #4984720388 with a SELL order.
+2025-10-07 16:24:28,094 - INFO - Successfully sent close order for position #4984720388. Result: Request executed
+2025-10-07 16:24:28,095 - INFO - Finished closing 1 positions.
+2025-10-07 16:24:28,096 - INFO - No trades managed by this bot were closed today.
+2025-10-07 16:24:28,096 - INFO - End of day procedure complete. Waiting for next trading day.
+2025-10-07 16:25:28,097 - INFO - London session open. Attempting to place trade.
+2025-10-07 16:25:28,098 - INFO - No open positions to close.
+2025-10-07 16:25:28,098 - INFO - Generating new trade signal...
+2025-10-07 16:25:34,602 - INFO - Indicators calculated and missing values filled.
+2025-10-07 16:25:34,633 - INFO - Signal generated successfully. Prediction: BULLISH
+2025-10-07 16:25:34,808 - INFO - Order successful: BUY 0.1 XAUUSD at 3971.67. Order #4984735197
+2025-10-07 16:25:34,809 - INFO - London session close. Closing all open positions.
+2025-10-07 16:25:34,809 - INFO - Found 1 total open positions. Checking for bot trades...
+2025-10-07 16:25:34,810 - INFO - Preparing to CLOSE BUY position #4984735197 with a SELL order.
+2025-10-07 16:25:34,974 - INFO - Successfully sent close order for position #4984735197. Result: Request executed
+2025-10-07 16:25:34,975 - INFO - Finished closing 1 positions.
+2025-10-07 16:25:34,976 - INFO - No trades managed by this bot were closed today.
+2025-10-07 16:25:34,976 - INFO - End of day procedure complete. Waiting for next trading day.
+2025-10-07 16:26:34,977 - INFO - London session open. Attempting to place trade.
+2025-10-07 16:26:34,978 - INFO - No open positions to close.
+2025-10-07 16:26:34,978 - INFO - Generating new trade signal...
+2025-10-07 16:26:41,267 - INFO - Indicators calculated and missing values filled.
+2025-10-07 16:26:41,298 - INFO - Signal generated successfully. Prediction: BULLISH
+2025-10-07 16:26:41,473 - INFO - Order successful: BUY 0.1 XAUUSD at 3972.46. Order #4984754237
+2025-10-07 16:26:41,474 - INFO - London session close. Closing all open positions.
+2025-10-07 16:26:41,474 - INFO - Found 1 total open positions. Checking for bot trades...
+2025-10-07 16:26:41,475 - INFO - Preparing to CLOSE BUY position #4984754237 with a SELL order.
+2025-10-07 16:26:41,646 - INFO - Successfully sent close order for position #4984754237. Result: Request executed
+2025-10-07 16:26:41,646 - INFO - Finished closing 1 positions.
+2025-10-07 16:26:41,647 - INFO - No trades managed by this bot were closed today.
+2025-10-07 16:26:41,647 - INFO - End of day procedure complete. Waiting for next trading day.
+2025-10-07 16:27:41,648 - INFO - London session open. Attempting to place trade.
+2025-10-07 16:27:41,649 - INFO - No open positions to close.
+2025-10-07 16:27:41,650 - INFO - Generating new trade signal...
+2025-10-07 16:27:48,118 - INFO - Indicators calculated and missing values filled.
+2025-10-07 16:27:48,143 - INFO - Signal generated successfully. Prediction: BULLISH
+2025-10-07 16:27:48,292 - INFO - Order successful: BUY 0.1 XAUUSD at 3971.24. Order #4984769355
+2025-10-07 16:27:48,292 - INFO - London session close. Closing all open positions.
+2025-10-07 16:27:48,293 - INFO - Found 1 total open positions. Checking for bot trades...
+2025-10-07 16:27:48,293 - INFO - Preparing to CLOSE BUY position #4984769355 with a SELL order.
+2025-10-07 16:27:48,445 - INFO - Successfully sent close order for position #4984769355. Result: Request executed
+2025-10-07 16:27:48,445 - INFO - Finished closing 1 positions.
+2025-10-07 16:27:48,446 - INFO - No trades managed by this bot were closed today.
+2025-10-07 16:27:48,446 - INFO - End of day procedure complete. Waiting for next trading day.
+2025-10-07 16:28:48,447 - INFO - London session open. Attempting to place trade.
+2025-10-07 16:28:48,448 - INFO - No open positions to close.
+2025-10-07 16:28:48,448 - INFO - Generating new trade signal...
+2025-10-07 16:28:54,926 - INFO - Indicators calculated and missing values filled.
+2025-10-07 16:28:54,949 - INFO - Signal generated successfully. Prediction: BULLISH
+2025-10-07 16:28:55,132 - INFO - Order successful: BUY 0.1 XAUUSD at 3970.81. Order #4984783151
+2025-10-07 16:28:55,133 - INFO - London session close. Closing all open positions.
+2025-10-07 16:28:55,133 - INFO - Found 1 total open positions. Checking for bot trades...
+2025-10-07 16:28:55,134 - INFO - Preparing to CLOSE BUY position #4984783151 with a SELL order.
+2025-10-07 16:28:55,315 - INFO - Successfully sent close order for position #4984783151. Result: Request executed
+2025-10-07 16:28:55,316 - INFO - Finished closing 1 positions.
+2025-10-07 16:28:55,317 - INFO - No trades managed by this bot were closed today.
+2025-10-07 16:28:55,317 - INFO - End of day procedure complete. Waiting for next trading day.
+2025-10-07 16:29:55,318 - INFO - London session open. Attempting to place trade.
+2025-10-07 16:29:55,319 - INFO - No open positions to close.
+2025-10-07 16:29:55,319 - INFO - Generating new trade signal...
+2025-10-07 16:30:02,282 - INFO - Indicators calculated and missing values filled.
+2025-10-07 16:30:02,319 - INFO - Signal generated successfully. Prediction: BULLISH
+2025-10-07 16:30:02,471 - INFO - Order successful: BUY 0.1 XAUUSD at 3969.4. Order #4984798125
+2025-10-07 16:30:02,471 - INFO - London session close. Closing all open positions.
+2025-10-07 16:30:02,472 - INFO - Found 1 total open positions. Checking for bot trades...
+2025-10-07 16:30:02,472 - INFO - Preparing to CLOSE BUY position #4984798125 with a SELL order.
+2025-10-07 16:30:02,639 - INFO - Successfully sent close order for position #4984798125. Result: Request executed
+2025-10-07 16:30:02,639 - INFO - Finished closing 1 positions.
+2025-10-07 16:30:02,640 - INFO - No trades managed by this bot were closed today.
+2025-10-07 16:30:02,641 - INFO - End of day procedure complete. Waiting for next trading day.
+2025-10-07 16:31:02,642 - INFO - London session open. Attempting to place trade.
+2025-10-07 16:31:02,643 - INFO - No open positions to close.
+2025-10-07 16:31:02,643 - INFO - Generating new trade signal...
+2025-10-07 16:31:11,333 - INFO - Indicators calculated and missing values filled.
+2025-10-07 16:31:11,368 - INFO - Signal generated successfully. Prediction: BULLISH
+2025-10-07 16:31:11,524 - INFO - Order successful: BUY 0.1 XAUUSD at 3971.98. Order #4984813167
+2025-10-07 16:31:11,525 - INFO - London session close. Closing all open positions.
+2025-10-07 16:31:11,526 - INFO - Found 1 total open positions. Checking for bot trades...
+2025-10-07 16:31:11,526 - INFO - Preparing to CLOSE BUY position #4984813167 with a SELL order.
+2025-10-07 16:31:11,677 - INFO - Successfully sent close order for position #4984813167. Result: Request executed
+2025-10-07 16:31:11,678 - INFO - Finished closing 1 positions.
+2025-10-07 16:31:11,680 - INFO - No trades managed by this bot were closed today.
+2025-10-07 16:31:11,680 - INFO - End of day procedure complete. Waiting for next trading day.
+2025-10-07 16:32:11,681 - INFO - London session open. Attempting to place trade.
+2025-10-07 16:32:11,682 - INFO - No open positions to close.
+2025-10-07 16:32:11,682 - INFO - Generating new trade signal...
+2025-10-07 16:32:20,125 - INFO - Indicators calculated and missing values filled.
+2025-10-07 16:32:20,159 - INFO - Signal generated successfully. Prediction: BULLISH
+2025-10-07 16:32:20,329 - INFO - Order successful: BUY 0.1 XAUUSD at 3972.8. Order #4984832006
+2025-10-07 16:32:20,329 - INFO - London session close. Closing all open positions.
+2025-10-07 16:32:20,330 - INFO - Found 1 total open positions. Checking for bot trades...
+2025-10-07 16:32:20,330 - INFO - Preparing to CLOSE BUY position #4984832006 with a SELL order.
+2025-10-07 16:32:20,492 - INFO - Successfully sent close order for position #4984832006. Result: Request executed
+2025-10-07 16:32:20,493 - INFO - Finished closing 1 positions.
+2025-10-07 16:32:20,495 - INFO - No trades managed by this bot were closed today.
+2025-10-07 16:32:20,495 - INFO - End of day procedure complete. Waiting for next trading day.
+2025-10-07 16:33:20,496 - INFO - London session open. Attempting to place trade.
+2025-10-07 16:33:20,497 - INFO - No open positions to close.
+2025-10-07 16:33:20,497 - INFO - Generating new trade signal...
+2025-10-07 16:33:27,556 - INFO - Indicators calculated and missing values filled.
+2025-10-07 16:33:27,588 - INFO - Signal generated successfully. Prediction: BULLISH
+2025-10-07 16:33:27,764 - INFO - Order successful: BUY 0.1 XAUUSD at 3972.98. Order #4984847007
+2025-10-07 16:33:27,765 - INFO - London session close. Closing all open positions.
+2025-10-07 16:33:27,765 - INFO - Found 1 total open positions. Checking for bot trades...
+2025-10-07 16:33:27,766 - INFO - Preparing to CLOSE BUY position #4984847007 with a SELL order.
+2025-10-07 16:33:27,913 - INFO - Successfully sent close order for position #4984847007. Result: Request executed
+2025-10-07 16:33:27,913 - INFO - Finished closing 1 positions.
+2025-10-07 16:33:27,914 - INFO - No trades managed by this bot were closed today.
+2025-10-07 16:33:27,914 - INFO - End of day procedure complete. Waiting for next trading day.
+2025-10-07 16:34:27,915 - INFO - London session open. Attempting to place trade.
+2025-10-07 16:34:27,916 - INFO - No open positions to close.
+2025-10-07 16:34:27,917 - INFO - Generating new trade signal...
+2025-10-07 16:34:37,945 - INFO - Indicators calculated and missing values filled.
+2025-10-07 16:34:37,984 - INFO - Signal generated successfully. Prediction: BULLISH
+2025-10-07 16:34:38,137 - INFO - Order successful: BUY 0.1 XAUUSD at 3973.53. Order #4984864697
+2025-10-07 16:34:38,138 - INFO - London session close. Closing all open positions.
+2025-10-07 16:34:38,138 - INFO - Found 1 total open positions. Checking for bot trades...
+2025-10-07 16:34:38,139 - INFO - Preparing to CLOSE BUY position #4984864697 with a SELL order.
+2025-10-07 16:34:38,285 - INFO - Successfully sent close order for position #4984864697. Result: Request executed
+2025-10-07 16:34:38,285 - INFO - Finished closing 1 positions.
+2025-10-07 16:34:38,287 - INFO - No trades managed by this bot were closed today.
+2025-10-07 16:34:38,287 - INFO - End of day procedure complete. Waiting for next trading day.
+2025-10-07 16:35:38,288 - INFO - London session open. Attempting to place trade.
+2025-10-07 16:35:38,288 - INFO - No open positions to close.
+2025-10-07 16:35:38,289 - INFO - Generating new trade signal...
+2025-10-07 16:35:44,296 - INFO - Indicators calculated and missing values filled.
+2025-10-07 16:35:44,320 - INFO - Signal generated successfully. Prediction: BULLISH
+2025-10-07 16:35:44,491 - INFO - Order successful: BUY 0.1 XAUUSD at 3975.67. Order #4984881086
+2025-10-07 16:35:44,492 - INFO - London session close. Closing all open positions.
+2025-10-07 16:35:44,492 - INFO - Found 1 total open positions. Checking for bot trades...
+2025-10-07 16:35:44,492 - INFO - Preparing to CLOSE BUY position #4984881086 with a SELL order.
+2025-10-07 16:35:44,651 - INFO - Successfully sent close order for position #4984881086. Result: Request executed
+2025-10-07 16:35:44,651 - INFO - Finished closing 1 positions.
+2025-10-07 16:35:44,652 - INFO - No trades managed by this bot were closed today.
+2025-10-07 16:35:44,653 - INFO - End of day procedure complete. Waiting for next trading day.
+2025-10-07 16:36:44,654 - INFO - London session open. Attempting to place trade.
+2025-10-07 16:36:44,654 - INFO - No open positions to close.
+2025-10-07 16:36:44,655 - INFO - Generating new trade signal...
+2025-10-07 16:36:51,863 - INFO - Indicators calculated and missing values filled.
+2025-10-07 16:36:51,893 - INFO - Signal generated successfully. Prediction: BULLISH
+2025-10-07 16:36:52,054 - INFO - Order successful: BUY 0.1 XAUUSD at 3975.92. Order #4984901321
+2025-10-07 16:36:52,054 - INFO - London session close. Closing all open positions.
+2025-10-07 16:36:52,055 - INFO - Found 1 total open positions. Checking for bot trades...
+2025-10-07 16:36:52,055 - INFO - Preparing to CLOSE BUY position #4984901321 with a SELL order.
+2025-10-07 16:36:52,227 - INFO - Successfully sent close order for position #4984901321. Result: Request executed
+2025-10-07 16:36:52,228 - INFO - Finished closing 1 positions.
+2025-10-07 16:36:52,229 - INFO - No trades managed by this bot were closed today.
+2025-10-07 16:36:52,229 - INFO - End of day procedure complete. Waiting for next trading day.
+2025-10-07 16:37:52,230 - INFO - London session open. Attempting to place trade.
+2025-10-07 16:37:52,232 - INFO - No open positions to close.
+2025-10-07 16:37:52,234 - INFO - Generating new trade signal...
+2025-10-07 16:37:58,997 - INFO - Indicators calculated and missing values filled.
+2025-10-07 16:37:59,031 - INFO - Signal generated successfully. Prediction: BULLISH
+2025-10-07 16:37:59,199 - INFO - Order successful: BUY 0.1 XAUUSD at 3977.66. Order #4984920611
+2025-10-07 16:37:59,200 - INFO - London session close. Closing all open positions.
+2025-10-07 16:37:59,200 - INFO - Found 1 total open positions. Checking for bot trades...
+2025-10-07 16:37:59,201 - INFO - Preparing to CLOSE BUY position #4984920611 with a SELL order.
+2025-10-07 16:37:59,362 - INFO - Successfully sent close order for position #4984920611. Result: Request executed
+2025-10-07 16:37:59,363 - INFO - Finished closing 1 positions.
+2025-10-07 16:37:59,364 - INFO - No trades managed by this bot were closed today.
+2025-10-07 16:37:59,364 - INFO - End of day procedure complete. Waiting for next trading day.
+2025-10-07 16:38:59,365 - INFO - London session open. Attempting to place trade.
+2025-10-07 16:38:59,366 - INFO - No open positions to close.
+2025-10-07 16:38:59,366 - INFO - Generating new trade signal...
+2025-10-07 16:39:06,133 - INFO - Indicators calculated and missing values filled.
+2025-10-07 16:39:06,158 - INFO - Signal generated successfully. Prediction: BULLISH
+2025-10-07 16:39:06,314 - INFO - Order successful: BUY 0.1 XAUUSD at 3978.45. Order #4984939335
+2025-10-07 16:39:06,315 - INFO - London session close. Closing all open positions.
+2025-10-07 16:39:06,315 - INFO - Found 1 total open positions. Checking for bot trades...
+2025-10-07 16:39:06,316 - INFO - Preparing to CLOSE BUY position #4984939335 with a SELL order.
+2025-10-07 16:39:06,470 - INFO - Successfully sent close order for position #4984939335. Result: Request executed
+2025-10-07 16:39:06,470 - INFO - Finished closing 1 positions.
+2025-10-07 16:39:06,471 - INFO - No trades managed by this bot were closed today.
+2025-10-07 16:39:06,472 - INFO - End of day procedure complete. Waiting for next trading day.
+2025-10-07 16:40:06,473 - INFO - London session open. Attempting to place trade.
+2025-10-07 16:40:06,473 - INFO - No open positions to close.
+2025-10-07 16:40:06,473 - INFO - Generating new trade signal...
+2025-10-07 16:40:13,896 - INFO - Indicators calculated and missing values filled.
+2025-10-07 16:40:13,927 - INFO - Signal generated successfully. Prediction: BULLISH
+2025-10-07 16:40:14,151 - INFO - Order successful: BUY 0.1 XAUUSD at 3979.26. Order #4984959095
+2025-10-07 16:40:14,151 - INFO - London session close. Closing all open positions.
+2025-10-07 16:40:14,152 - INFO - Found 1 total open positions. Checking for bot trades...
+2025-10-07 16:40:14,152 - INFO - Preparing to CLOSE BUY position #4984959095 with a SELL order.
+2025-10-07 16:40:14,367 - INFO - Successfully sent close order for position #4984959095. Result: Request executed
+2025-10-07 16:40:14,368 - INFO - Finished closing 1 positions.
+2025-10-07 16:40:14,369 - INFO - No trades managed by this bot were closed today.
+2025-10-07 16:40:14,369 - INFO - End of day procedure complete. Waiting for next trading day.
+2025-10-07 16:41:14,370 - INFO - London session open. Attempting to place trade.
+2025-10-07 16:41:14,371 - INFO - No open positions to close.
+2025-10-07 16:41:14,371 - INFO - Generating new trade signal...
+2025-10-07 16:41:21,216 - INFO - Indicators calculated and missing values filled.
+2025-10-07 16:41:21,243 - INFO - Signal generated successfully. Prediction: BULLISH
+2025-10-07 16:41:21,442 - INFO - Order successful: BUY 0.1 XAUUSD at 3979.16. Order #4984975706
+2025-10-07 16:41:21,442 - INFO - London session close. Closing all open positions.
+2025-10-07 16:41:21,443 - INFO - Found 1 total open positions. Checking for bot trades...
+2025-10-07 16:41:21,443 - INFO - Preparing to CLOSE BUY position #4984975706 with a SELL order.
+2025-10-07 16:41:21,647 - INFO - Successfully sent close order for position #4984975706. Result: Request executed
+2025-10-07 16:41:21,648 - INFO - Finished closing 1 positions.
+2025-10-07 16:41:21,648 - INFO - No trades managed by this bot were closed today.
+2025-10-07 16:41:21,649 - INFO - End of day procedure complete. Waiting for next trading day.
+2025-10-07 16:42:21,649 - INFO - London session open. Attempting to place trade.
+2025-10-07 16:42:21,650 - INFO - No open positions to close.
+2025-10-07 16:42:21,650 - INFO - Generating new trade signal...
+2025-10-07 16:42:28,523 - INFO - Indicators calculated and missing values filled.
+2025-10-07 16:42:28,547 - INFO - Signal generated successfully. Prediction: BULLISH
+2025-10-07 16:42:28,734 - INFO - Order successful: BUY 0.1 XAUUSD at 3975.8. Order #4984992253
+2025-10-07 16:42:28,734 - INFO - London session close. Closing all open positions.
+2025-10-07 16:42:28,735 - INFO - Found 1 total open positions. Checking for bot trades...
+2025-10-07 16:42:28,735 - INFO - Preparing to CLOSE BUY position #4984992253 with a SELL order.
+2025-10-07 16:42:28,895 - INFO - Successfully sent close order for position #4984992253. Result: Request executed
+2025-10-07 16:42:28,895 - INFO - Finished closing 1 positions.
+2025-10-07 16:42:28,896 - INFO - No trades managed by this bot were closed today.
+2025-10-07 16:42:28,896 - INFO - End of day procedure complete. Waiting for next trading day.
+2025-10-07 16:43:28,897 - INFO - London session open. Attempting to place trade.
+2025-10-07 16:43:28,898 - INFO - No open positions to close.
+2025-10-07 16:43:28,898 - INFO - Generating new trade signal...
+2025-10-07 16:43:35,525 - INFO - Indicators calculated and missing values filled.
+2025-10-07 16:43:35,552 - INFO - Signal generated successfully. Prediction: BULLISH
+2025-10-07 16:43:35,704 - INFO - Order successful: BUY 0.1 XAUUSD at 3977.51. Order #4985010050
+2025-10-07 16:43:35,704 - INFO - London session close. Closing all open positions.
+2025-10-07 16:43:35,705 - INFO - Found 1 total open positions. Checking for bot trades...
+2025-10-07 16:43:35,705 - INFO - Preparing to CLOSE BUY position #4985010050 with a SELL order.
+2025-10-07 16:43:35,855 - INFO - Successfully sent close order for position #4985010050. Result: Request executed
+2025-10-07 16:43:35,856 - INFO - Finished closing 1 positions.
+2025-10-07 16:43:35,857 - INFO - No trades managed by this bot were closed today.
+2025-10-07 16:43:35,857 - INFO - End of day procedure complete. Waiting for next trading day.
+2025-10-07 16:44:35,858 - INFO - London session open. Attempting to place trade.
+2025-10-07 16:44:35,859 - INFO - No open positions to close.
+2025-10-07 16:44:35,859 - INFO - Generating new trade signal...
+2025-10-07 16:44:43,623 - INFO - Indicators calculated and missing values filled.
+2025-10-07 16:44:43,644 - INFO - Signal generated successfully. Prediction: BULLISH
+2025-10-07 16:44:43,794 - INFO - Order successful: BUY 0.1 XAUUSD at 3976.68. Order #4985022918
+2025-10-07 16:44:43,794 - INFO - London session close. Closing all open positions.
+2025-10-07 16:44:43,795 - INFO - Found 1 total open positions. Checking for bot trades...
+2025-10-07 16:44:43,795 - INFO - Preparing to CLOSE BUY position #4985022918 with a SELL order.
+2025-10-07 16:44:44,108 - INFO - Successfully sent close order for position #4985022918. Result: Request executed
+2025-10-07 16:44:44,108 - INFO - Finished closing 1 positions.
+2025-10-07 16:44:44,109 - INFO - No trades managed by this bot were closed today.
+2025-10-07 16:44:44,109 - INFO - End of day procedure complete. Waiting for next trading day.
+2025-10-07 16:45:44,110 - INFO - London session open. Attempting to place trade.
+2025-10-07 16:45:44,111 - INFO - No open positions to close.
+2025-10-07 16:45:44,111 - INFO - Generating new trade signal...
+2025-10-07 16:45:51,148 - INFO - Indicators calculated and missing values filled.
+2025-10-07 16:45:51,172 - INFO - Signal generated successfully. Prediction: BULLISH
+2025-10-07 16:45:51,325 - INFO - Order successful: BUY 0.1 XAUUSD at 3976.66. Order #4985035871
+2025-10-07 16:45:51,326 - INFO - London session close. Closing all open positions.
+2025-10-07 16:45:51,326 - INFO - Found 1 total open positions. Checking for bot trades...
+2025-10-07 16:45:51,327 - INFO - Preparing to CLOSE BUY position #4985035871 with a SELL order.
+2025-10-07 16:45:51,478 - INFO - Successfully sent close order for position #4985035871. Result: Request executed
+2025-10-07 16:45:51,478 - INFO - Finished closing 1 positions.
+2025-10-07 16:45:51,479 - INFO - No trades managed by this bot were closed today.
+2025-10-07 16:45:51,479 - INFO - End of day procedure complete. Waiting for next trading day.
+2025-10-07 16:46:51,480 - INFO - London session open. Attempting to place trade.
+2025-10-07 16:46:51,480 - INFO - No open positions to close.
+2025-10-07 16:46:51,481 - INFO - Generating new trade signal...
+2025-10-07 16:47:00,720 - INFO - Indicators calculated and missing values filled.
+2025-10-07 16:47:00,769 - INFO - Signal generated successfully. Prediction: BULLISH
+2025-10-07 16:47:00,922 - INFO - Order successful: BUY 0.1 XAUUSD at 3974.84. Order #4985048872
+2025-10-07 16:47:00,922 - INFO - London session close. Closing all open positions.
+2025-10-07 16:47:00,923 - INFO - Found 1 total open positions. Checking for bot trades...
+2025-10-07 16:47:00,924 - INFO - Preparing to CLOSE BUY position #4985048872 with a SELL order.
+2025-10-07 16:47:01,094 - INFO - Successfully sent close order for position #4985048872. Result: Request executed
+2025-10-07 16:47:01,097 - INFO - Finished closing 1 positions.
+2025-10-07 16:47:01,099 - INFO - No trades managed by this bot were closed today.
+2025-10-07 16:47:01,099 - INFO - End of day procedure complete. Waiting for next trading day.
+2025-10-07 16:48:01,100 - INFO - London session open. Attempting to place trade.
+2025-10-07 16:48:01,102 - INFO - No open positions to close.
+2025-10-07 16:48:01,103 - INFO - Generating new trade signal...
+2025-10-07 16:48:07,795 - INFO - Indicators calculated and missing values filled.
+2025-10-07 16:48:07,818 - INFO - Signal generated successfully. Prediction: BULLISH
+2025-10-07 16:48:07,969 - INFO - Order successful: BUY 0.1 XAUUSD at 3974.15. Order #4985064460
+2025-10-07 16:48:07,969 - INFO - London session close. Closing all open positions.
+2025-10-07 16:48:07,970 - INFO - Found 1 total open positions. Checking for bot trades...
+2025-10-07 16:48:07,970 - INFO - Preparing to CLOSE BUY position #4985064460 with a SELL order.
+2025-10-07 16:48:08,125 - INFO - Successfully sent close order for position #4985064460. Result: Request executed
+2025-10-07 16:48:08,126 - INFO - Finished closing 1 positions.
+2025-10-07 16:48:08,127 - INFO - No trades managed by this bot were closed today.
+2025-10-07 16:48:08,127 - INFO - End of day procedure complete. Waiting for next trading day.
+2025-10-07 16:49:08,128 - INFO - London session open. Attempting to place trade.
+2025-10-07 16:49:08,128 - INFO - No open positions to close.
+2025-10-07 16:49:08,128 - INFO - Generating new trade signal...
+2025-10-07 16:49:14,427 - INFO - Indicators calculated and missing values filled.
+2025-10-07 16:49:14,452 - INFO - Signal generated successfully. Prediction: BULLISH
+2025-10-07 16:49:14,610 - INFO - Order successful: BUY 0.1 XAUUSD at 3974.23. Order #4985081312
+2025-10-07 16:49:14,611 - INFO - London session close. Closing all open positions.
+2025-10-07 16:49:14,611 - INFO - Found 1 total open positions. Checking for bot trades...
+2025-10-07 16:49:14,611 - INFO - Preparing to CLOSE BUY position #4985081312 with a SELL order.
+2025-10-07 16:49:14,756 - INFO - Successfully sent close order for position #4985081312. Result: Request executed
+2025-10-07 16:49:14,756 - INFO - Finished closing 1 positions.
+2025-10-07 16:49:14,757 - INFO - No trades managed by this bot were closed today.
+2025-10-07 16:49:14,758 - INFO - End of day procedure complete. Waiting for next trading day.
+2025-10-07 16:50:14,759 - INFO - London session open. Attempting to place trade.
+2025-10-07 16:50:14,759 - INFO - No open positions to close.
+2025-10-07 16:50:14,759 - INFO - Generating new trade signal...
+2025-10-07 16:50:21,350 - INFO - Indicators calculated and missing values filled.
+2025-10-07 16:50:21,387 - INFO - Signal generated successfully. Prediction: BULLISH
+2025-10-07 16:50:21,543 - INFO - Order successful: BUY 0.1 XAUUSD at 3972.56. Order #4985094606
+2025-10-07 16:50:21,543 - INFO - London session close. Closing all open positions.
+2025-10-07 16:50:21,544 - INFO - Found 1 total open positions. Checking for bot trades...
+2025-10-07 16:50:21,544 - INFO - Preparing to CLOSE BUY position #4985094606 with a SELL order.
+2025-10-07 16:50:21,702 - INFO - Successfully sent close order for position #4985094606. Result: Request executed
+2025-10-07 16:50:21,702 - INFO - Finished closing 1 positions.
+2025-10-07 16:50:21,703 - INFO - No trades managed by this bot were closed today.
+2025-10-07 16:50:21,704 - INFO - End of day procedure complete. Waiting for next trading day.
+2025-10-07 16:51:21,705 - INFO - London session open. Attempting to place trade.
+2025-10-07 16:51:21,705 - INFO - No open positions to close.
+2025-10-07 16:51:21,705 - INFO - Generating new trade signal...
+2025-10-07 16:51:31,017 - INFO - Indicators calculated and missing values filled.
+2025-10-07 16:51:31,059 - INFO - Signal generated successfully. Prediction: BULLISH
+2025-10-07 16:51:31,224 - INFO - Order successful: BUY 0.1 XAUUSD at 3973.4. Order #4985110205
+2025-10-07 16:51:31,224 - INFO - London session close. Closing all open positions.
+2025-10-07 16:51:31,225 - INFO - Found 1 total open positions. Checking for bot trades...
+2025-10-07 16:51:31,225 - INFO - Preparing to CLOSE BUY position #4985110205 with a SELL order.
+2025-10-07 16:51:31,402 - INFO - Successfully sent close order for position #4985110205. Result: Request executed
+2025-10-07 16:51:31,402 - INFO - Finished closing 1 positions.
+2025-10-07 16:51:31,403 - INFO - No trades managed by this bot were closed today.
+2025-10-07 16:51:31,404 - INFO - End of day procedure complete. Waiting for next trading day.
+2025-10-07 16:52:31,405 - INFO - London session open. Attempting to place trade.
+2025-10-07 16:52:31,405 - INFO - No open positions to close.
+2025-10-07 16:52:31,406 - INFO - Generating new trade signal...
+2025-10-08 06:59:14,672 - INFO - Starting trading bot...
+2025-10-08 06:59:14,684 - INFO - MT5 connection successful.
+2025-10-08 06:59:14,976 - INFO - New trading day: 2025-10-08. Ready for signals.
+2025-10-08 07:00:14,977 - INFO - London session open. Attempting to place trade.
+2025-10-08 07:00:14,979 - INFO - No open positions to close.
+2025-10-08 07:00:14,980 - INFO - Generating new trade signal...
+2025-10-08 07:00:19,208 - INFO - Indicators calculated and missing values filled.
+2025-10-08 07:00:20,788 - INFO - Signal generated successfully. Prediction: BULLISH
+2025-10-08 07:00:20,954 - INFO - Order successful: BUY 0.1 XAUUSD at 4030.58. Order #4991748472
+2025-10-09 06:59:17,888 - INFO - Starting trading bot...
+2025-10-09 06:59:17,923 - INFO - MT5 connection successful.
+2025-10-09 06:59:18,876 - INFO - New trading day: 2025-10-09. Ready for signals.
+2025-10-09 07:00:18,878 - INFO - London session open. Attempting to place trade.
+2025-10-09 07:00:18,879 - INFO - No open positions to close.
+2025-10-09 07:00:18,880 - INFO - Generating new trade signal...
+2025-10-09 07:00:26,295 - INFO - Indicators calculated and missing values filled.
+2025-10-09 07:00:30,249 - INFO - Signal generated successfully. Prediction: BULLISH
+2025-10-09 07:00:30,412 - INFO - Order successful: BUY 0.1 XAUUSD at 4027.19. Order #5008374618
+2025-10-09 16:00:40,374 - INFO - London session close. Closing all open positions.
+2025-10-09 16:00:40,395 - INFO - Found 1 total open positions. Checking for bot trades...
+2025-10-09 16:00:40,398 - INFO - Preparing to CLOSE BUY position #5008374618 with a SELL order.
+2025-10-09 16:00:40,570 - INFO - Successfully sent close order for position #5008374618. Result: Request executed
+2025-10-09 16:00:40,572 - INFO - Finished closing 1 positions.
+2025-10-09 16:00:40,681 - INFO - No trades managed by this bot were closed today.
+2025-10-09 16:00:40,682 - INFO - End of day procedure complete. Waiting for next trading day.
+2025-10-09 16:01:40,684 - INFO - London session open. Attempting to place trade.
+2025-10-09 16:01:40,685 - INFO - No open positions to close.
+2025-10-09 16:01:40,687 - INFO - Generating new trade signal...
+2025-10-09 16:01:50,712 - INFO - Indicators calculated and missing values filled.
+2025-10-09 16:01:50,930 - INFO - Signal generated successfully. Prediction: BULLISH
+2025-10-09 16:01:51,293 - INFO - Order successful: BUY 0.1 XAUUSD at 4018.44. Order #5018309663
+2025-10-09 16:01:51,294 - INFO - London session close. Closing all open positions.
+2025-10-09 16:01:51,296 - INFO - Found 1 total open positions. Checking for bot trades...
+2025-10-09 16:01:51,298 - INFO - Preparing to CLOSE BUY position #5018309663 with a SELL order.
+2025-10-09 16:01:51,472 - INFO - Successfully sent close order for position #5018309663. Result: Request executed
+2025-10-09 16:01:51,474 - INFO - Finished closing 1 positions.
+2025-10-09 16:01:51,477 - INFO - No trades managed by this bot were closed today.
+2025-10-09 16:01:51,478 - INFO - End of day procedure complete. Waiting for next trading day.
+2025-10-09 16:02:51,480 - INFO - London session open. Attempting to place trade.
+2025-10-09 16:02:51,481 - INFO - No open positions to close.
+2025-10-09 16:02:51,482 - INFO - Generating new trade signal...
+2025-10-09 16:02:58,615 - INFO - Indicators calculated and missing values filled.
+2025-10-09 16:02:58,665 - INFO - Signal generated successfully. Prediction: BULLISH
+2025-10-09 16:02:58,811 - INFO - Order successful: BUY 0.1 XAUUSD at 4019.64. Order #5018329572
+2025-10-09 16:02:58,812 - INFO - London session close. Closing all open positions.
+2025-10-09 16:02:58,813 - INFO - Found 1 total open positions. Checking for bot trades...
+2025-10-09 16:02:58,813 - INFO - Preparing to CLOSE BUY position #5018329572 with a SELL order.
+2025-10-09 16:02:58,971 - INFO - Successfully sent close order for position #5018329572. Result: Request executed
+2025-10-09 16:02:58,972 - INFO - Finished closing 1 positions.
+2025-10-09 16:02:58,975 - INFO - No trades managed by this bot were closed today.
+2025-10-09 16:02:58,976 - INFO - End of day procedure complete. Waiting for next trading day.
+2025-10-09 16:03:58,978 - INFO - London session open. Attempting to place trade.
+2025-10-09 16:03:58,980 - INFO - No open positions to close.
+2025-10-09 16:03:58,981 - INFO - Generating new trade signal...
+2025-10-09 16:04:05,919 - INFO - Indicators calculated and missing values filled.
+2025-10-09 16:04:05,964 - INFO - Signal generated successfully. Prediction: BULLISH
+2025-10-09 16:04:06,106 - INFO - Order successful: BUY 0.1 XAUUSD at 4019.77. Order #5018349396
+2025-10-09 16:04:06,107 - INFO - London session close. Closing all open positions.
+2025-10-09 16:04:06,108 - INFO - Found 1 total open positions. Checking for bot trades...
+2025-10-09 16:04:06,108 - INFO - Preparing to CLOSE BUY position #5018349396 with a SELL order.
+2025-10-09 16:04:06,277 - INFO - Successfully sent close order for position #5018349396. Result: Request executed
+2025-10-09 16:04:06,278 - INFO - Finished closing 1 positions.
+2025-10-09 16:04:06,281 - INFO - No trades managed by this bot were closed today.
+2025-10-09 16:04:06,283 - INFO - End of day procedure complete. Waiting for next trading day.
+2025-10-09 16:05:06,285 - INFO - London session open. Attempting to place trade.
+2025-10-09 16:05:06,286 - INFO - No open positions to close.
+2025-10-09 16:05:06,287 - INFO - Generating new trade signal...
+2025-10-09 16:05:13,278 - INFO - Indicators calculated and missing values filled.
+2025-10-09 16:05:13,321 - INFO - Signal generated successfully. Prediction: BULLISH
+2025-10-09 16:05:13,506 - INFO - Order successful: BUY 0.1 XAUUSD at 4017.54. Order #5018365510
+2025-10-09 16:05:13,507 - INFO - London session close. Closing all open positions.
+2025-10-09 16:05:13,509 - INFO - Found 1 total open positions. Checking for bot trades...
+2025-10-09 16:05:13,510 - INFO - Preparing to CLOSE BUY position #5018365510 with a SELL order.
+2025-10-09 16:05:13,713 - INFO - Successfully sent close order for position #5018365510. Result: Request executed
+2025-10-09 16:05:13,714 - INFO - Finished closing 1 positions.
+2025-10-09 16:05:13,718 - INFO - No trades managed by this bot were closed today.
+2025-10-09 16:05:13,719 - INFO - End of day procedure complete. Waiting for next trading day.
+2025-10-09 16:06:13,721 - INFO - London session open. Attempting to place trade.
+2025-10-09 16:06:13,723 - INFO - No open positions to close.
+2025-10-09 16:06:13,724 - INFO - Generating new trade signal...
+2025-10-09 16:06:20,757 - INFO - Indicators calculated and missing values filled.
+2025-10-09 16:06:20,798 - INFO - Signal generated successfully. Prediction: BULLISH
+2025-10-09 16:06:20,935 - INFO - Order successful: BUY 0.1 XAUUSD at 4019.06. Order #5018382123
+2025-10-09 16:06:20,936 - INFO - London session close. Closing all open positions.
+2025-10-09 16:06:20,936 - INFO - Found 1 total open positions. Checking for bot trades...
+2025-10-09 16:06:20,937 - INFO - Preparing to CLOSE BUY position #5018382123 with a SELL order.
+2025-10-09 16:06:21,108 - INFO - Successfully sent close order for position #5018382123. Result: Request executed
+2025-10-09 16:06:21,109 - INFO - Finished closing 1 positions.
+2025-10-09 16:06:21,112 - INFO - No trades managed by this bot were closed today.
+2025-10-09 16:06:21,113 - INFO - End of day procedure complete. Waiting for next trading day.
+2025-10-09 16:07:21,115 - INFO - London session open. Attempting to place trade.
+2025-10-09 16:07:21,117 - INFO - No open positions to close.
+2025-10-09 16:07:21,118 - INFO - Generating new trade signal...
+2025-10-09 16:07:27,917 - INFO - Indicators calculated and missing values filled.
+2025-10-09 16:07:27,958 - INFO - Signal generated successfully. Prediction: BULLISH
+2025-10-09 16:07:28,102 - INFO - Order successful: BUY 0.1 XAUUSD at 4019.11. Order #5018394143
+2025-10-09 16:07:28,102 - INFO - London session close. Closing all open positions.
+2025-10-09 16:07:28,103 - INFO - Found 1 total open positions. Checking for bot trades...
+2025-10-09 16:07:28,104 - INFO - Preparing to CLOSE BUY position #5018394143 with a SELL order.
+2025-10-09 16:07:28,265 - INFO - Successfully sent close order for position #5018394143. Result: Request executed
+2025-10-09 16:07:28,267 - INFO - Finished closing 1 positions.
+2025-10-09 16:07:28,270 - INFO - No trades managed by this bot were closed today.
+2025-10-09 16:07:28,271 - INFO - End of day procedure complete. Waiting for next trading day.
+2025-10-09 16:08:28,273 - INFO - London session open. Attempting to place trade.
+2025-10-09 16:08:28,274 - INFO - No open positions to close.
+2025-10-09 16:08:28,275 - INFO - Generating new trade signal...
+2025-10-09 16:08:34,924 - INFO - Indicators calculated and missing values filled.
+2025-10-09 16:08:34,967 - INFO - Signal generated successfully. Prediction: BULLISH
+2025-10-09 16:08:35,106 - INFO - Order successful: BUY 0.1 XAUUSD at 4019.19. Order #5018406126
+2025-10-09 16:08:35,107 - INFO - London session close. Closing all open positions.
+2025-10-09 16:08:35,108 - INFO - Found 1 total open positions. Checking for bot trades...
+2025-10-09 16:08:35,109 - INFO - Preparing to CLOSE BUY position #5018406126 with a SELL order.
+2025-10-09 16:08:35,253 - INFO - Successfully sent close order for position #5018406126. Result: Request executed
+2025-10-09 16:08:35,254 - INFO - Finished closing 1 positions.
+2025-10-09 16:08:35,257 - INFO - No trades managed by this bot were closed today.
+2025-10-09 16:08:35,258 - INFO - End of day procedure complete. Waiting for next trading day.
+2025-10-09 16:09:35,260 - INFO - London session open. Attempting to place trade.
+2025-10-09 16:09:35,262 - INFO - No open positions to close.
+2025-10-09 16:09:35,263 - INFO - Generating new trade signal...
+2025-10-09 16:09:42,098 - INFO - Indicators calculated and missing values filled.
+2025-10-09 16:09:42,145 - INFO - Signal generated successfully. Prediction: BULLISH
+2025-10-09 16:09:42,301 - INFO - Order successful: BUY 0.1 XAUUSD at 4021.18. Order #5018425326
+2025-10-09 16:09:42,302 - INFO - London session close. Closing all open positions.
+2025-10-09 16:09:42,304 - INFO - Found 1 total open positions. Checking for bot trades...
+2025-10-09 16:09:42,305 - INFO - Preparing to CLOSE BUY position #5018425326 with a SELL order.
+2025-10-09 16:09:42,457 - INFO - Successfully sent close order for position #5018425326. Result: Request executed
+2025-10-09 16:09:42,458 - INFO - Finished closing 1 positions.
+2025-10-09 16:09:42,461 - INFO - No trades managed by this bot were closed today.
+2025-10-09 16:09:42,462 - INFO - End of day procedure complete. Waiting for next trading day.
+2025-10-09 16:10:42,464 - INFO - London session open. Attempting to place trade.
+2025-10-09 16:10:42,465 - INFO - No open positions to close.
+2025-10-09 16:10:42,466 - INFO - Generating new trade signal...
+2025-10-09 16:10:49,182 - INFO - Indicators calculated and missing values filled.
+2025-10-09 16:10:49,232 - INFO - Signal generated successfully. Prediction: BULLISH
+2025-10-09 16:10:49,388 - INFO - Order successful: BUY 0.1 XAUUSD at 4019.81. Order #5018443879
+2025-10-09 16:10:49,389 - INFO - London session close. Closing all open positions.
+2025-10-09 16:10:49,390 - INFO - Found 1 total open positions. Checking for bot trades...
+2025-10-09 16:10:49,391 - INFO - Preparing to CLOSE BUY position #5018443879 with a SELL order.
+2025-10-09 16:10:49,556 - INFO - Successfully sent close order for position #5018443879. Result: Request executed
+2025-10-09 16:10:49,557 - INFO - Finished closing 1 positions.
+2025-10-09 16:10:49,560 - INFO - No trades managed by this bot were closed today.
+2025-10-09 16:10:49,561 - INFO - End of day procedure complete. Waiting for next trading day.
+2025-10-09 16:11:49,563 - INFO - London session open. Attempting to place trade.
+2025-10-09 16:11:49,565 - INFO - No open positions to close.
+2025-10-09 16:11:49,566 - INFO - Generating new trade signal...
+2025-10-09 16:11:55,617 - INFO - Indicators calculated and missing values filled.
+2025-10-09 16:11:55,673 - INFO - Signal generated successfully. Prediction: BULLISH
+2025-10-09 16:11:55,809 - INFO - Order successful: BUY 0.1 XAUUSD at 4018.75. Order #5018460696
+2025-10-09 16:11:55,810 - INFO - London session close. Closing all open positions.
+2025-10-09 16:11:55,812 - INFO - Found 1 total open positions. Checking for bot trades...
+2025-10-09 16:11:55,812 - INFO - Preparing to CLOSE BUY position #5018460696 with a SELL order.
+2025-10-09 16:11:55,958 - INFO - Successfully sent close order for position #5018460696. Result: Request executed
+2025-10-09 16:11:55,959 - INFO - Finished closing 1 positions.
+2025-10-09 16:11:55,962 - INFO - No trades managed by this bot were closed today.
+2025-10-09 16:11:55,963 - INFO - End of day procedure complete. Waiting for next trading day.
+2025-10-09 16:12:55,965 - INFO - London session open. Attempting to place trade.
+2025-10-09 16:12:55,967 - INFO - No open positions to close.
+2025-10-09 16:12:55,968 - INFO - Generating new trade signal...
+2025-10-09 16:13:02,555 - INFO - Indicators calculated and missing values filled.
+2025-10-09 16:13:02,609 - INFO - Signal generated successfully. Prediction: BULLISH
+2025-10-09 16:13:02,751 - INFO - Order successful: BUY 0.1 XAUUSD at 4017.27. Order #5018479021
+2025-10-09 16:13:02,751 - INFO - London session close. Closing all open positions.
+2025-10-09 16:13:02,752 - INFO - Found 1 total open positions. Checking for bot trades...
+2025-10-09 16:13:02,753 - INFO - Preparing to CLOSE BUY position #5018479021 with a SELL order.
+2025-10-09 16:13:02,890 - INFO - Successfully sent close order for position #5018479021. Result: Request executed
+2025-10-09 16:13:02,891 - INFO - Finished closing 1 positions.
+2025-10-09 16:13:02,892 - INFO - No trades managed by this bot were closed today.
+2025-10-09 16:13:02,893 - INFO - End of day procedure complete. Waiting for next trading day.
+2025-10-09 16:14:02,895 - INFO - London session open. Attempting to place trade.
+2025-10-09 16:14:02,896 - INFO - No open positions to close.
+2025-10-09 16:14:02,898 - INFO - Generating new trade signal...
+2025-10-09 16:14:09,291 - INFO - Indicators calculated and missing values filled.
+2025-10-09 16:14:09,341 - INFO - Signal generated successfully. Prediction: BULLISH
+2025-10-09 16:14:09,506 - INFO - Order successful: BUY 0.1 XAUUSD at 4018.04. Order #5018492120
+2025-10-09 16:14:09,507 - INFO - London session close. Closing all open positions.
+2025-10-09 16:14:09,508 - INFO - Found 1 total open positions. Checking for bot trades...
+2025-10-09 16:14:09,509 - INFO - Preparing to CLOSE BUY position #5018492120 with a SELL order.
+2025-10-09 16:14:09,672 - INFO - Successfully sent close order for position #5018492120. Result: Request executed
+2025-10-09 16:14:09,673 - INFO - Finished closing 1 positions.
+2025-10-09 16:14:09,677 - INFO - No trades managed by this bot were closed today.
+2025-10-09 16:14:09,678 - INFO - End of day procedure complete. Waiting for next trading day.
+2025-10-09 16:15:09,680 - INFO - London session open. Attempting to place trade.
+2025-10-09 16:15:09,682 - INFO - No open positions to close.
+2025-10-09 16:15:09,683 - INFO - Generating new trade signal...
+2025-10-09 16:15:16,255 - INFO - Indicators calculated and missing values filled.
+2025-10-09 16:15:16,299 - INFO - Signal generated successfully. Prediction: BULLISH
+2025-10-09 16:15:16,505 - INFO - Order successful: BUY 0.1 XAUUSD at 4015.57. Order #5018507276
+2025-10-09 16:15:16,506 - INFO - London session close. Closing all open positions.
+2025-10-09 16:15:16,507 - INFO - Found 1 total open positions. Checking for bot trades...
+2025-10-09 16:15:16,508 - INFO - Preparing to CLOSE BUY position #5018507276 with a SELL order.
+2025-10-09 16:15:16,660 - INFO - Successfully sent close order for position #5018507276. Result: Request executed
+2025-10-09 16:15:16,661 - INFO - Finished closing 1 positions.
+2025-10-09 16:15:16,665 - INFO - No trades managed by this bot were closed today.
+2025-10-09 16:15:16,667 - INFO - End of day procedure complete. Waiting for next trading day.
+2025-10-09 16:16:16,669 - INFO - London session open. Attempting to place trade.
+2025-10-09 16:16:16,671 - INFO - No open positions to close.
+2025-10-09 16:16:16,672 - INFO - Generating new trade signal...
+2025-10-09 16:16:22,899 - INFO - Indicators calculated and missing values filled.
+2025-10-09 16:16:22,949 - INFO - Signal generated successfully. Prediction: BULLISH
+2025-10-09 16:16:23,101 - INFO - Order successful: BUY 0.1 XAUUSD at 4015.78. Order #5018522197
+2025-10-09 16:16:23,102 - INFO - London session close. Closing all open positions.
+2025-10-09 16:16:23,103 - INFO - Found 1 total open positions. Checking for bot trades...
+2025-10-09 16:16:23,103 - INFO - Preparing to CLOSE BUY position #5018522197 with a SELL order.
+2025-10-09 16:16:23,244 - INFO - Successfully sent close order for position #5018522197. Result: Request executed
+2025-10-09 16:16:23,245 - INFO - Finished closing 1 positions.
+2025-10-09 16:16:23,247 - INFO - No trades managed by this bot were closed today.
+2025-10-09 16:16:23,247 - INFO - End of day procedure complete. Waiting for next trading day.
+2025-10-09 16:17:23,249 - INFO - London session open. Attempting to place trade.
+2025-10-09 16:17:23,251 - INFO - No open positions to close.
+2025-10-09 16:17:23,252 - INFO - Generating new trade signal...
+2025-10-09 16:17:30,621 - INFO - Indicators calculated and missing values filled.
+2025-10-09 16:17:30,670 - INFO - Signal generated successfully. Prediction: BULLISH
+2025-10-09 16:17:30,832 - INFO - Order successful: BUY 0.1 XAUUSD at 4016.84. Order #5018535309
+2025-10-09 16:17:30,833 - INFO - London session close. Closing all open positions.
+2025-10-09 16:17:30,835 - INFO - Found 1 total open positions. Checking for bot trades...
+2025-10-09 16:17:30,837 - INFO - Preparing to CLOSE BUY position #5018535309 with a SELL order.
+2025-10-09 16:17:30,984 - INFO - Successfully sent close order for position #5018535309. Result: Request executed
+2025-10-09 16:17:30,986 - INFO - Finished closing 1 positions.
+2025-10-09 16:17:30,988 - INFO - No trades managed by this bot were closed today.
+2025-10-09 16:17:30,989 - INFO - End of day procedure complete. Waiting for next trading day.
+2025-10-09 16:18:30,990 - INFO - London session open. Attempting to place trade.
+2025-10-09 16:18:30,991 - INFO - No open positions to close.
+2025-10-09 16:18:30,992 - INFO - Generating new trade signal...
+2025-10-09 16:18:38,560 - INFO - Indicators calculated and missing values filled.
+2025-10-09 16:18:38,605 - INFO - Signal generated successfully. Prediction: BULLISH
+2025-10-09 16:18:38,762 - INFO - Order successful: BUY 0.1 XAUUSD at 4017.49. Order #5018548886
+2025-10-09 16:18:38,763 - INFO - London session close. Closing all open positions.
+2025-10-09 16:18:38,763 - INFO - Found 1 total open positions. Checking for bot trades...
+2025-10-09 16:18:38,764 - INFO - Preparing to CLOSE BUY position #5018548886 with a SELL order.
+2025-10-09 16:18:38,920 - INFO - Successfully sent close order for position #5018548886. Result: Request executed
+2025-10-09 16:18:38,922 - INFO - Finished closing 1 positions.
+2025-10-09 16:18:38,925 - INFO - No trades managed by this bot were closed today.
+2025-10-09 16:18:38,926 - INFO - End of day procedure complete. Waiting for next trading day.
+2025-10-09 16:19:38,928 - INFO - London session open. Attempting to place trade.
+2025-10-09 16:19:38,930 - INFO - No open positions to close.
+2025-10-09 16:19:38,931 - INFO - Generating new trade signal...
+2025-10-09 16:19:46,220 - INFO - Indicators calculated and missing values filled.
+2025-10-09 16:19:46,272 - INFO - Signal generated successfully. Prediction: BULLISH
+2025-10-09 16:19:46,412 - INFO - Order successful: BUY 0.1 XAUUSD at 4016.49. Order #5018563173
+2025-10-09 16:19:46,413 - INFO - London session close. Closing all open positions.
+2025-10-09 16:19:46,414 - INFO - Found 1 total open positions. Checking for bot trades...
+2025-10-09 16:19:46,415 - INFO - Preparing to CLOSE BUY position #5018563173 with a SELL order.
+2025-10-09 16:19:46,637 - INFO - Successfully sent close order for position #5018563173. Result: Request executed
+2025-10-09 16:19:46,639 - INFO - Finished closing 1 positions.
+2025-10-09 16:19:46,642 - INFO - No trades managed by this bot were closed today.
+2025-10-09 16:19:46,643 - INFO - End of day procedure complete. Waiting for next trading day.
+2025-10-09 16:20:46,645 - INFO - London session open. Attempting to place trade.
+2025-10-09 16:20:46,647 - INFO - No open positions to close.
+2025-10-09 16:20:46,648 - INFO - Generating new trade signal...
+2025-10-09 16:20:54,055 - INFO - Indicators calculated and missing values filled.
+2025-10-09 16:20:54,108 - INFO - Signal generated successfully. Prediction: BULLISH
+2025-10-09 16:20:54,249 - INFO - Order successful: BUY 0.1 XAUUSD at 4016.85. Order #5018577689
+2025-10-09 16:20:54,250 - INFO - London session close. Closing all open positions.
+2025-10-09 16:20:54,251 - INFO - Found 1 total open positions. Checking for bot trades...
+2025-10-09 16:20:54,253 - INFO - Preparing to CLOSE BUY position #5018577689 with a SELL order.
+2025-10-09 16:20:54,405 - INFO - Successfully sent close order for position #5018577689. Result: Request executed
+2025-10-09 16:20:54,406 - INFO - Finished closing 1 positions.
+2025-10-09 16:20:54,407 - INFO - No trades managed by this bot were closed today.
+2025-10-09 16:20:54,408 - INFO - End of day procedure complete. Waiting for next trading day.
+2025-10-09 16:21:54,410 - INFO - London session open. Attempting to place trade.
+2025-10-09 16:21:54,412 - INFO - No open positions to close.
+2025-10-09 16:21:54,413 - INFO - Generating new trade signal...
+2025-10-09 16:22:02,054 - INFO - Indicators calculated and missing values filled.
+2025-10-09 16:22:02,109 - INFO - Signal generated successfully. Prediction: BULLISH
+2025-10-09 16:22:02,259 - INFO - Order successful: BUY 0.1 XAUUSD at 4016.91. Order #5018586528
+2025-10-09 16:22:02,260 - INFO - London session close. Closing all open positions.
+2025-10-09 16:22:02,260 - INFO - Found 1 total open positions. Checking for bot trades...
+2025-10-09 16:22:02,261 - INFO - Preparing to CLOSE BUY position #5018586528 with a SELL order.
+2025-10-09 16:22:02,426 - INFO - Successfully sent close order for position #5018586528. Result: Request executed
+2025-10-09 16:22:02,426 - INFO - Finished closing 1 positions.
+2025-10-09 16:22:02,428 - INFO - No trades managed by this bot were closed today.
+2025-10-09 16:22:02,429 - INFO - End of day procedure complete. Waiting for next trading day.
+2025-10-09 16:22:22,766 - INFO - Bot stopped by user.
+2025-10-10 06:29:46,855 - INFO - Starting trading bot...
+2025-10-10 06:29:46,869 - INFO - MT5 connection successful.
+2025-10-10 06:29:47,200 - INFO - New trading day: 2025-10-10. Ready for signals.
+2025-10-10 07:00:47,226 - INFO - London session open. Attempting to place trade.
+2025-10-10 07:00:47,229 - INFO - No open positions to close.
+2025-10-10 07:00:47,230 - INFO - Generating new trade signal...
+2025-10-10 07:00:51,843 - INFO - Indicators calculated and missing values filled.
+2025-10-10 07:00:53,827 - INFO - Signal generated successfully. Prediction: BULLISH
+2025-10-10 07:00:53,989 - INFO - Order successful: BUY 0.1 XAUUSD at 3965.28. Order #5027344464
+2025-10-10 14:59:00,223 - INFO - Bot stopped by user.
+2025-10-13 06:59:14,769 - INFO - Starting trading bot...
+2025-10-13 06:59:14,788 - INFO - MT5 connection successful.
+2025-10-13 06:59:15,384 - INFO - New trading day: 2025-10-13. Ready for signals.
+2025-10-13 07:00:15,386 - INFO - London session open. Attempting to place trade.
+2025-10-13 07:00:15,388 - INFO - No open positions to close.
+2025-10-13 07:00:15,389 - INFO - Generating new trade signal...
+2025-10-13 07:00:21,438 - INFO - Indicators calculated and missing values filled.
+2025-10-13 07:00:24,396 - INFO - Signal generated successfully. Prediction: BULLISH
+2025-10-13 07:00:24,623 - INFO - Order successful: BUY 0.1 XAUUSD at 4069.17. Order #5047745179
+2025-10-14 06:59:43,099 - INFO - Starting trading bot...
+2025-10-14 06:59:43,182 - INFO - MT5 connection successful.
+2025-10-14 06:59:44,374 - INFO - New trading day: 2025-10-14. Ready for signals.
+2025-10-14 07:00:44,376 - INFO - London session open. Attempting to place trade.
+2025-10-14 07:00:44,378 - INFO - No open positions to close.
+2025-10-14 07:00:44,379 - INFO - Generating new trade signal...
+2025-10-14 07:00:54,270 - INFO - Indicators calculated and missing values filled.
+2025-10-14 07:00:58,842 - INFO - Signal generated successfully. Prediction: BULLISH
+2025-10-14 07:00:58,997 - INFO - Order successful: BUY 0.1 XAUUSD at 4109.19. Order #5070744339
+2025-10-15 07:19:43,551 - INFO - Starting trading bot...
+2025-10-15 07:19:50,040 - INFO - MT5 connection successful.
+2025-10-15 07:19:50,443 - INFO - New trading day: 2025-10-15. Ready for signals.
+2025-10-15 07:19:50,444 - INFO - London session open. Attempting to place trade.
+2025-10-15 07:19:50,444 - INFO - No open positions to close.
+2025-10-15 07:19:50,444 - INFO - Generating new trade signal...
+2025-10-15 07:19:55,616 - INFO - Indicators calculated and missing values filled.
+2025-10-15 07:19:57,112 - INFO - Signal generated successfully. Prediction: BULLISH
+2025-10-15 07:19:57,266 - INFO - Order successful: BUY 0.1 XAUUSD at 4200.53. Order #5090494754
+2025-10-16 06:58:55,650 - INFO - Starting trading bot...
+2025-10-16 06:58:55,675 - INFO - MT5 connection successful.
+2025-10-16 06:58:57,066 - INFO - New trading day: 2025-10-16. Ready for signals.
+2025-10-16 07:00:56,734 - INFO - Bot stopped by user.
+2025-10-16 07:01:03,155 - INFO - Starting trading bot...
+2025-10-16 07:01:03,181 - INFO - MT5 connection successful.
+2025-10-16 07:01:03,894 - INFO - New trading day: 2025-10-16. Ready for signals.
+2025-10-16 07:01:03,895 - INFO - London session open. Attempting to place trade.
+2025-10-16 07:01:03,896 - INFO - No open positions to close.
+2025-10-16 07:01:03,897 - INFO - Generating new trade signal...
+2025-10-16 07:01:11,165 - INFO - Indicators calculated and missing values filled.
+2025-10-16 07:01:14,145 - INFO - Signal generated successfully. Prediction: BULLISH
+2025-10-16 07:01:14,285 - INFO - Order successful: BUY 0.1 XAUUSD at 4226.85. Order #5109532515
+2025-10-17 07:12:02,794 - INFO - Starting trading bot...
+2025-10-17 07:12:02,818 - INFO - MT5 connection successful.
+2025-10-17 07:12:03,269 - INFO - New trading day: 2025-10-17. Ready for signals.
+2025-10-17 07:12:03,269 - INFO - London session open. Attempting to place trade.
+2025-10-17 07:12:03,269 - INFO - No open positions to close.
+2025-10-17 07:12:03,269 - INFO - Generating new trade signal...
+2025-10-17 07:12:08,751 - INFO - Indicators calculated and missing values filled.
+2025-10-17 07:12:10,324 - INFO - Signal generated successfully. Prediction: BULLISH
+2025-10-17 07:12:10,491 - INFO - Order successful: BUY 0.1 XAUUSD at 4358.89. Order #5131639260
