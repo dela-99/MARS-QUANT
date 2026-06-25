@@ -43,7 +43,7 @@ Quantitative-XAUUSD-Strategy/
 1.  **Clone the repository:**
 
     ```bash
-    git clone https://github.com/soloeinsteinmit/Quantitative-XAUUSD-Strategy.git
+    git clone https://github.com/dela-99/MARS-QUANT.git
     cd Quantitative-XAUUSD-Strategy
     ```
 
