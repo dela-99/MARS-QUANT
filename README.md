@@ -1,133 +1,153 @@
-# Quantitative XAU/USD Session Strategy
+# M.A.R.S. — Mathematical Algorithm Risk System
 
-![Python](https://img.shields.io/badge/Python-3.12%2B-blue.svg)
+![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Models-orange)](https://huggingface.co/SoloShun)
 
-A quantitative research project to model and predict the session dynamics of Gold (XAU/USD). This repository explores multiple hypotheses using a dual modeling approach, benchmarking **Gradient Boosted Trees (XGBoost)** against **Deep Learning models (LSTM, Transformers)** for each research question.
+**M.A.R.S.** is a quantitative trading research and execution foundation focused on
+**time-series correctness**, modular strategy/risk interfaces, and reproducible
+experiment workflows.
 
-The project investigates both **classification** (predicting market direction) and **regression** (predicting market return) to build a comprehensive, backtested understanding of intra-day market behavior.
+This repository originated as a **XAUUSD session-dynamics research project**
+(Hypothesis A: Asian session → London session prediction) and has been reorganized
+into a maintainable research platform without discarding prior work.
 
-## Project Goals & Research Questions
+---
 
-The primary goal of this project is to move beyond simple discretionary trading patterns and answer key quantitative questions through a rigorous, data-driven framework:
+## What M.A.R.S. is (and is not)
 
-1.  **Predictive Power of Sessions:** Can the characteristics of one trading session (e.g., Asia) reliably predict the behavior of a subsequent session (e.g., London or New York)?
-2.  **Intra-day Momentum:** Can the price action of the London morning session be used to forecast the high-volume London/New York overlap?
-3.  **Model Benchmarking:** Which model architecture—XGBoost on tabular features or Deep Learning on sequential data—is better suited for predicting these market dynamics?
+**Is:**
 
-## Tech Stack
+- A research layer for data → features → labels → models → evaluation
+- A trading-core foundation: strategy setups, risk policy stubs, backtest hooks
+- Explicit about leakage risks and incomplete components
 
-- **Data Acquisition:** MetaTrader5 API
-- **Data Manipulation:** Pandas, NumPy
-- **Feature Engineering:** pandas_ta
-- **Modeling:** Scikit-learn, XGBoost, TensorFlow/Keras, PyTorch
-- **Backtesting:** backtesting.py
-- **Deployment/Demo:** Hugging Face Hub (Models & Spaces), Next.js, FastAPI
+**Is not (yet):**
 
-## Repository Structure
+- An autonomous multi-strategy hedge fund
+- A “fully AI trader” product UI
+- A claim that legacy model metrics are production-ready
+
+---
+
+## What the repo currently supports
+
+| Capability | Status |
+|------------|--------|
+| Load / validate XAUUSD H1 parquet | Supported |
+| Hyp-A Asia→London feature engineering | Supported (`mars.libs.features`) |
+| Direction + return labels | Supported |
+| Chronological train/val/test split | Supported |
+| Baseline XGBoost train + OOS metrics report | Supported |
+| Simple session-level backtest | Supported (vectorized) |
+| PyTorch LSTM / Transformer architectures | Present (use chronological splits only) |
+| Live MT5 bots | Legacy only (`legacy/src/bots`) |
+| Hypotheses B & C | Research plan only |
+| Regime engine / full risk engine | Skeleton / backlog |
+
+Historical notebooks, models, and reports remain for research continuity.
+
+---
+
+## Repository layout (short)
 
 ```
-Quantitative-XAUUSD-Strategy/
-│
-├── data/ # Raw and processed datasets
-├── models/ # Trained models (subfolders for xgb, lstm, etc.)
-├── notebooks/ # Exploratory data analysis
-├── reports/ # Backtest plots and results
-├── src/ # Main source code for the workflow
-└── app/ # Code for the Hugging Face Spaces demo
+mars/           # Clean package (apps + libs)
+data/           # raw + processed market data
+models/         # trained artifacts
+reports/        # metrics & plots
+notebooks/      # exploratory (experimental)
+docs/           # architecture, audit, backlog
+legacy/         # original src/ and research artifacts
+tests/          # smoke / unit tests
 ```
 
-## How to Run This Project
+See [docs/architecture.md](docs/architecture.md) for full detail.
 
-1.  **Clone the repository:**
+---
 
-    ```bash
-    git clone https://github.com/dela-99/MARS-QUANT.git
-    cd MARS-QUANT
-    ```
+## Setup
 
-2.  **Set up Python environment:**
+```bash
+# From repo root
+python -m venv .venv
 
-    ```bash
-    # Option 1: Using venv
-    python -m venv trade_env
-    # On Windows
-    .\trade_env\Scripts\activate
-    # On Unix or MacOS
-    source trade_env/bin/activate
+# Windows
+.\.venv\Scripts\activate
 
-    # Install requirements
-    pip install -r requirements.txt
-    ```
+# Unix
+source .venv/bin/activate
 
-    ```bash
-    # Option 2: Using conda
-    conda create -n trade_env python=3.12
-    conda activate trade_env
+pip install -r requirements.txt
+```
 
-    # Install requirements
-    pip install -r requirements.txt
-    ```
+Optional: copy `.env.example` → `.env` for MetaTrader 5 downloads / live bots.
 
-3.  **Configure MetaTrader 5:**
+```env
+DEMO_ACCOUNT_NUMBER=YOUR_ACCOUNT_NUMBER
+PASSWORD=YOUR_PASSWORD
+SERVER=MetaQuotes-Demo
+```
 
-    - Copy the example environment file:
+---
 
-    ```bash
-    cp .env.example .env
-    ```
+## Run the baseline XAUUSD workflow
 
-    - Update the `.env` file with your MetaTrader 5 credentials:
+Requires existing raw data, e.g. `data/raw/xauusd_h1_2018_present.parquet`
+(already present in this repo for several start years).
 
-    ```env
-    DEMO_ACCOUNT_NUMBER=YOUR_ACCOUNT_NUMBER
-    PASSWORD=YOUR_PASSWORD
-    SERVER=MetaQuotes-Demo
-    ```
+```bash
+# End-to-end: load → features → labels → time split → XGBoost → report
+python -m mars.apps.research_lab.xauusd_baseline_pipeline --year 2018
 
-4.  **Run the pipeline:**
+# Equivalent trainer entry point
+python -m mars.apps.trainer.train_xgb_baseline --year 2018
+```
 
-    > **Note:** The current implementation supports 1-hour (H1) timeframe data only. Support for additional timeframes (M15, M30, H4, etc.) will be added in future updates.
+Outputs:
 
-    Option 1: Step by Step (Recommended for first run)
+- Report: `reports/mars_hyp_a_xgb_baseline_*.txt`
+- Models: `models/mars_hyp_a_xgb_classifier_*.joblib`, `models/mars_hyp_a_xgb_regressor_*.joblib`
+- Features: `data/processed/mars_hyp_a_features_*.parquet`
 
-    ```bash
-    # 1. Download data from MetaTrader 5
-    python src/data_acquisition.py --year 2023
+Optional download (MT5):
 
-    # 2. Generate features for Hypothesis A
-    python src/hyp_a_feature_engineering.py --year 2023 --timeframe h1 --symbol xauusd
+```bash
+python -m mars.apps.research_lab.download_data --symbol XAUUSD --year 2018 --timeframe H1
+```
 
-    # 3. Train and evaluate models
-    python src/hyp_a_train_model.py --year 2023 --hypothesis hyp_a
-    ```
+Optional session backtest on a processed feature file:
 
-    Option 2: Using the Interactive Pipeline
+```bash
+python -m mars.apps.backtester.run_hyp_a_backtest \
+  --model models/mars_hyp_a_xgb_classifier_XXXX.joblib \
+  --features data/processed/mars_hyp_a_features_XXXX.parquet
+```
 
-    ```bash
-    # Using Python
-    python src/run_pipeline.py
-    ```
+---
 
-    The interactive pipeline will prompt for parameters and run all steps automatically.
+## What is still experimental
 
-5.  **View Results:**
-    - Model performance metrics and analysis: `reports/model_results_*.txt`
-    - Pipeline execution logs: `reports/report_*.log`
-    - Trained models: `models/xgb_classifier_*.joblib` and `models/xgb_regressor_*.joblib`
+- All **notebooks/** and **legacy/** training scripts
+- **PyTorch** metrics from the original repo (random train/test split — not trustworthy OOS)
+- Paper-tuned advanced-feature XGBoost models (artifacts kept; pipeline not fully ported)
+- Live trading bots (duplicated feature logic; not wired to `mars.libs`)
+- Monte Carlo notebooks (useful diagnostics; not integrated into apps)
 
-## Research Roadmap & Status
+Read [docs/audit_report.md](docs/audit_report.md) and [docs/research_backlog.md](docs/research_backlog.md).
 
-- [x] **Hypothesis A (Asia -> London):** Implement and benchmark XGBoost vs. DL models.
-- [ ] **Hypothesis B (London Morning -> Overlap):** Implement and benchmark all model types.
-- [ ] **Hypothesis C (Asia+London -> NY):** Implement and benchmark all model types.
-- [ ] **Final Analysis:** Write a comparative report on the performance of all models across all hypotheses.
-- [ ] **Incorporate Additional Features:** Explore data from the DXY (US Dollar Index) and major market futures.
+---
+
+## Research context (Hypothesis A)
+
+- **Features:** Asian session return/range + indicators at Asia close  
+- **Labels:** London session direction (close ≷ open) and return  
+- **Decision time:** After Asia, before London open  
+
+Original research plan: [docs/RESEARCH_PLAN.md](docs/RESEARCH_PLAN.md).
+
+---
 
 ## Author
 
-- **RIDGE DELA TORJAGBO**
-  - [LinkedIn](https://www.linkedin.com/in/ridge-dela-torjagbo-32963b366?utm_source=share_via&utm_content=profile&utm_medium=member_android)
-  
- 
+**RIDGE DELA TORJAGBO**  
+[LinkedIn](https://www.linkedin.com/in/ridge-dela-torjagbo-32963b366)
