@@ -44,7 +44,7 @@ Quantitative-XAUUSD-Strategy/
 
     ```bash
     git clone https://github.com/dela-99/MARS-QUANT.git
-    cd Quantitative-XAUUSD-Strategy
+    cd MARS-QUANT
     ```
 
 2.  **Set up Python environment:**
