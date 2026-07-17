@@ -1,0 +1,85 @@
+=== M.A.R.S. Hyp-A XGBoost Baseline ===
+Generated: 2026-07-17 02:08:07
+
+Symbol: XAUUSD  Timeframe: h1
+
+Source data: C:\Users\RIDGE\OneDrive\Desktop\DEVS\MARS-QUANT\data\raw\xauusd_h1_2018_present.parquet
+
+Processed features: C:\Users\RIDGE\OneDrive\Desktop\DEVS\MARS-QUANT\data\processed\mars_hyp_a_features_xauusd_h1_20260717_020724.parquet
+
+
+
+PERIODS
+
+Train: 2018-01-03 00:00:00 → 2023-06-12 00:00:00 (n=1404)
+Val:   2023-06-13 00:00:00 → 2024-08-09 00:00:00 (n=301)
+Test:  2024-08-12 00:00:00 → 2025-10-10 00:00:00 (n=302)
+
+
+
+TRAIN classification metrics
+
+accuracy=0.9879  f1=0.9883
+
+              precision    recall  f1-score   support
+
+ Bearish (0)       0.99      0.98      0.99       681
+ Bullish (1)       0.98      0.99      0.99       723
+
+    accuracy                           0.99      1404
+   macro avg       0.99      0.99      0.99      1404
+weighted avg       0.99      0.99      0.99      1404
+
+
+
+VALIDATION classification metrics
+
+accuracy=0.4817  f1=0.5301
+              precision    recall  f1-score   support
+
+ Bearish (0)       0.46      0.39      0.42       145
+ Bullish (1)       0.50      0.56      0.53       156
+
+    accuracy                           0.48       301
+   macro avg       0.48      0.48      0.48       301
+weighted avg       0.48      0.48      0.48       301
+
+
+
+TEST (out-of-sample) classification metrics
+
+accuracy=0.5199  precision=0.5511  recall=0.5951  f1=0.5723
+
+              precision    recall  f1-score   support
+
+ Bearish (0)       0.48      0.43      0.45       139
+ Bullish (1)       0.55      0.60      0.57       163
+
+    accuracy                           0.52       302
+   macro avg       0.51      0.51      0.51       302
+weighted avg       0.52      0.52      0.52       302
+
+
+
+TEST regression metrics (london_return)
+
+MAE=0.006282  RMSE=0.008620  R2=-0.8778
+
+
+
+Classifier saved: C:\Users\RIDGE\OneDrive\Desktop\DEVS\MARS-QUANT\models\mars_hyp_a_xgb_classifier_20260717_020724.joblib
+
+Regressor saved:  C:\Users\RIDGE\OneDrive\Desktop\DEVS\MARS-QUANT\models\mars_hyp_a_xgb_regressor_20260717_020724.joblib
+
+
+
+ASSUMPTIONS & LEAKAGE NOTES
+---------------------------
+- Features use only Asia session OHLCV + indicators at Asia close.
+- Labels use London open/close (known only after London session).
+- Split is chronological (train → val → test); no random shuffle.
+- Indicators (EMA200) require warm-up; early NaN rows dropped.
+- No spread / slippage model in this ML evaluation (classification only).
+- Commission-aware backtest lives in apps/backtester (separate step).
+- Regime segmentation and walk-forward validation are NOT yet applied.
+- Prior legacy PyTorch scripts used random splits; do not mix those metrics.

@@ -1,15 +1,27 @@
-metatrader5
-pandas
+# M.A.R.S. core research stack
+# Recommended Python: 3.10–3.13 (3.14 may lack wheels for some deps)
+pandas>=2.0
+numpy>=1.24
 pytz
-numpy
-pandas-ta
-scikit-learn
-xgboost
-seaborn
+pyarrow
+scikit-learn>=1.3
+xgboost>=2.0
+joblib
 matplotlib
-torch
-backtesting
-fastparquet
-dotenv
-backtesting
-mplfinance
+seaborn
+python-dotenv
+pytest
+
+# Optional: richer TA library (needs compatible Python / numba)
+# pandas-ta
+# fastparquet
+
+# Deep learning (optional; baseline XGB does not require torch)
+# torch
+
+# Backtesting / charts (legacy + research)
+# backtesting
+# mplfinance
+
+# MetaTrader 5 (Windows; optional for download / live bots)
+# MetaTrader5
