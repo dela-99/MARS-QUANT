@@ -1,0 +1,25 @@
+{
+  "hypothesis_id": "HYP-B-001",
+  "title": "London morning price action predicts LON/NY overlap behavior",
+  "problem_statement": "The price action of the London morning session provides predictive signals for the LON/NY overlap session (direction, return, volatility spike).",
+  "mathematical_formulation": "TODO: formalize feature map F_LondonMorning and targets for overlap session under no-lookahead constraints.",
+  "required_datasets": ["xauusd_h1_processed"],
+  "required_features": ["session:london_morning", "volatility:atr@v1", "momentum:rolling_momentum@v1"],
+  "experiments": [],
+  "statistical_validation": [
+    "sharpe",
+    "sortino",
+    "max_drawdown",
+    "bootstrap_ci",
+    "purged_cv",
+    "walk_forward",
+    "out_of_sample"
+  ],
+  "status": "draft",
+  "author": "RIDGE DELA TORJAGBO",
+  "created_at": "2025-03-20T00:00:00Z",
+  "updated_at": "2026-07-17T00:00:00Z",
+  "tags": ["xauusd", "sessions", "london", "overlap", "migrated_from_legacy"],
+  "notes": "Migrated from legacy RESEARCH_PLAN.md Hypothesis B. Not yet implemented under M.A.R.S. Feature Engine.",
+  "related_literature": []
+}

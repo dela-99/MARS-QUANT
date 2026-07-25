@@ -1,0 +1,43 @@
+{
+  "hypothesis_id": "HYP-A-001",
+  "title": "Asia session characteristics predict London session behavior",
+  "problem_statement": "The characteristics of the Asian session contain predictive information about the subsequent London session's behavior for XAU/USD (direction and return).",
+  "mathematical_formulation": "Let F_Asia(t) be a feature vector computed only from bars with timestamps in the Asia session window ending at t*. Let y_dir = 1{Close_London > Open_London} and y_ret = (Close_London - Open_London) / Open_London. H0: IC(F_Asia, y) = 0 and out-of-sample predictive metrics are indistinguishable from noise after multiple-testing adjustment. H1: there exists a measurable predictive relationship under purged CV and walk-forward validation.",
+  "required_datasets": [
+    "xauusd_h1_processed",
+    "legacy:data/raw/xauusd_h1_2018_present.parquet"
+  ],
+  "required_features": [
+    "session:asia_return",
+    "session:asia_range",
+    "volatility:atr@v1",
+    "momentum:rsi_proxy",
+    "momentum:ema_distance"
+  ],
+  "experiments": [
+    "EXP-A-XGB-CLASS",
+    "EXP-A-XGB-REG",
+    "EXP-A-LSTM",
+    "EXP-A-TRANSFORMER"
+  ],
+  "statistical_validation": [
+    "sharpe",
+    "sortino",
+    "calmar",
+    "max_drawdown",
+    "bootstrap_ci",
+    "information_coefficient",
+    "purged_cv",
+    "walk_forward",
+    "out_of_sample",
+    "feature_importance",
+    "feature_stability"
+  ],
+  "status": "testing",
+  "author": "RIDGE DELA TORJAGBO",
+  "created_at": "2025-03-20T00:00:00Z",
+  "updated_at": "2026-07-17T00:00:00Z",
+  "tags": ["xauusd", "sessions", "asia", "london", "migrated_from_legacy"],
+  "notes": "Migrated from legacy RESEARCH_PLAN.md Hypothesis A. Prior notebooks and models preserved under legacy/. Re-validation under M.A.R.S. validation suite is required before any production-candidate status.",
+  "related_literature": []
+}
