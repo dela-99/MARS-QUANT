@@ -35,3 +35,32 @@ if you adjust them — or run with working directory set carefully.
 
 Recommended: migrate any needed logic into `mars/libs/` rather than relying on
 these scripts long-term.
+
+# Legacy Research Archive New
+
+This directory preserves the **pre-refactor** M.A.R.S. / Quantitative XAUUSD research codebase.
+
+**Nothing here was deleted.** It was moved for reproducibility and institutional memory.
+
+## Contents
+
+| Path | Description |
+|------|-------------|
+| `src/` | Original scripts (data acquisition, hyp-A features, XGB/LSTM/Transformer training, bots) |
+| `notebooks/` | Exploratory notebooks for Hypothesis A |
+| `models/` | Trained model artifacts |
+| `reports/` | Backtest plots and training reports |
+| `RESEARCH_PLAN.md` | Original research plan (Hypotheses A/B/C) |
+
+## Status
+
+Code in `legacy/` is **deprecated for new work**.
+
+- New data work → `mars.data`
+- New features → `mars.features`
+- New hypotheses → `research/hypotheses` + `mars.research`
+- New validation → `mars.validation`
+
+## Migration
+
+See [`../docs/MIGRATION.md`](../docs/MIGRATION.md) for the mapping from legacy modules to the new platform.

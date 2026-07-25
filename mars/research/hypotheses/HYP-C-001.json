@@ -1,0 +1,25 @@
+{
+  "hypothesis_id": "HYP-C-001",
+  "title": "Combined Asia + London features predict New York session behavior",
+  "problem_statement": "The combined characteristics of Asia and full London sessions contain predictive information about the subsequent New York session.",
+  "mathematical_formulation": "TODO: formalize joint feature map F_Asia∪London known at London close and NY session targets.",
+  "required_datasets": ["xauusd_h1_processed"],
+  "required_features": ["session:asia", "session:london_full", "volatility:atr@v1"],
+  "experiments": [],
+  "statistical_validation": [
+    "sharpe",
+    "sortino",
+    "max_drawdown",
+    "bootstrap_ci",
+    "purged_cv",
+    "walk_forward",
+    "out_of_sample"
+  ],
+  "status": "draft",
+  "author": "RIDGE DELA TORJAGBO",
+  "created_at": "2025-03-20T00:00:00Z",
+  "updated_at": "2026-07-17T00:00:00Z",
+  "tags": ["xauusd", "sessions", "new_york", "migrated_from_legacy"],
+  "notes": "Migrated from legacy RESEARCH_PLAN.md Hypothesis C. Not yet implemented under M.A.R.S. Feature Engine.",
+  "related_literature": []
+}
