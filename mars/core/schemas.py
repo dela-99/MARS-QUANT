@@ -115,7 +115,7 @@ class FeatureMetadata(BaseModel):
 class HypothesisRecord(BaseModel):
     """
     Formal hypothesis record.
- 
+
     Every research idea must be captured with:
         - unique ID
         - problem statement
@@ -125,7 +125,9 @@ class HypothesisRecord(BaseModel):
         - statistical validation plan
         - status
     """
- 
+
+    model_config = {"extra": "allow"}
+
     hypothesis_id: str
     title: str
     problem_statement: str
@@ -141,6 +143,9 @@ class HypothesisRecord(BaseModel):
     tags: list[str] = Field(default_factory=list)
     notes: str = ""
     related_literature: list[str] = Field(default_factory=list)
+    test_set_locked: bool = False
+    test_set_locked_at: Optional[datetime] = None
+    test_set_locked_by_experiment: Optional[str] = None
  
     @field_validator("hypothesis_id")
     @classmethod

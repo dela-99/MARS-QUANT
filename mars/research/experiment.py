@@ -1,21 +1,22 @@
 """Experiment logging for reproducible research runs."""
- 
+
 from __future__ import annotations
- 
+
 import json
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 from uuid import uuid4
- 
+
 from pydantic import BaseModel, Field
- 
+
 from mars.core.config import DEFAULT_CONFIG
- 
- 
+from mars.research.hypothesis import HypothesisStore
+
+
 class ExperimentRecord(BaseModel):
     """Single experiment run metadata."""
- 
+
     experiment_id: str = Field(default_factory=lambda: uuid4().hex[:12])
     hypothesis_id: str
     name: str
@@ -30,36 +31,44 @@ class ExperimentRecord(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     completed_at: Optional[datetime] = None
     notes: str = ""
- 
- 
+
+
 class ExperimentLog:
     """Append-only experiment log under research/experiment_logs/."""
- 
-    def __init__(self, root: Optional[Path] = None) -> None:
+
+    def __init__(self, root: Optional[Path] = None, hypothesis_root: Optional[Path] = None) -> None:
         self.root = root or DEFAULT_CONFIG.paths.experiment_logs
         self.root.mkdir(parents=True, exist_ok=True)
- 
+        self.hypothesis_root = hypothesis_root
+
     def _path(self, experiment_id: str) -> Path:
         return self.root / f"{experiment_id}.json"
- 
+
     def write(self, record: ExperimentRecord) -> Path:
         path = self._path(record.experiment_id)
         path.write_text(record.model_dump_json(indent=2), encoding="utf-8")
         return path
- 
+
     def read(self, experiment_id: str) -> ExperimentRecord:
         path = self._path(experiment_id)
         if not path.exists():
             raise FileNotFoundError(path)
         return ExperimentRecord.model_validate_json(path.read_text(encoding="utf-8"))
- 
+
     def complete(
         self,
         experiment_id: str,
         metrics: dict[str, Any],
         artifacts: Optional[list[str]] = None,
+        evaluated_on_test: bool = False,
     ) -> ExperimentRecord:
         rec = self.read(experiment_id)
+
+        # If this experiment evaluated on the test set, lock the test set for the hypothesis
+        if evaluated_on_test:
+            hypothesis_store = HypothesisStore(root=self.hypothesis_root)
+            hypothesis_store.lock_test_set(rec.hypothesis_id, experiment_id)
+
         rec = rec.model_copy(
             update={
                 "metrics": metrics,
@@ -70,7 +79,7 @@ class ExperimentLog:
         )
         self.write(rec)
         return rec
- 
+
     def list_for_hypothesis(self, hypothesis_id: str) -> list[ExperimentRecord]:
         results = []
         for path in sorted(self.root.glob("*.json")):
@@ -83,3 +92,8 @@ class ExperimentLog:
             if rec.hypothesis_id == hypothesis_id:
                 results.append(rec)
         return results
+
+    def assert_can_evaluate_on_test(self, hypothesis_id: str) -> None:
+        """Raise if test set is locked for this hypothesis."""
+        hypothesis_store = HypothesisStore(root=self.hypothesis_root)
+        hypothesis_store.assert_test_set_unlocked(hypothesis_id)
