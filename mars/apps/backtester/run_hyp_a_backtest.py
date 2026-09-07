@@ -25,6 +25,7 @@ import pandas as pd
 
 from mars.libs.models.xgboost_model import XGBoostClassifierModel
 from mars.libs.utils.paths import ProjectPaths
+from mars.research.experiment import ExperimentLog
 
 
 def simple_session_backtest(
@@ -94,6 +95,10 @@ def main() -> None:
     X_test = X.iloc[-n_test:]
     y_dir_test = y_dir.iloc[-n_test:]
     y_ret_test = y_ret.iloc[-n_test:]
+
+    # TEST SET GUARD: must pass before touching test data for HYP-A
+    exp_log = ExperimentLog(hypothesis_root=ProjectPaths.from_root().hypotheses)
+    exp_log.assert_can_evaluate_on_test("HYP-A-001")
 
     model = XGBoostClassifierModel.load(args.model)
     preds = model.predict(X_test)

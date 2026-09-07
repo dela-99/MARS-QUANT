@@ -1,0 +1,71 @@
+=== M.A.R.S. Hyp-B Session Volatility Baseline ===
+Generated: 2026-09-06 20:57:48
+
+Symbol: XAUUSD  Timeframe: h1
+
+Source data: C:\Users\RIDGE\OneDrive\Desktop\MARS-QUANT\data\raw\xauusd_h1_2018_present.parquet
+
+Processed features: C:\Users\RIDGE\OneDrive\Desktop\MARS-QUANT\data\processed\mars_hyp_b_features_xauusd_h1_20260906_205651.parquet
+
+
+
+PERIODS
+
+Train: 2018-01-03_0 → 2023-06-13_2 (n=5619)
+Val:   2023-06-13_3 → 2024-08-12_2 (n=1204)
+Test:  2024-08-12_3 → 2025-10-10_3 (n=1205)
+
+
+
+TRAIN regression metrics (XGB)
+
+MAE=0.002059  RMSE=0.003112  R2=0.3902
+
+
+
+VALIDATION regression metrics
+
+XGB: MAE=0.002352  RMSE=0.003252  R2=0.1673
+GARCH: MAE=14.935425  RMSE=14.935426  R2=-17566887.1015
+
+
+
+TEST (out-of-sample) regression metrics
+
+XGB: MAE=0.003558  RMSE=0.004285  R2=-0.2582
+
+GARCH: MAE=14.934212  RMSE=14.934213  R2=-15280950.5662
+
+
+
+GARCH COMPARISON (primary hypothesis test):
+
+  XGB beats GARCH on test MAE: True
+
+  XGB beats GARCH on test R²:  True
+
+  MAE difference (GARCH - XGB): 14.930654
+
+  R² difference (XGB - GARCH):  15280950.3079
+
+
+
+XGBoost saved: C:\Users\RIDGE\OneDrive\Desktop\MARS-QUANT\models\mars_hyp_b_xgb_regressor_20260906_205651.joblib
+
+GARCH saved:  C:\Users\RIDGE\OneDrive\Desktop\MARS-QUANT\models\mars_hyp_b_garch_baseline_20260906_205651.joblib
+
+
+
+ASSUMPTIONS & LEAKAGE NOTES
+---------------------------
+- Features use only COMPLETED sessions (no partial-session data).
+- session:current_session_range = range of the most recently closed session.
+- realized_vol_trailing_5/_20 = rolling over COMPLETED sessions only.
+- Labels = next_session_atr_pct = ATR of NEXT session / close of current session.
+- Features computed at session CLOSE; labels from NEXT session — strict no-lookahead.
+- Session boundaries (UTC fixed): Asia 00-08, London 08-17, NY 13-22, Overlap 13-17.
+- Overlap is its own 4th session category in session_dummy.
+- Split is chronological (train → val → test); no random shuffle.
+- GARCH baseline: CARR range-GARCH (not return-GARCH with flat √24 scaling).
+  This avoids the unfair return-vol→range conversion and uses the same range target.
+- XGBoost gets session-dummy features; GARCH gets session-specific range series.

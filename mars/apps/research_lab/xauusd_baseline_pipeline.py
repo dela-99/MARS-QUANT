@@ -30,6 +30,7 @@ from mars.libs.features.hyp_a_asia_london import HypAAsiaLondonFeatures
 from mars.libs.labels.hyp_a_labels import HypALondonLabels
 from mars.libs.models.xgboost_model import XGBoostClassifierModel, XGBoostRegressorModel
 from mars.libs.utils.paths import ProjectPaths
+from mars.research.experiment import ExperimentLog
 
 
 def run_baseline_pipeline(
@@ -146,6 +147,10 @@ def run_baseline_pipeline(
         reg.fit(X_train, y_train_r)
 
     # --- 6. Evaluate ---
+    # TEST SET GUARD: must pass before touching test data for any registered hypothesis
+    exp_log = ExperimentLog(hypothesis_root=paths.hypotheses)
+    exp_log.assert_can_evaluate_on_test("HYP-A-001")
+
     print("[6/7] Evaluating out-of-sample ...")
     test_pred_c = clf.predict(X_test)
     test_pred_r = reg.predict(X_test)
