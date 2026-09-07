@@ -1,0 +1,1 @@
+data/raw/xauusd_m5_2003_2026_raw.csv filter=lfs diff=lfs merge=lfs -text
