@@ -1,0 +1,26 @@
+{
+  "experiment_id": "5ca93b5df137",
+  "hypothesis_id": "HYP-A-001",
+  "name": "EXP-A-5MIN-ROBUSTNESS",
+  "description": "5-min resolution Hyp-A features with same H1 feature set",
+  "dataset_ids": [],
+  "feature_versions": [],
+  "parameters": {
+    "n_estimators": 500,
+    "timeframe": "5min",
+    "data_start": "2003-05-06",
+    "data_end": "2026-04-29"
+  },
+  "metrics": {
+    "val_accuracy": 0.6344,
+    "val_f1": 0.4148527528809219,
+    "val_mae": 0.004425458754138777,
+    "val_r2": -0.1895026885461244
+  },
+  "artifacts": [],
+  "status": "completed",
+  "seed": null,
+  "created_at": "2026-09-07T01:49:53.083085Z",
+  "completed_at": "2026-09-07T01:49:53.101118Z",
+  "notes": ""
+}
