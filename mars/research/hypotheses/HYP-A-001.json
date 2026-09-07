@@ -33,11 +33,20 @@
     "feature_importance",
     "feature_stability"
   ],
-  "status": "testing",
+  "status": "rejected",
   "author": "RIDGE DELA TORJAGBO",
   "created_at": "2025-03-20T00:00:00Z",
-  "updated_at": "2026-07-17T00:00:00Z",
-  "tags": ["xauusd", "sessions", "asia", "london", "migrated_from_legacy"],
-  "notes": "Migrated from legacy RESEARCH_PLAN.md Hypothesis A. Prior notebooks and models preserved under legacy/. Re-validation under M.A.R.S. validation suite is required before any production-candidate status.",
-  "related_literature": []
+  "updated_at": "2026-09-07T02:45:00Z",
+  "tags": [
+    "xauusd",
+    "sessions",
+    "asia",
+    "london",
+    "migrated_from_legacy"
+  ],
+  "notes": "Migrated from legacy RESEARCH_PLAN.md Hypothesis A. Prior notebooks and models preserved under legacy/. Re-validation under M.A.R.S. validation suite is required before any production-candidate status.\nNegative R² across all start-year splits and both baseline runs. Backtest Sharpe positive but consistently underperforms buy-and-hold by 20-70pp; likely trend-drift, not edge. No further tuning of this feature family without a new information source.\nEXP-A-5MIN-ROBUSTNESS: classification accuracy (65.47% test) exceeds majority-class baseline (63.5%) by only ~2pp; precision/recall consistent with model tracking the class prior rather than genuine discrimination. Not a meaningful edge. Regression R² remains negative. REJECTED status confirmed.",
+  "related_literature": [],
+  "test_set_locked": true,
+  "test_set_locked_at": "2026-09-04T01:52:09.655380Z",
+  "test_set_locked_by_experiment": "EXP-TEST-001"
 }

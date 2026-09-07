@@ -190,20 +190,19 @@ class HypBSessionVolFeatures:
         # Detect gaps between consecutive sessions
         # A gap is when the time between session end and next session start > 1 hour
         # (normal session transitions are at most ~1 hour, e.g., London close 17:00 -> NY open 17:00)
-        df["prev_end"] = df.index
-        df["next_start"] = df.index.to_series().shift(-1)
-        # Actually, sessions on the same day are contiguous; gaps occur across days
-        # The gap is between the last session of one day and first session of next day
+        # The key gap is between the LAST session of one day and FIRST session of next day
         df["gap_hours"] = (df.index.to_series() - df.index.to_series().shift(1)).dt.total_seconds() / 3600
         
-        # Flag sessions that follow a gap > 1 hour
-        # A normal overnight gap is ~6-8 hours (NY close 22:00 -> Asia open 00:00 next day = 2 hours)
-        # But multi-day feed outages are > 24 hours
+        # Normal overnight gap: NY close (21:55) -> Asia open (07:55 next day) = ~10 hours
+        # But wait: Asia 00:00-07:55, London 08:00-12:55, Overlap 13:00-16:55, NY 17:00-21:55
+        # NY close 21:55 -> next day Asia open 00:00 = 2 hours 5 min
+        # So normal overnight gap is ~2 hours between sessions
+        # Multi-day feed outages are > 24 hours
         df["is_gap_after_feed_outage"] = df["gap_hours"] > 24  # multi-day outage
-        df["is_large_gap"] = df["gap_hours"] > 2  # any gap larger than normal overnight
+        df["is_large_gap"] = df["gap_hours"] > 8  # gap larger than normal overnight (2h) + buffer
         
         # Clean up temp columns
-        df = df.drop(columns=["prev_end", "next_start", "gap_hours"])
+        df = df.drop(columns=["gap_hours"])
         
         return df
 

@@ -12,6 +12,9 @@ seaborn
 python-dotenv
 pytest
 
+# Macro data
+fredapi
+
 # Optional: richer TA library (needs compatible Python / numba)
 # pandas-ta
 # fastparquet

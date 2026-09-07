@@ -1,25 +1,26 @@
 {
   "hypothesis_id": "HYP-C-001",
-  "title": "Combined Asia + London features predict New York session behavior",
-  "problem_statement": "The combined characteristics of Asia and full London sessions contain predictive information about the subsequent New York session.",
-  "mathematical_formulation": "TODO: formalize joint feature map F_Asia∪London known at London close and NY session targets.",
-  "required_datasets": ["xauusd_h1_processed"],
-  "required_features": ["session:asia", "session:london_full", "volatility:atr@v1"],
-  "experiments": [],
-  "statistical_validation": [
-    "sharpe",
-    "sortino",
-    "max_drawdown",
-    "bootstrap_ci",
-    "purged_cv",
-    "walk_forward",
-    "out_of_sample"
+  "title": "Macro regime filter for XAUUSD (DXY/real yields) — position permission/sizing input",
+  "problem_statement": "OHLCV-only technical features (Hyp-A, Hyp-B) show no exploitable edge on XAUUSD at H1/5-min. Test whether macro regime state (dollar strength, real yield momentum) carries information for a risk-on/risk-off filter, to be used for trade permission/sizing rather than standalone directional alpha.",
+  "target": "dxy_momentum_regime",
+  "target_type": "classification",
+  "target_definition": "Ternary macro regime from DXY 20-session momentum: risk-on (DXY down > 0.5% over 20 sessions), neutral (|change| <= 0.5%), risk-off (DXY up > 0.5% over 20 sessions). Labeled at session close using DXY close prices; no XAUUSD price data used in label construction — pure macro regime classifier.",
+  "required_datasets": ["xauusd_h1_processed", "fred:DXY_proxy", "fred:DFII10", "fred:VIXCLS (optional)"],
+  "required_features": [
+    "macro:dxy_momentum_5",
+    "macro:dxy_momentum_20",
+    "macro:real_yield_10y_level",
+    "macro:real_yield_10y_momentum_5",
+    "macro:vix_level (optional, if stress proxy needed)"
   ],
+  "experiments": ["EXP-C-XGB-CLASS", "EXP-C-PERSISTENCE-BASELINE"],
+  "statistical_validation": ["purged_cv", "walk_forward", "baseline_comparison"],
+  "notes": "Baseline is naive persistence (yesterday's regime = today's regime) — model must beat this, not beat zero. This is a filter/sizing input, not standalone alpha, so success bar is lower than Hyp-A/B but must still show real discriminative power over persistence. Label uses DXY only; XAUUSD used only for downstream sizing test after regime classification is validated.",
   "status": "draft",
-  "author": "RIDGE DELA TORJAGBO",
-  "created_at": "2025-03-20T00:00:00Z",
-  "updated_at": "2026-07-17T00:00:00Z",
-  "tags": ["xauusd", "sessions", "new_york", "migrated_from_legacy"],
-  "notes": "Migrated from legacy RESEARCH_PLAN.md Hypothesis C. Not yet implemented under M.A.R.S. Feature Engine.",
-  "related_literature": []
+  "test_set_locked": false,
+  "created_at": "2026-09-07T00:00:00Z",
+  "updated_at": "2026-09-07T00:00:00Z",
+  "tags": ["xauusd", "macro", "dxy", "real_yields", "regime_filter", "position_sizing"],
+  "test_set_locked_at": null,
+  "test_set_locked_by_experiment": null
 }

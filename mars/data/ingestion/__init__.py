@@ -1,6 +1,7 @@
 from mars.data.ingestion.mt5 import MT5Ingestor
 from mars.data.ingestion.parquet_source import ParquetIngestor
 from mars.data.ingestion.csv_source import CSVIngestor
+from mars.data.ingestion.fred_source import FREDIngestor
 from mars.data.ingestion.pipeline import IngestionPipeline
 
-__all__ = ["MT5Ingestor", "ParquetIngestor", "CSVIngestor", "IngestionPipeline"]
+__all__ = ["MT5Ingestor", "ParquetIngestor", "CSVIngestor", "FREDIngestor", "IngestionPipeline"]
