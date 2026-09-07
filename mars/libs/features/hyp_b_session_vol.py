@@ -186,6 +186,25 @@ class HypBSessionVolFeatures:
         df = pd.DataFrame(session_rows)
         df["timestamp"] = pd.to_datetime(df["timestamp"])
         df = df.set_index("timestamp").sort_index()
+        
+        # Detect gaps between consecutive sessions
+        # A gap is when the time between session end and next session start > 1 hour
+        # (normal session transitions are at most ~1 hour, e.g., London close 17:00 -> NY open 17:00)
+        df["prev_end"] = df.index
+        df["next_start"] = df.index.to_series().shift(-1)
+        # Actually, sessions on the same day are contiguous; gaps occur across days
+        # The gap is between the last session of one day and first session of next day
+        df["gap_hours"] = (df.index.to_series() - df.index.to_series().shift(1)).dt.total_seconds() / 3600
+        
+        # Flag sessions that follow a gap > 1 hour
+        # A normal overnight gap is ~6-8 hours (NY close 22:00 -> Asia open 00:00 next day = 2 hours)
+        # But multi-day feed outages are > 24 hours
+        df["is_gap_after_feed_outage"] = df["gap_hours"] > 24  # multi-day outage
+        df["is_large_gap"] = df["gap_hours"] > 2  # any gap larger than normal overnight
+        
+        # Clean up temp columns
+        df = df.drop(columns=["prev_end", "next_start", "gap_hours"])
+        
         return df
 
     def _make_session_row(
@@ -230,9 +249,19 @@ class HypBSessionVolFeatures:
         completed = session_data.iloc[idx - 1]  # most recently completed session
         completed_idx = idx - 1
 
+        # Check if the completed session itself follows a large gap (feed outage)
+        if completed.get("is_large_gap", False):
+            # Skip this session - it follows a gap, so its return is not a valid 5-min return
+            return None
+
         # Trailing realized vol over COMPLETED sessions only
-        trailing_5 = session_data.iloc[max(0, completed_idx - 4):completed_idx + 1]
-        trailing_20 = session_data.iloc[max(0, completed_idx - 19):completed_idx + 1]
+        # Exclude sessions that follow large gaps from the trailing window
+        trailing_candidates_5 = session_data.iloc[max(0, completed_idx - 4):completed_idx + 1]
+        trailing_candidates_20 = session_data.iloc[max(0, completed_idx - 19):completed_idx + 1]
+
+        # Filter out sessions that follow large gaps
+        trailing_5 = trailing_candidates_5[~trailing_candidates_5.get("is_large_gap", False)]
+        trailing_20 = trailing_candidates_20[~trailing_candidates_20.get("is_large_gap", False)]
 
         realized_vol_5 = np.sqrt(trailing_5["session_return"].pow(2).mean()) if len(trailing_5) > 0 else np.nan
         realized_vol_20 = np.sqrt(trailing_20["session_return"].pow(2).mean()) if len(trailing_20) > 0 else np.nan

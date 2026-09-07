@@ -8,6 +8,7 @@ import numpy as np
 from sklearn.metrics import (
     accuracy_score,
     classification_report,
+    confusion_matrix,
     f1_score,
     mean_absolute_error,
     mean_squared_error,
@@ -26,6 +27,7 @@ def classification_metrics(y_true, y_pred) -> Dict[str, Any]:
         "precision": float(precision_score(y_true, y_pred, zero_division=0, average="binary")),
         "recall": float(recall_score(y_true, y_pred, zero_division=0, average="binary")),
         "f1": float(f1_score(y_true, y_pred, zero_division=0, average="binary")),
+        "confusion_matrix": confusion_matrix(y_true, y_pred).tolist(),
         "report": classification_report(
             y_true, y_pred, target_names=["Bearish (0)", "Bullish (1)"], zero_division=0
         ),

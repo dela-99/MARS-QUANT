@@ -15,7 +15,6 @@ import pandas as pd
 import pytz
 
 from mars.libs.data.loaders import to_price_index
-from mars.libs.features.base import FeaturePipeline
 from mars.libs.features.indicators import add_baseline_indicators
 
 
@@ -30,7 +29,7 @@ FEATURE_COLUMNS = [
 ]
 
 
-class HypAAsiaLondonFeatures(FeaturePipeline):
+class HypAAsiaLondonFeatures:
     """
     Daily tabular features for Asia → London (Hypothesis A).
 
@@ -39,9 +38,9 @@ class HypAAsiaLondonFeatures(FeaturePipeline):
     """
 
     def __init__(self, london_tz_name: str = "Europe/London") -> None:
-        super().__init__(name="hyp_a_asia_london")
         self.london_tz = pytz.timezone(london_tz_name)
-        self.set_feature_names(FEATURE_COLUMNS)
+        self.feature_names = list(FEATURE_COLUMNS)
+        self._is_fitted = False
 
     def transform(self, market_data: pd.DataFrame) -> pd.DataFrame:
         """
@@ -67,7 +66,6 @@ class HypAAsiaLondonFeatures(FeaturePipeline):
         out = out.set_index("date").sort_index()
         out = out[FEATURE_COLUMNS]
         out = out.dropna()
-        self.set_feature_names(list(out.columns))
         self._is_fitted = True
         return out
 
@@ -116,7 +114,6 @@ class HypAAsiaLondonFeatures(FeaturePipeline):
         features_df = features_df.loc[valid, FEATURE_COLUMNS]
         meta_df = meta_df.loc[features_df.index]
 
-        self.set_feature_names(list(features_df.columns))
         self._is_fitted = True
         return features_df, meta_df
 
