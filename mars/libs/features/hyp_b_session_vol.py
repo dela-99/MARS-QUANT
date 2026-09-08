@@ -49,6 +49,71 @@ class HypBSessionVolFeatures:
         self.feature_names = list(FEATURE_COLUMNS)
         self._is_fitted = False
 
+    def _make_session_row(self, session_bars: pd.DataFrame, date, session_id: int, name: str) -> Dict[str, Any]:
+        """Build a session row from raw 5-min bars."""
+        # Session OHLC
+        session_open = session_bars["open"].iloc[0]
+        session_high = session_bars["high"].max()
+        session_low = session_bars["low"].min()
+        session_close = session_bars["close"].iloc[-1]
+        session_volume = session_bars["volume"].sum()
+        session_range = (session_high - session_low) / session_close
+
+        # ATR at session close (use last bar's ATR)
+        atr_at_close = session_bars["ATRr_14"].iloc[-1] if "ATRr_14" in session_bars.columns else np.nan
+
+        # Realized vol within session (std of 5-min returns)
+        returns = session_bars["close"].pct_change().dropna()
+        realized_vol = returns.std() * np.sqrt(12)  # annualize from 5-min to daily (12 * 5min = 1 hour)
+
+        return {
+            "timestamp": session_bars.index[-1],
+            "date": date,
+            "session_id": session_id,
+            "session_name": name,
+            "session_open": session_open,
+            "session_high": session_high,
+            "session_low": session_low,
+            "session_close": session_close,
+            "session_volume": session_volume,
+            "session_range": session_range,
+            "session_return": (session_close / session_open - 1) if session_open != 0 else 0,
+            "atr_at_close": atr_at_close,
+            "realized_vol": realized_vol,
+        }
+
+    def _extract_features(self, session_data: pd.DataFrame, idx: int) -> Optional[Dict[str, Any]]:
+        """Extract features from completed session at index idx-1."""
+        if idx - 1 < 0:
+            return None
+            
+        prev_session = session_data.iloc[idx - 1]
+        
+        # Trailing realized vol (exclude sessions after large gaps)
+        def trailing_vol(window: int) -> float:
+            """Compute trailing realized vol, skipping gap-adjacent sessions."""
+            vols = []
+            for j in range(idx - window, idx):
+                if j < 0:
+                    continue
+                sess = session_data.iloc[j]
+                if sess.get("is_large_gap", False):
+                    continue
+                vols.append(sess["realized_vol"])
+            return np.mean(vols) if vols else np.nan
+
+        day_of_week = prev_session.name.weekday()
+        
+        return {
+            "day_of_week": day_of_week,
+            "session_id": int(prev_session["session_id"]),
+            "current_session_range": prev_session["session_range"],
+            "atr_at_session_close": prev_session["atr_at_close"],
+            "realized_vol_trailing_5": trailing_vol(5),
+            "realized_vol_trailing_20": trailing_vol(20),
+            "tick_volume_proxy": prev_session["session_volume"],
+        }
+
     def transform(self, market_data: pd.DataFrame) -> pd.DataFrame:
         """Build daily feature rows. Returns a DataFrame indexed by date with FEATURE_COLUMNS."""
         features_df, _ = self.transform_with_sessions(market_data)
@@ -94,6 +159,7 @@ class HypBSessionVolFeatures:
                 feature_rows.append(features)
                 meta_rows.append({
                     "date": prev_session.name.date(),
+                    "timestamp": prev_session.name,  # Session end timestamp
                     "session_id": int(prev_session["session_id"]),
                     "session_open": prev_session["session_open"],
                     "session_high": prev_session["session_high"],
@@ -131,6 +197,18 @@ class HypBSessionVolFeatures:
 
     def _build_session_data(self, price: pd.DataFrame) -> pd.DataFrame:
         """Slice price data into session bars using fixed UTC boundaries."""
+        # For daily data, we can't slice into sessions. 
+        # Instead, treat each day as a single "session" with OHLC from daily close.
+        # For true intraday data, this would slice into Asia/London/NY/Overlap sessions.
+        
+        # Check if data is daily (no intraday frequency)
+        inferred_freq = pd.infer_freq(price.index)
+        is_daily = inferred_freq is not None and inferred_freq.startswith('D')
+        
+        if is_daily:
+            return self._build_daily_session_data(price)
+        
+        # Original intraday session slicing logic
         session_rows = []
 
         for day in price.index.normalize().unique():
@@ -188,9 +266,6 @@ class HypBSessionVolFeatures:
         df = df.set_index("timestamp").sort_index()
         
         # Detect gaps between consecutive sessions
-        # A gap is when the time between session end and next session start > 1 hour
-        # (normal session transitions are at most ~1 hour, e.g., London close 17:00 -> NY open 17:00)
-        # The key gap is between the LAST session of one day and FIRST session of next day
         df["gap_hours"] = (df.index.to_series() - df.index.to_series().shift(1)).dt.total_seconds() / 3600
         
         # Normal overnight gap: NY close (21:55) -> Asia open (07:55 next day) = ~10 hours
@@ -205,85 +280,37 @@ class HypBSessionVolFeatures:
         df = df.drop(columns=["gap_hours"])
         
         return df
-
-    def _make_session_row(
-        self, session_bars: pd.DataFrame, day_date: datetime.date,
-        session_id: int, name: str
-    ) -> Dict[str, Any]:
-        """Compute session-level statistics."""
-        session_open = float(session_bars["open"].iloc[0])
-        session_close = float(session_bars["close"].iloc[-1])
-        session_high = float(session_bars["high"].max())
-        session_low = float(session_bars["low"].min())
-        session_volume = float(session_bars["volume"].sum())
-        session_range = session_high - session_low
-        session_return = (session_close - session_open) / session_open if session_open else np.nan
-        atr_at_close = float(session_bars["ATRr_14"].iloc[-1]) if "ATRr_14" in session_bars.columns and pd.notna(session_bars["ATRr_14"].iloc[-1]) else np.nan
-        realized_vol = abs(session_return)  # simple proxy for realized vol
-
-        return {
-            "timestamp": session_bars.index[-1],  # session end timestamp
-            "date": day_date,
-            "session_id": session_id,
-            "session_name": name,
-            "session_open": session_open,
-            "session_high": session_high,
-            "session_low": session_low,
-            "session_close": session_close,
-            "session_volume": session_volume,
-            "session_range": session_range,
-            "session_return": session_return,
-            "atr_at_close": atr_at_close,
-            "realized_vol": realized_vol,
-        }
-
-    def _extract_features(self, session_data: pd.DataFrame, idx: int) -> Optional[Dict[str, Any]]:
-        """
-        Extract features at session boundary `idx` (target session).
-        Features come from session `idx-1` (completed) and trailing windows.
-        """
-        if idx < 1:
-            return None
-
-        completed = session_data.iloc[idx - 1]  # most recently completed session
-        completed_idx = idx - 1
-
-        # Check if the completed session itself follows a large gap (feed outage)
-        if completed.get("is_large_gap", False):
-            # Skip this session - it follows a gap, so its return is not a valid 5-min return
-            return None
-
-        # Trailing realized vol over COMPLETED sessions only
-        # Exclude sessions that follow large gaps from the trailing window
-        trailing_candidates_5 = session_data.iloc[max(0, completed_idx - 4):completed_idx + 1]
-        trailing_candidates_20 = session_data.iloc[max(0, completed_idx - 19):completed_idx + 1]
-
-        # Filter out sessions that follow large gaps
-        trailing_5 = trailing_candidates_5[~trailing_candidates_5.get("is_large_gap", False)]
-        trailing_20 = trailing_candidates_20[~trailing_candidates_20.get("is_large_gap", False)]
-
-        realized_vol_5 = np.sqrt(trailing_5["session_return"].pow(2).mean()) if len(trailing_5) > 0 else np.nan
-        realized_vol_20 = np.sqrt(trailing_20["session_return"].pow(2).mean()) if len(trailing_20) > 0 else np.nan
-
-        # Current session range = range of the COMPLETED session
-        current_session_range = completed["session_range"]
-
-        # ATR at completed session close
-        atr_at_session_close = completed["atr_at_close"]
-
-        # Tick volume proxy = volume in completed session
-        tick_volume_proxy = completed["session_volume"]
-
-        # Day of week from completed session date
-        day_of_week = completed.name.dayofweek if hasattr(completed.name, "dayofweek") else \
-                      pd.Timestamp(completed.name).dayofweek
-
-        return {
-            "day_of_week": day_of_week,
-            "session_id": int(completed["session_id"]),
-            "current_session_range": current_session_range,
-            "atr_at_session_close": atr_at_session_close,
-            "realized_vol_trailing_5": realized_vol_5,
-            "realized_vol_trailing_20": realized_vol_20,
-            "tick_volume_proxy": tick_volume_proxy,
-        }
+    
+    def _build_daily_session_data(self, price: pd.DataFrame) -> pd.DataFrame:
+        """Convert daily OHLC to session-like format for macro regime features."""
+        session_rows = []
+        
+        for date, row in price.iterrows():
+            date_only = date.date()
+            close = row["close"]
+            
+            # For daily data, use close as proxy for all OHLC
+            # Create a single "session" per day
+            session_rows.append({
+                "timestamp": pd.Timestamp(date),
+                "date": date,
+                "session_id": 0,  # Single daily session
+                "session_name": "Daily",
+                "session_open": close,
+                "session_high": close,
+                "session_low": close,
+                "session_close": close,
+                "session_volume": row.get("volume", 0.0),
+                "session_range": 0.0,
+                "session_return": 0.0,  # No intraday return for daily
+                "atr_at_close": row.get("atr", float("nan")) if "atr" in price.columns else float("nan"),
+                "realized_vol": 0.0,
+            })
+        
+        if not session_rows:
+            return pd.DataFrame()
+        
+        df = pd.DataFrame(session_rows)
+        df["timestamp"] = pd.to_datetime(df["timestamp"])
+        df = df.set_index("timestamp").sort_index()
+        return df
