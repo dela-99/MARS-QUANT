@@ -1,7 +1,7 @@
 """
 Macro regime features for Hyp-C: DXY momentum, real yield momentum, VIX, etc.
 
-Features are computed from FRED macro time series (daily frequency).
+Features are computed from FRED macro time series (daily frequency with publication lag applied).
 """
 
 from __future__ import annotations
@@ -14,14 +14,13 @@ import pandas as pd
 
 
 FEATURE_COLUMNS = [
-    "dxy_momentum_5",
-    "dxy_momentum_20",
-    "real_yield_10y_level",
-    "real_yield_10y_momentum_5",
-    "real_yield_10y_momentum_20",
-    "vix_level",
-    "vix_momentum_5",
-    "vix_momentum_20",
+    "dxy_momentum_5",           # Short-term DXY momentum (predictive, not directly used in target)
+    "real_yield_10y_level",     # Real yield level
+    "real_yield_10y_momentum_5", # Real yield short momentum
+    "real_yield_10y_momentum_20", # Real yield long momentum
+    "vix_level",                # VIX level
+    "vix_momentum_5",           # VIX short momentum
+    "vix_momentum_20",          # VIX long momentum
 ]
 
 
@@ -29,7 +28,8 @@ class MacroRegimeFeatures:
     """
     Daily macro regime features for Hyp-C.
 
-    Input: normalized macro DataFrames (one per series) with UTC timestamps.
+    Input: normalized macro DataFrames (one per series) with UTC timestamps
+           already adjusted for FRED publication lag (timestamp = when data becomes available).
     Output: one row per trading day with macro regime features.
     """
 
@@ -48,14 +48,15 @@ class MacroRegimeFeatures:
         ----------
         macro_data: dict mapping series name -> DataFrame with DatetimeIndex and 'close' column
                     Expected keys: 'DXY', 'REAL_YIELD_10Y', 'VIX'
+                    Index must be datetime (UTC) representing *available* dates (after publication lag).
 
         Returns
         -------
         features : pd.DataFrame
             One row per trading day with FEATURE_COLUMNS, indexed by date.
         """
-        # Align all series to common daily index
-        # Use business day frequency for alignment
+        # Align all series to common daily index using merge_asof (backward)
+        # to respect publication lag - we only use values available at or before each date
         dxy = macro_data.get("DXY")
         real_yield = macro_data.get("REAL_YIELD_10Y")
         vix = macro_data.get("VIX")
@@ -63,40 +64,43 @@ class MacroRegimeFeatures:
         if dxy is None:
             raise ValueError("DXY series is required")
 
-        # Get common date index (intersection of all available series)
-        common_index = dxy.index
+        # All timestamps should already be lag-adjusted (available dates)
+        # Use DXY index as the master timeline (most complete series)
+        master_index = dxy.index.sort_values()
+
+        # Reindex all series to master index using forward fill (last known value)
+        # This simulates "most recent known value as of this date"
+        dxy_aligned = dxy["close"].reindex(master_index).ffill()
+        
+        real_yield_aligned = None
         if real_yield is not None:
-            common_index = common_index.intersection(real_yield.index)
+            real_yield_aligned = real_yield["close"].reindex(master_index).ffill()
+        
+        vix_aligned = None
         if vix is not None:
-            common_index = common_index.intersection(vix.index)
-
-        common_index = common_index.sort_values()
-
-        if len(common_index) < 21:  # need at least 20 for momentum_20
-            raise RuntimeError(f"Insufficient overlapping data: {len(common_index)} days")
-
-        # Reindex all series to common index
-        dxy_aligned = dxy.reindex(common_index)["close"]
-        real_yield_aligned = real_yield.reindex(common_index)["close"] if real_yield is not None else None
-        vix_aligned = vix.reindex(common_index)["close"] if vix is not None else None
+            vix_aligned = vix["close"].reindex(master_index).ffill()
 
         # Compute features
         feature_rows = []
 
-        for i, date in enumerate(common_index):
+        for i, date in enumerate(master_index):
             if i < 20:  # need 20 days for momentum_20
+                continue
+
+            # Skip if any required value is NaN
+            if pd.isna(dxy_aligned.iloc[i]) or \
+               (real_yield is not None and pd.isna(real_yield_aligned.iloc[i])) or \
+               (vix is not None and pd.isna(vix_aligned.iloc[i])):
                 continue
 
             row = {"date": date.date()}
 
             # DXY momentum
             dxy_5 = dxy_aligned.iloc[i-5:i+1]
-            dxy_20 = dxy_aligned.iloc[i-20:i+1]
             row["dxy_momentum_5"] = (dxy_5.iloc[-1] / dxy_5.iloc[0] - 1) if len(dxy_5) == 6 else np.nan
-            row["dxy_momentum_20"] = (dxy_20.iloc[-1] / dxy_20.iloc[0] - 1) if len(dxy_20) == 21 else np.nan
 
             # Real yield level and momentum
-            if real_yield_aligned is not None:
+            if real_yield is not None and real_yield_aligned is not None:
                 ry_5 = real_yield_aligned.iloc[i-5:i+1]
                 ry_20 = real_yield_aligned.iloc[i-20:i+1]
                 row["real_yield_10y_level"] = real_yield_aligned.iloc[i]
@@ -108,7 +112,8 @@ class MacroRegimeFeatures:
                 row["real_yield_10y_momentum_20"] = np.nan
 
             # VIX level and momentum
-            if vix_aligned is not None:
+            if vix is not None:
+                vix_aligned = vix["close"].reindex(master_index).ffill()
                 row["vix_level"] = vix_aligned.iloc[i]
                 vix_5 = vix_aligned.iloc[i-5:i+1]
                 vix_20 = vix_aligned.iloc[i-20:i+1]
@@ -148,12 +153,18 @@ class MacroRegimeFeatures:
         """
         features = self.transform(macro_data)
 
-        # Build target from DXY 20-session momentum
-        # Risk-on: DXY down > 0.5% over 20 sessions
-        # Neutral: |change| <= 0.5%
-        # Risk-off: DXY up > 0.5% over 20 sessions
-        dxy_close = macro_data["DXY"].reindex(features.index)["close"]
-        dxy_momentum_20 = dxy_close.pct_change(20)
+        # Build target from DXY 20-session momentum on the lag-adjusted DXY
+        # We need to get the DXY close values aligned with the features index
+        # features.index is a date index (date only), dxy has timestamp index
+        dxy_close = macro_data["DXY"]["close"]
+        
+        # Create a mapping from date to close value
+        # dxy_close has timestamp index, we need to map to date
+        dxy_close_by_date = dxy_close.groupby(dxy_close.index.date).last()
+        
+        # Reindex to features index (which is already date index)
+        dxy_close_aligned = dxy_close_by_date.reindex(features.index)
+        dxy_momentum_20 = dxy_close_aligned.pct_change(20)
 
         def label_regime(momentum: float) -> int:
             if pd.isna(momentum):

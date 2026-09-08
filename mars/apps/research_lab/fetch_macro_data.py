@@ -55,19 +55,19 @@ def fetch_and_store_macro(
         # Ingest from FRED
         raw = ingestor.ingest(symbol=symbol, start=start, end=end)
         print(f"  Fetched {len(raw)} observations")
+        print(f"  Columns: {raw.columns.tolist()}")
 
-        # Normalize - FRED data is already daily and UTC
-        # We need to adapt the normalizer for macro data (no OHLC)
-        # For now, just ensure timestamp index and proper columns
+        # Normalize - FRED data is already daily and UTC with lag-adjusted timestamps
+        # The ingestor returns: timestamp, close, series_id, symbol
         df = raw.copy()
         df = df.set_index("timestamp")
         df = df.sort_index()
-        df = df[["value"]].rename(columns={"value": "close"})
+        df = df[["close"]].copy()
         df["volume"] = 0.0  # placeholder
 
         # Validate
         validator = MarketDataValidator(bad_tick_z=10.0, max_spread_pct=1.0)
-        report = validator.validate(df, Timeframe.DAILY)  # FRED is daily
+        report = validator.validate(df, Timeframe.D)  # FRED is daily
         print(f"  Validation: passed={report.passed}, warnings={len(report.warnings)}")
 
         # Store
@@ -82,7 +82,7 @@ def fetch_and_store_macro(
             dataset_id=f"{symbol.lower()}_daily_v1.0.0_{uuid4().hex[:8]}",
             layer=DatasetLayer.PROCESSED,
             symbol=symbol.upper(),
-            timeframe=Timeframe.DAILY,
+            timeframe=Timeframe.D,
             version="1.0.0",
             source="fred",
             timezone="UTC",

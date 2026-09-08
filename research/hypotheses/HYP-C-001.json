@@ -8,19 +8,21 @@
   "required_datasets": ["xauusd_h1_processed", "fred:DXY_proxy", "fred:DFII10", "fred:VIXCLS (optional)"],
   "required_features": [
     "macro:dxy_momentum_5",
-    "macro:dxy_momentum_20",
     "macro:real_yield_10y_level",
     "macro:real_yield_10y_momentum_5",
-    "macro:vix_level (optional, if stress proxy needed)"
+    "macro:real_yield_10y_momentum_20",
+    "macro:vix_level (optional, if stress proxy needed)",
+    "macro:vix_momentum_5",
+    "macro:vix_momentum_20"
   ],
-  "experiments": ["EXP-C-XGB-CLASS", "EXP-C-PERSISTENCE-BASELINE"],
+  "experiments": ["EXP-C-XGB-CLASS", "EXP-C-PERSISTENCE-BASELINE", "EXP-C-TRANSITION-BASELINE"],
   "statistical_validation": ["purged_cv", "walk_forward", "baseline_comparison"],
-  "notes": "Baseline is naive persistence (yesterday's regime = today's regime) — model must beat this, not beat zero. This is a filter/sizing input, not standalone alpha, so success bar is lower than Hyp-A/B but must still show real discriminative power over persistence. Label uses DXY only; XAUUSD used only for downstream sizing test after regime classification is validated.",
-  "status": "draft",
+  "notes": "Baseline is naive persistence (yesterday's regime = today's regime) AND transition baseline (did regime actually change from 20 sessions ago). Standard persistence is artificially high (~83%) due to label autocorrelation (19/20 session overlap in 20-session momentum). Transition baseline (~81%) tests genuine regime change prediction. XGBoost (57.6% accuracy, 53.6% F1) does NOT beat either baseline. Persistence: 82.6% (autocorrelation-inflated). Transition: 81.4% (genuine changes). Macro features tested: DXY momentum_5, real yield level/momentum_5/20, VIX level/momentum_5/20. DXY momentum_20 REMOVED from features to prevent leakage (directly constructs the target). Result: NEGATIVE. No discriminative power beyond autocorrelation structure. Hyp-C rejected; macro regime filter does not add value for XAUUSD sizing filter.",
+  "status": "rejected",
   "test_set_locked": false,
   "created_at": "2026-09-07T00:00:00Z",
   "updated_at": "2026-09-07T00:00:00Z",
-  "tags": ["xauusd", "macro", "dxy", "real_yields", "regime_filter", "position_sizing"],
+  "tags": ["xauusd", "macro", "dxy", "real_yields", "regime_filter", "position_sizing", "rejected"],
   "test_set_locked_at": null,
   "test_set_locked_by_experiment": null
 }

@@ -1,9 +1,3 @@
-"""FRED (Federal Reserve Economic Data) market data ingestor.
-
-Fetches macro time series (DXY, real yields, VIX) from FRED API.
-Implements DataIngestor interface for plug-and-play with the ingestion pipeline.
-"""
-
 from __future__ import annotations
 
 from datetime import datetime
@@ -11,6 +5,7 @@ from pathlib import Path
 from typing import Any, Optional, Union
 
 import pandas as pd
+from pandas.tseries.offsets import BDay
 
 from mars.core.timeframes import Timeframe
 
@@ -20,6 +15,13 @@ class FREDIngestor:
 
     Returns a raw DataFrame with timestamp index and value column.
     Requires FRED_API_KEY environment variable or passed via constructor.
+
+    Publication lag handling:
+    - FRED series (especially DFII10, DTWEXBGS) are typically published with
+      a 1-business-day lag (value for date T becomes available on T+1).
+    - By default, this ingestor shifts all timestamps forward by 1 business day
+      so that the timestamp represents when the data becomes *available*,
+      not the reference date. This prevents look-ahead bias.
     """
 
     # FRED series IDs for key macro indicators
@@ -38,12 +40,16 @@ class FREDIngestor:
         self,
         api_key: Optional[str] = None,
         cache_dir: Optional[Union[str, Path]] = None,
+        publication_lag_bdays: int = 1,
     ) -> None:
         """
         Parameters
         ----------
         api_key: FRED API key. If None, reads from FRED_API_KEY env var.
         cache_dir: Directory to cache raw CSV downloads. If None, no caching.
+        publication_lag_bdays: Number of business days to shift timestamps forward
+            to account for FRED publication lag. Default=1 (next business day).
+            Set to 0 to disable lag adjustment (not recommended for research).
         """
         try:
             from fredapi import Fred
@@ -55,6 +61,7 @@ class FREDIngestor:
         self.api_key = api_key
         self.fred = Fred(api_key=api_key)
         self.cache_dir = Path(cache_dir) if cache_dir else None
+        self.publication_lag_bdays = publication_lag_bdays
         if self.cache_dir:
             self.cache_dir.mkdir(parents=True, exist_ok=True)
 
@@ -67,13 +74,13 @@ class FREDIngestor:
         **kwargs: Any,
     ) -> pd.DataFrame:
         """
-        Fetch FRED series and return as DataFrame.
+        Fetch FRED series and return as DataFrame with publication-lag-adjusted timestamps.
 
         Parameters
         ----------
         symbol: FRED series ID or alias from FRED_SERIES (e.g., "DXY", "REAL_YIELD_10Y", "VIX")
         timeframe: Expected timeframe (used for validation)
-        start/end: Date range filter (applied after fetch)
+        start/end: Date range filter (applied after fetch, in *available* date space)
         **kwargs:
             series_id: Override FRED series ID directly
             observation_start/observation_end: Passed to fredapi
@@ -102,6 +109,18 @@ class FREDIngestor:
         df = df.reset_index()
 
         # Ensure timestamp is datetime and UTC
+        df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True)
+
+        # CRITICAL: Apply publication lag shift
+        # FRED timestamps are the *reference dates* (e.g., value for 2024-01-15).
+        # That value becomes available on the next business day.
+        # Shift forward by publication_lag_bdays business days so the timestamp
+        # represents when the data is *actually available* for trading decisions.
+        if self.publication_lag_bdays > 0:
+            df["timestamp"] = df["timestamp"] + BDay(self.publication_lag_bdays)
+
+        # Convert to DataFrame
+        df = df.rename(columns={"value": "close"})
         df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True)
 
         # Add metadata columns

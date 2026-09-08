@@ -17,7 +17,8 @@ from typing import Final
  
 class Timeframe(str, Enum):
     """Supported research timeframes (order is coarsest → finest)."""
- 
+
+    D = "D"  # Daily
     H1 = "H1"
     M30 = "M30"
     M15 = "M15"
@@ -36,6 +37,7 @@ class Timeframe(str, Enum):
  
  
 TIMEFRAME_MINUTES: Final[dict[Timeframe, int]] = {
+    Timeframe.D: 1440,
     Timeframe.H1: 60,
     Timeframe.M30: 30,
     Timeframe.M15: 15,

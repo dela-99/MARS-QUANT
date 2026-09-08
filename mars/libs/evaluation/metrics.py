@@ -22,14 +22,21 @@ def classification_metrics(y_true, y_pred) -> Dict[str, Any]:
     """Standard binary/multiclass metrics + full text report."""
     y_true = np.asarray(y_true)
     y_pred = np.asarray(y_pred)
+    
+    # Determine if binary or multiclass
+    unique_classes = np.unique(np.concatenate([y_true, y_pred]))
+    is_binary = len(unique_classes) <= 2
+    
+    average = "binary" if is_binary else "macro"
+    
     return {
         "accuracy": float(accuracy_score(y_true, y_pred)),
-        "precision": float(precision_score(y_true, y_pred, zero_division=0, average="binary")),
-        "recall": float(recall_score(y_true, y_pred, zero_division=0, average="binary")),
-        "f1": float(f1_score(y_true, y_pred, zero_division=0, average="binary")),
+        "precision": float(precision_score(y_true, y_pred, zero_division=0, average=average)),
+        "recall": float(recall_score(y_true, y_pred, zero_division=0, average=average)),
+        "f1": float(f1_score(y_true, y_pred, zero_division=0, average=average)),
         "confusion_matrix": confusion_matrix(y_true, y_pred).tolist(),
         "report": classification_report(
-            y_true, y_pred, target_names=["Bearish (0)", "Bullish (1)"], zero_division=0
+            y_true, y_pred, target_names=[str(c) for c in sorted(np.unique(y_true))], zero_division=0
         ),
     }
 

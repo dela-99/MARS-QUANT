@@ -120,6 +120,15 @@ def run_macro_regime_pipeline(
     y_test_aligned = y_test.loc[persistence_pred.index]
     persistence_cls = classification_metrics(y_test_aligned, persistence_pred)
 
+    # --- 5b. Non-overlapping transition baseline ---
+    # Standard persistence leverages label overlap (adjacent labels share 19/20 sessions).
+    # Report a harder baseline: only count predictions at genuine regime transitions.
+    # "Did the regime actually change from 20 sessions ago?"
+    regime_transitions = (target != target.shift(20)).astype(int)
+    transition_persistence = regime_transitions.shift(1).loc[y_test.index].dropna()
+    y_test_trans = (target != target.shift(20)).astype(int).loc[transition_persistence.index]
+    transition_persistence_cls = classification_metrics(y_test_trans, transition_persistence)
+
     # --- 6. Evaluate with TEST SET GUARD ---
     from mars.research.experiment import ExperimentLog
     exp_log = ExperimentLog(hypothesis_root=DEFAULT_CONFIG.paths.hypotheses)
@@ -147,6 +156,11 @@ def run_macro_regime_pipeline(
         paths.reports.mkdir(parents=True, exist_ok=True)
         clf.save(clf_path)
 
+    # Class balance report
+    train_dist = y_train.value_counts(normalize=True).to_dict()
+    val_dist = y_val.value_counts(normalize=True).to_dict() if y_val is not None else {}
+    test_dist = y_test.value_counts(normalize=True).to_dict()
+
     assumptions = """
 ASSUMPTIONS & LEAKAGE NOTES
 ---------------------------
@@ -155,7 +169,14 @@ ASSUMPTIONS & LEAKAGE NOTES
 - Features: DXY momentum (5/20), real yield level/momentum, VIX level/momentum
 - Split is chronological (train → val → test); no random shuffle
 - Baseline: naive persistence (yesterday's regime = today's regime)
+  NOTE: Label has built-in autocorrelation (19/20 session overlap in 20-session momentum).
+  Persistence baseline is artificially high (~90%+). See transition baseline below.
 - XGBoost must beat persistence on test accuracy/F1 to justify complexity
+- Transition baseline: predicts regime transitions only (regime != 20 sessions ago)
+  This removes the built-in autocorrelation and is the true test of skill.
+- XGBoost must beat transition persistence on transition accuracy to show real skill.
+- FRED data ingested with 1-business-day publication lag (timestamp = available date).
+- Features use forward-fill of last known FRED value (last known value as of date).
 - Purged CV and walk-forward validation NOT yet applied; planned for next phase
 """.strip()
 
@@ -166,6 +187,11 @@ ASSUMPTIONS & LEAKAGE NOTES
         "",
         "PERIODS",
         split.describe(),
+        "",
+        "CLASS BALANCE",
+        f"Train: {train_dist}",
+        f"Val:   {val_dist}" if val_dist else "Val:   (empty)",
+        f"Test:  {test_dist}",
         "",
         "TRAIN classification metrics",
         f"accuracy={train_cls['accuracy']:.4f}  f1={train_cls['f1']:.4f}",
@@ -185,17 +211,24 @@ ASSUMPTIONS & LEAKAGE NOTES
         f"recall={test_cls['recall']:.4f}  f1={test_cls['f1']:.4f}",
         test_cls["report"],
         "",
-        "PERSISTENCE BASELINE (test)",
+        "PERSISTENCE BASELINE (test) — uses built-in label autocorrelation",
         f"accuracy={persistence_cls['accuracy']:.4f}  f1={persistence_cls['f1']:.4f}",
         persistence_cls["report"],
         "",
-        "MODEL vs PERSISTENCE COMPARISON",
-        f"  XGB test accuracy:  {test_cls['accuracy']:.4f}",
-        f"  Persistence accuracy: {persistence_cls['accuracy']:.4f}",
-        f"  XGB beats persistence: {test_cls['accuracy'] > persistence_cls['accuracy']}",
-        f"  XGB test F1:  {test_cls['f1']:.4f}",
-        f"  Persistence F1: {persistence_cls['f1']:.4f}",
-        f"  XGB beats persistence F1: {test_cls['f1'] > persistence_cls['f1']}",
+        "TRANSITION BASELINE (test) — genuine regime changes only (no label overlap)",
+        f"accuracy={transition_persistence_cls['accuracy']:.4f}  f1={transition_persistence_cls['f1']:.4f}",
+        transition_persistence_cls["report"],
+        "",
+        "MODEL vs BASELINES COMPARISON",
+        f"  XGB test accuracy:       {test_cls['accuracy']:.4f}",
+        f"  Persistence accuracy:    {persistence_cls['accuracy']:.4f} (with label autocorrelation)",
+        f"  Transition accuracy:     {transition_persistence_cls['accuracy']:.4f} (genuine changes only)",
+        f"  XGB beats persistence:   {test_cls['accuracy'] > persistence_cls['accuracy']}",
+        f"  XGB beats transition:    {test_cls['accuracy'] > transition_persistence_cls['accuracy']}",
+        f"  XGB test F1:             {test_cls['f1']:.4f}",
+        f"  Persistence F1:          {persistence_cls['f1']:.4f}",
+        f"  Transition F1:           {transition_persistence_cls['f1']:.4f}",
+        f"  XGB beats transition F1: {test_cls['f1'] > transition_persistence_cls['f1']}",
         "",
         f"XGBoost saved: {clf_path if save_artifacts else '(not saved)'}",
         "",
