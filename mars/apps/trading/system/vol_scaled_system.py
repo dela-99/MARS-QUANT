@@ -20,7 +20,7 @@ class SizingConfig:
     """Configuration for volatility-scaled position sizing."""
     target_vol: float = 0.15          # Target annualized volatility (15%)
     max_leverage: float = 3.0         # Maximum position leverage
-    min_leverage: float = 0.1         # Minimum position leverage
+    min_leverage: float = 0.01        # Minimum position leverage (1% - allows true vol scaling)
     vol_lookback: int = 20            # Lookback for realized vol calibration
     max_position_pct: float = 0.10    # Max position as % of equity
     kelly_fraction: float = 0.5       # Kelly fraction for sizing
@@ -77,9 +77,11 @@ class VolScaledSizer:
         forecasts = self.garch.predict(session_meta, session_meta.index)
         
         # Convert to annualized percentage vol
-        # For GARCH on log returns * 100, the forecast is conditional std dev of returns * 100
-        # So annualized % vol = forecast / 100 * sqrt(252)
-        annualized_vol = forecasts / 100 * np.sqrt(252)
+        # For GARCH: forecasts are % return volatility PER SESSION
+        # Session ≈ 4-6 hours. Annualize: session_vol * sqrt(252 * sessions_per_day)
+        # Typical trading day: 4 sessions (Asia, London, Overlap, NY)
+        # Annualized % vol = session_vol * sqrt(252 * 4) = session_vol * sqrt(1008)
+        annualized_vol = forecasts * np.sqrt(252 * 4)  # 4 sessions per day
         
         # Create Series with session index
         vol_series = pd.Series(annualized_vol, index=session_meta.index, name='vol')
@@ -138,6 +140,9 @@ class VolScaledSizer:
         if forecast_vol is None:
             forecast_vol = self.forecast_vol(price)
         
+        # Forward fill NaN values in forecast (happens at start of series)
+        forecast_vol = forecast_vol.ffill().bfill()
+        
         # Ensure signal is a pandas Series with proper index
         # Signal can be DataFrame with 'signal' column or Series
         if isinstance(signal, pd.DataFrame):
@@ -156,11 +161,12 @@ class VolScaledSizer:
         price_aligned = price.loc[common_idx]
         
         # Vol-scaled leverage
-        leverage = self.config.target_vol / forecast_vol
+        # Formula: leverage = (target_vol / forecast_vol) * kelly_fraction
+        # target_vol is in decimal (0.15 = 15%), forecast_vol is in % (14.55 = 14.55%)
+        # Convert forecast_vol to decimal for correct unit matching
+        forecast_vol_decimal = forecast_vol / 100
+        leverage = (self.config.target_vol / forecast_vol_decimal) * self.config.kelly_fraction
         leverage = leverage.clip(self.config.min_leverage, self.config.max_leverage)
-        
-        # Kelly adjustment
-        leverage *= self.config.kelly_fraction
         
         # Position value = equity * leverage
         position_value = equity * leverage
@@ -171,8 +177,12 @@ class VolScaledSizer:
         position_size = position_value / (price_aligned["close"] * contract_multiplier)
         
         # Cap by max position % of equity
-        max_contracts = equity * self.config.max_position_pct / price_aligned["close"]
+        max_position_value = equity * self.config.max_position_pct
+        max_contracts = max_position_value / (price_aligned["close"] * contract_multiplier)
         position_size = position_size.clip(upper=max_contracts)
+        
+        # Recalculate position_value from capped position_size
+        position_value = position_size * price_aligned["close"] * contract_multiplier
         
         return pd.DataFrame({
             "position_size": position_size,

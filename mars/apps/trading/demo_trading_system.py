@@ -81,8 +81,10 @@ class DemoTradingSystem:
         
         # Vol-scaled sizer (GARCH validated - CARR had numerical issues)
         sizing_config = sizing_config or SizingConfig(
-            target_vol=0.25,  # 25% annualized target (XAUUSD typical ~24%)
+            target_vol=0.15,  # 15% annualized target (matches SizingConfig default)
             max_leverage=3.0,
+            min_leverage=0.01,
+            max_position_pct=1.0,  # 100% of equity max (leverage already capped at 3x)
             kelly_fraction=0.5,
         )
         self.sizer = VolScaledSizer(sizing_config, garch_variant="garch")
@@ -94,7 +96,7 @@ class DemoTradingSystem:
             max_weekly_loss_pct=risk_config.get("max_weekly_loss", 0.05),
             max_monthly_loss_pct=risk_config.get("max_monthly_loss", 0.10),
             max_drawdown_pct=risk_config.get("max_drawdown", 0.15),
-            max_position_pct=risk_config.get("max_position", 0.10),
+            max_position_pct=1.0,  # Not used by sizer (sizer has own config)
         )
         
         # Trading system

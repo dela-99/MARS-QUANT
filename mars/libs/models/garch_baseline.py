@@ -30,6 +30,20 @@ class GARCHBaseline:
     The CARR variant is the honest baseline for an ATR/range target because it
     models range dynamics directly, avoiding the unfair return-vol→range conversion
     with a calibration constant.
+
+    NOTE ON CARR VARIANT (2024-09-08):
+    The CARR variant was attempted during Hyp-B validation but exhibited numerical
+    issues: the AR-GARCH specification on log ranges (line 86-95) produced
+    parameter estimates with extreme values (omega ~ 4.96, alpha ~ 5e-13, 
+    beta ~ 1.0) and forecasts ~3e-6 (effectively zero variance). The root cause
+    appears to be the log-range transformation combined with GARCH errors on
+    low-variance session range data, causing the optimizer to hit boundary
+    conditions. The CARR model is theoretically sound for range-based targets
+    but requires either: (a) more careful initialization/bounds, (b) a proper
+    CARR likelihood (Chou 2005) rather than AR-GARCH approximation, or (c) more
+    data with higher session range variance. For now, the standard GARCH(1,1)
+    on log returns is used as the validated baseline. CARR debugging is
+    deprioritized unless range-based forecasting becomes a primary requirement.
     """
 
     variant: Literal["garch", "carr"] = "carr"
@@ -130,7 +144,7 @@ class GARCHBaseline:
             
             # Get conditional variance for all points (in-sample) and forecast for test
             cond_var_all = self._model_fit.conditional_volatility ** 2 / 10000
-            cond_vol = np.sqrt(cond_var_all)
+            cond_vol = np.sqrt(cond_var_all)  # decimal return volatility per session
             
             # Map to feature dates
             predictions = []
@@ -143,9 +157,9 @@ class GARCHBaseline:
                     cond_var = forecast.variance.values.flatten() / 10000
                     predictions.append(np.sqrt(cond_var[0]))
             
-            predictions = np.array(predictions)
-            session_close = aligned_meta["session_close"].values
-            return predictions * session_close  # ~ATR in price units
+            predictions = np.array(predictions)  # decimal return vol per session
+            # Return as percentage return volatility per session (consistent with CARR variant)
+            return predictions * 100  # % return volatility per session
 
         else:
             # CARR: 1-step forecast of log range for each feature date
