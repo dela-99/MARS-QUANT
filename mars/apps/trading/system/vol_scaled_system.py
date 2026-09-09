@@ -232,8 +232,7 @@ class RiskManager:
     def reset_daily(self, equity: float) -> None:
         """Call at start of each trading day."""
         self.daily_pnl = 0.0
-        self.weekly_pnl = 0.0
-        self.monthly_pnl = 0.0
+        # Note: weekly_pnl and monthly_pnl are NOT reset daily - they accumulate
         self.current_equity = equity
         self.peak_equity = max(self.peak_equity, equity)
         self.trades_today = 0
@@ -245,6 +244,20 @@ class RiskManager:
         self.monthly_pnl += pnl
         self.current_equity += pnl
         self.peak_equity = max(self.peak_equity, self.current_equity)
+    
+    def reset_weekly(self, equity: float) -> None:
+        """Call at start of each trading week."""
+        self.weekly_pnl = 0.0
+        self.current_equity = equity
+        self.peak_equity = max(self.peak_equity, equity)
+        self.trades_today = 0
+    
+    def reset_monthly(self, equity: float) -> None:
+        """Call at start of each trading month."""
+        self.monthly_pnl = 0.0
+        self.current_equity = equity
+        self.peak_equity = max(self.peak_equity, equity)
+        self.trades_today = 0
     
     def check_limits(self) -> tuple[bool, list[str]]:
         """
