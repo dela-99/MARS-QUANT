@@ -6,9 +6,11 @@ Integrates with the CARR range-GARCH baseline already validated in Hyp-B.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Literal, Optional
 
+import json
 import numpy as np
 import pandas as pd
 
@@ -196,13 +198,16 @@ class VolScaledSizer:
 class RiskManager:
     """
     Hard risk rules for the trading system.
-    
+
     - Max drawdown limit (daily, weekly, monthly)
     - Max position size per symbol
     - Max correlation exposure
     - Daily loss limit
     - Forced liquidation on breach
     """
+    
+    # Default persistence file for kill-switch state
+    DEFAULT_KILL_SWITCH_FILE = "risk_kill_switch.json"
     
     def __init__(
         self,
@@ -212,6 +217,8 @@ class RiskManager:
         max_drawdown_pct: float = 0.15,
         max_position_pct: float = 0.10,
         max_correlation_exposure: float = 0.30,
+        max_risk_per_trade_pct: float = 0.01,  # 1% per trade
+        kill_switch_file: Optional[str] = None,
     ) -> None:
         self.max_daily_loss_pct = max_daily_loss_pct
         self.max_weekly_loss_pct = max_weekly_loss_pct
@@ -219,6 +226,10 @@ class RiskManager:
         self.max_drawdown_pct = max_drawdown_pct
         self.max_position_pct = max_position_pct
         self.max_correlation_exposure = max_correlation_exposure
+        self.max_risk_per_trade_pct = max_risk_per_trade_pct
+        
+        # Kill-switch persistence file
+        self.KILL_SWITCH_FILE = kill_switch_file or self.DEFAULT_KILL_SWITCH_FILE
         
         # State
         self.daily_pnl = 0.0
@@ -228,14 +239,45 @@ class RiskManager:
         self.current_equity = 0.0
         self.current_positions = {}
         self.trades_today = 0
+        
+        # Kill-switch state (persisted)
+        self.kill_switch_halted = False
+        self.kill_switch_triggered_at: Optional[datetime] = None
+        self.kill_switch_drawdown_at_trigger: float = 0.0
+        self.kill_switch_requires_manual_reset = True
+        
+        # Load persisted kill-switch state on init
+        self._load_kill_switch_state()
     
-    def reset_daily(self, equity: float) -> None:
-        """Call at start of each trading day."""
-        self.daily_pnl = 0.0
-        # Note: weekly_pnl and monthly_pnl are NOT reset daily - they accumulate
-        self.current_equity = equity
-        self.peak_equity = max(self.peak_equity, equity)
-        self.trades_today = 0
+    def _load_kill_switch_state(self) -> None:
+        """Load kill-switch state from disk if it exists."""
+        try:
+            import os
+            if os.path.exists(self.KILL_SWITCH_FILE):
+                with open(self.KILL_SWITCH_FILE, 'r') as f:
+                    state = json.load(f)
+                self.kill_switch_halted = state.get('halted', False)
+                self.kill_switch_triggered_at = datetime.fromisoformat(state['triggered_at']) if state.get('triggered_at') else None
+                self.kill_switch_drawdown_at_trigger = state.get('drawdown_at_trigger', 0.0)
+                self.kill_switch_requires_manual_reset = state.get('requires_manual_reset', True)
+        except Exception as e:
+            # If loading fails, start fresh (don't block initialization)
+            pass
+    
+    def _save_kill_switch_state(self) -> None:
+        """Save kill-switch state to disk."""
+        try:
+            state = {
+                'halted': self.kill_switch_halted,
+                'triggered_at': self.kill_switch_triggered_at.isoformat() if self.kill_switch_triggered_at else None,
+                'drawdown_at_trigger': self.kill_switch_drawdown_at_trigger,
+                'requires_manual_reset': self.kill_switch_requires_manual_reset,
+            }
+            with open(self.KILL_SWITCH_FILE, 'w') as f:
+                json.dump(state, f)
+        except Exception as e:
+            # Log but don't crash
+            pass
     
     def update_pnl(self, pnl: float) -> None:
         """Update PnL tracking after each trade."""
@@ -265,6 +307,10 @@ class RiskManager:
         
         Returns (can_trade, violations_list)
         """
+        # Check kill-switch first - if halted, block all trading
+        if self.kill_switch_halted and self.kill_switch_requires_manual_reset:
+            return False, [f"KILL-SWITCH ACTIVE: Drawdown {self.kill_switch_drawdown_at_trigger:.2%} exceeded at {self.kill_switch_triggered_at}. Manual reset required."]
+        
         violations = []
         
         # Daily loss limit
@@ -283,6 +329,13 @@ class RiskManager:
         current_dd = (self.peak_equity - self.current_equity) / self.peak_equity
         if current_dd > self.max_drawdown_pct:
             violations.append(f"Max drawdown exceeded: {current_dd:.2%}")
+            # Trigger kill-switch
+            if not self.kill_switch_halted:
+                self.kill_switch_halted = True
+                self.kill_switch_triggered_at = datetime.now()
+                self.kill_switch_drawdown_at_trigger = current_dd
+                self.kill_switch_requires_manual_reset = True
+                self._save_kill_switch_state()
         
         return len(violations) == 0, violations
     
@@ -292,15 +345,59 @@ class RiskManager:
         if not can_trade:
             return False, "; ".join(violations)
         
-        # Position size limit
+        # Position size limit (concurrent exposure cap)
         if position_value > self.max_position_pct * equity:
             return False, f"Position value {position_value:.2f} exceeds max {self.max_position_pct:.1%} of equity"
         
         return True, "OK"
     
+    def check_per_trade_risk(self, config: "TradeConfig", equity: float) -> tuple[bool, str]:
+        """Check if trade risk exceeds per-trade risk limit."""
+        stop_distance = abs(config.entry_price - config.stop_price)
+        risk_per_contract = stop_distance * 100  # XAUUSD: 1 pip = $1 per oz, 100 oz per lot
+        total_risk = config.position_size * risk_per_contract
+        max_risk = equity * self.max_risk_per_trade_pct
+        
+        if total_risk > max_risk:
+            return False, f"Trade risk ${total_risk:.2f} exceeds max {self.max_risk_per_trade_pct:.1%} of equity (${max_risk:.2f})"
+        
+        return True, "OK"
+    
+    def manual_reset_kill_switch(self) -> None:
+        """Manually reset the kill-switch (operator action required)."""
+        self.kill_switch_halted = False
+        self.kill_switch_triggered_at = None
+        self.kill_switch_drawdown_at_trigger = 0.0
+        self.kill_switch_requires_manual_reset = False
+        # Reset peak equity to current equity to accept the drawdown and prevent immediate re-trigger
+        self.peak_equity = self.current_equity
+        self._save_kill_switch_state()
+    
     def forced_liquidation(self) -> dict[str, float]:
         """Return all positions to liquidate (placeholder - implement with broker)."""
         return {symbol: -pos for symbol, pos in self.current_positions.items()}
+    
+    def reset_daily(self, equity: float) -> None:
+        """Call at start of each trading day."""
+        self.daily_pnl = 0.0
+        # Note: weekly_pnl and monthly_pnl are NOT reset daily - they accumulate
+        self.current_equity = equity
+        self.peak_equity = max(self.peak_equity, equity)
+        self.trades_today = 0
+    
+    def reset_weekly(self, equity: float) -> None:
+        """Call at start of each trading week."""
+        self.weekly_pnl = 0.0
+        self.current_equity = equity
+        self.peak_equity = max(self.peak_equity, equity)
+        self.trades_today = 0
+    
+    def reset_monthly(self, equity: float) -> None:
+        """Call at start of each trading month."""
+        self.monthly_pnl = 0.0
+        self.current_equity = equity
+        self.peak_equity = max(self.peak_equity, equity)
+        self.trades_today = 0
 
 
 @dataclass
@@ -339,6 +436,7 @@ class TradeExecutor:
     
     def open_position(self, config: TradeConfig) -> bool:
         """Open a new position with risk checks."""
+        # Check concurrent exposure cap
         can_open, reason = self.risk_manager.can_open_position(
             config.symbol, 
             config.position_size * config.entry_price, 
@@ -347,13 +445,9 @@ class TradeExecutor:
         if not can_open:
             return False
         
-        # Calculate stop distance and risk
-        stop_distance = abs(config.entry_price - config.stop_price)
-        risk_per_contract = stop_distance * 100  # XAUUSD: 1 pip = $1 per oz, 100 oz per lot
-        total_risk = config.position_size * risk_per_contract
-        
-        max_risk = self.equity * 0.01  # 1% max risk
-        if total_risk > max_risk:
+        # Check per-trade risk limit (delegated to risk_manager)
+        can_open, reason = self.risk_manager.check_per_trade_risk(config, self.equity)
+        if not can_open:
             return False
         
         # Open position
