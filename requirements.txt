@@ -15,16 +15,22 @@ pytest
 # Macro data
 fredapi
 
-# Optional: richer TA library (needs compatible Python / numba)
-# pandas-ta
-# fastparquet
-
-# Deep learning (optional; baseline XGB does not require torch)
-# torch
-
-# Backtesting / charts (legacy + research)
-# backtesting
-# mplfinance
-
 # MetaTrader 5 (Windows; optional for download / live bots)
 MetaTrader5
+
+# ───────────────────────────────────────────────────────────────
+# Research / optional — NOT required for live trading
+# ───────────────────────────────────────────────────────────────
+# Richer TA library (needs compatible Python / numba)
+# pandas_ta only needed for add_advanced_indicators(); baseline uses pure pandas fallback
+pandas_ta
+# Alternative parquet engine (pyarrow is primary)
+fastparquet
+
+# Deep learning (baseline XGB does not require torch)
+# torch only needed for LSTMClassifier/TransformerClassifier in research
+torch
+
+# Backtesting / charts (legacy + research)
+backtesting
+mplfinance
