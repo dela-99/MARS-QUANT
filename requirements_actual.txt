@@ -39,3 +39,4 @@ typing_extensions==4.16.0
 tzdata==2026.3
 wrapt==2.4.1
 xgboost==3.4.1
+MetaTrader5==5.0.6180

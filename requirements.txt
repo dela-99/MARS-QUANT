@@ -27,4 +27,4 @@ fredapi
 # mplfinance
 
 # MetaTrader 5 (Windows; optional for download / live bots)
-# MetaTrader5
+MetaTrader5
