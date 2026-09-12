@@ -92,11 +92,7 @@ class DemoTradingSystem:
         # Risk management
         risk_config = risk_config or {}
         self.risk_manager = RiskManager(
-            max_daily_loss_pct=risk_config.get("max_daily_loss", 0.02),
-            max_weekly_loss_pct=risk_config.get("max_weekly_loss", 0.05),
-            max_monthly_loss_pct=risk_config.get("max_monthly_loss", 0.10),
-            max_drawdown_pct=risk_config.get("max_drawdown", 0.15),
-            max_position_pct=1.0,  # Not used by sizer (sizer has own config)
+            kill_switch_file=risk_config.get("kill_switch_file")
         )
         
         # Trading system

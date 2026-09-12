@@ -97,6 +97,12 @@ class MT5SymbolInfo:
     last: float
     volume_real: float
     time: datetime
+    # Filling modes supported by broker (bitmask)
+    filling_mode: int = 0
+    # Order modes supported
+    order_mode: int = 0
+    # Trade mode
+    trade_mode: int = 0
 
 
 class MT5SymbolResolver:
@@ -153,6 +159,9 @@ class MT5SymbolResolver:
                 last=info.last,
                 volume_real=info.volume_real,
                 time=datetime.fromtimestamp(info.time),
+                filling_mode=info.filling_mode,
+                order_mode=info.order_mode,
+                trade_mode=info.trade_mode,
             )
             self._symbol_cache[symbol] = spec
             return spec
@@ -304,19 +313,32 @@ class MT5ConnectionManager:
 
 class MT5OrderRouter:
     """Routes orders to MT5 with proper symbol/lot handling."""
-    
+
     def __init__(self, mt5_module, symbol_resolver: MT5SymbolResolver):
         self.mt5 = mt5_module
         self.symbol_resolver = symbol_resolver
-    
+        # Determine best filling mode for this broker
+        self._supported_filling_modes = [mt5_module.ORDER_FILLING_FOK, mt5_module.ORDER_FILLING_IOC, mt5_module.ORDER_FILLING_RETURN]
+
+    def _get_best_filling_mode(self, spec: MT5SymbolInfo) -> int:
+        """Select best filling mode supported by broker."""
+        broker_modes = spec.filling_mode
+        # Prefer FOK > IOC > RETURN
+        for mode in [self.mt5.ORDER_FILLING_FOK, self.mt5.ORDER_FILLING_IOC, self.mt5.ORDER_FILLING_RETURN]:
+            if broker_modes & mode:
+                return mode
+        # Fallback to FOK if detection fails
+        return self.mt5.ORDER_FILLING_FOK
+
     def send_order(self, config: TradeConfig, spec: MT5SymbolInfo) -> FillResult:
         """
         Send order to MT5 with proper lot normalization and price handling.
+        Includes pre-flight margin check via order_check().
         """
         # Normalize lot size
         raw_lots = config.position_size
         normalized_lots = self.symbol_resolver.normalize_lot_size(config.symbol, raw_lots)
-        
+
         if normalized_lots <= 0:
             return FillResult(
                 success=False,
@@ -325,7 +347,7 @@ class MT5OrderRouter:
                 request=None, result_code=-1, retcode_external=-1,
                 timestamp=datetime.now()
             )
-        
+
         # Get current prices
         tick = self.mt5.symbol_info_tick(config.symbol)
         if tick is None:
@@ -336,7 +358,7 @@ class MT5OrderRouter:
                 request=None, result_code=-1, retcode_external=-1,
                 timestamp=datetime.now()
             )
-        
+
         # Determine order type and price
         if config.signal == 1:  # Long
             order_type = self.mt5.ORDER_TYPE_BUY
@@ -348,12 +370,15 @@ class MT5OrderRouter:
             price = tick.bid
             sl = config.stop_price
             tp = config.take_profit
-        
+
+        # Determine best filling mode for this broker
+        filling_mode = self._get_best_filling_mode(spec)
+
         # Build request
         request = OrderRequest(
             action=self.mt5.TRADE_ACTION_DEAL,
             symbol=config.symbol,
-            volume=config.position_size,  # Use normalized lots
+            volume=config.position_size,
             type=order_type,
             price=price,
             sl=sl,
@@ -362,11 +387,11 @@ class MT5OrderRouter:
             magic=123456,  # Magic number for identification
             comment=f"MARS_{config.signal}_{config.entry_time.strftime('%H%M%S')}",
             type_time=self.mt5.ORDER_TIME_GTC,
-            type_filling=self.mt5.ORDER_FILLING_FOK,
+            type_filling=filling_mode,
             signal=config.signal,
         )
-        
-        # Send order
+
+        # PRE-FLIGHT CHECK: Validate margin/fund sufficiency via order_check()
         mt5_request = {
             "action": request.action,
             "symbol": request.symbol,
@@ -381,9 +406,21 @@ class MT5OrderRouter:
             "type_time": request.type_time,
             "type_filling": request.type_filling,
         }
-        
+
+        check_result = self.mt5.order_check(mt5_request)
+        if check_result is None or check_result.retcode != 0:
+            error_msg = f"Pre-flight order_check failed: {check_result.comment if check_result else self.mt5.last_error()}"
+            return FillResult(
+                success=False, ticket=0, order_id=0, volume=0,
+                price=0, bid=tick.bid, ask=tick.ask, sl=0, tp=0,
+                comment=error_msg,
+                request=request, result_code=-1, retcode_external=-1,
+                timestamp=datetime.now()
+            )
+
+        # Send order
         result = self.mt5.order_send(mt5_request)
-        
+
         if result is None:
             return FillResult(
                 success=False, ticket=0, order_id=0, volume=0,
@@ -392,7 +429,7 @@ class MT5OrderRouter:
                 request=request, result_code=-1, retcode_external=-1,
                 timestamp=datetime.now()
             )
-        
+
         # Calculate slippage
         signal_price = config.entry_price
         filled_price = result.price
@@ -403,14 +440,14 @@ class MT5OrderRouter:
         
         return FillResult(
             success=result.retcode == self.mt5.TRADE_RETCODE_DONE,
-            ticket=result.ticket,
+            ticket=result.deal,  # MT5 uses 'deal' for position ticket
             order_id=result.order,
             volume=result.volume,
             price=result.price,
             bid=tick.bid,
             ask=tick.ask,
-            sl=result.sl,
-            tp=result.tp,
+            sl=config.stop_price,  # Use config stop_price since result doesn't have it
+            tp=config.take_profit,  # Use config take_profit since result doesn't have it
             comment=result.comment,
             request=request,
             result_code=result.retcode,
@@ -625,6 +662,11 @@ class MT5Executor:
     """
     Live MT5 executor implementing TradeExecutor interface.
     Replaces backtest TradeExecutor for live demo trading.
+    
+    Key fixes:
+    - Idempotent order placement (prevents duplicate orders per bar/signal)
+    - Live MT5 position checking for concurrent risk
+    - Every order_send() call is logged (success or failure)
     """
     
     def __init__(
@@ -645,7 +687,7 @@ class MT5Executor:
         self.mt5 = None
         self.symbol_resolver = None
         self.order_router = None
-        self.audit_logger = MT5AuditLogger()
+        self.audit_logger = MT5AuditLogger(audit_db_path)
         
         # State
         self.open_positions: Dict[str, Dict] = {}
@@ -653,6 +695,12 @@ class MT5Executor:
         self.equity_curve = [equity]
         self._signal_counter = 0
         self._lock = Lock()
+        
+        # Idempotency tracking (persisted to survive restart, bounded to prevent memory leak)
+        self._processed_signals: set[str] = set()  # "symbol_bar_signal" keys
+        self._IDEMPOTENCY_FILE = Path(audit_db_path).with_suffix('.idempotency.json')
+        self._MAX_PROCESSED_SIGNALS = 10000  # ~2 months of 5-min bars
+        self._load_idempotency_state()
         
         # Connect and initialize
         self._initialize()
@@ -668,8 +716,90 @@ class MT5Executor:
         account_info = self.mt5.account_info()
         if account_info:
             print(f"MT5 DEMO ACCOUNT: #{account_info.login} | Balance: {account_info.balance:.2f} | Equity: {account_info.equity:.2f}")
+        
+        # Sync positions from MT5 on startup
+        self._sync_positions_from_mt5()
     
-    def _ensure_connection(self):
+    def _load_idempotency_state(self) -> None:
+        """Load processed signals from disk to survive restart."""
+        try:
+            if self._IDEMPOTENCY_FILE.exists():
+                with open(self._IDEMPOTENCY_FILE, 'r') as f:
+                    data = json.load(f)
+                self._processed_signals = set(data.get('processed_signals', []))
+                print(f"Loaded {len(self._processed_signals)} processed signals from {self._IDEMPOTENCY_FILE}")
+        except Exception as e:
+            print(f"Warning: failed to load idempotency state: {e}")
+            self._processed_signals = set()
+    
+    def _save_idempotency_state(self) -> None:
+        """Save processed signals to disk."""
+        try:
+            # Prune if too large (keep most recent half)
+            if len(self._processed_signals) > self._MAX_PROCESSED_SIGNALS:
+                # Convert to list, sort by timestamp in key, keep newest half
+                signals_list = list(self._processed_signals)
+                # Keys are like "XAUUSDm_2026-09-10T01:40:00_1"
+                signals_list.sort(key=lambda k: k.split('_')[1], reverse=True)
+                self._processed_signals = set(signals_list[:self._MAX_PROCESSED_SIGNALS // 2])
+                print(f"Pruned idempotency set to {len(self._processed_signals)} entries")
+            
+            with open(self._IDEMPOTENCY_FILE, 'w') as f:
+                json.dump({'processed_signals': list(self._processed_signals)}, f)
+        except Exception as e:
+            print(f"Warning: failed to save idempotency state: {e}")
+    
+    def _get_bar_key(self, timestamp: datetime) -> str:
+        """Get normalized bar key (5-minute boundary)."""
+        bar_time = timestamp.replace(second=0, microsecond=0)
+        bar_minute = bar_time.minute
+        if bar_minute % 5 != 0:
+            bar_time = bar_time.replace(minute=(bar_minute // 5) * 5)
+        return bar_time.isoformat()
+    
+    def _is_duplicate_signal(self, symbol: str, bar_key: str, signal: int) -> bool:
+        """Check if this signal for this bar has already been acted upon."""
+        signal_key = f"{symbol}_{bar_key}_{signal}"
+        if signal_key in self._processed_signals:
+            return True
+        self._processed_signals.add(signal_key)
+        self._save_idempotency_state()  # Persist after every addition
+        return False
+    
+    def _get_live_open_positions_value(self, symbol: str) -> float:
+        """Get current open position value for a symbol from LIVE MT5."""
+        self._ensure_connection()
+        positions = self.mt5.positions_get(symbol=symbol)
+        if not positions:
+            return 0.0
+        
+        total_value = 0.0
+        for pos in positions:
+            if pos.magic == 123456:
+                total_value += pos.volume * pos.price_open * 100  # contract_size=100
+        return total_value
+    
+    def _sync_positions_from_mt5(self) -> None:
+        """Sync internal position tracking with live MT5 positions."""
+        self._ensure_connection()
+        positions = self.mt5.positions_get(symbol="XAUUSDm")
+        if positions:
+            self.open_positions = {}
+            for pos in positions:
+                if pos.magic == 123456:  # Only our positions
+                    self.open_positions[pos.symbol] = {
+                        "entry_price": pos.price_open,
+                        "stop_price": pos.sl,
+                        "take_profit": pos.tp,
+                        "position_size": pos.volume if pos.type == 0 else -pos.volume,
+                        "entry_time": datetime.fromtimestamp(pos.time),
+                        "mt5_ticket": pos.ticket,
+                        "mt5_position_id": pos.identifier,
+                    }
+        else:
+            self.open_positions = {}
+    
+    def _ensure_connection(self) -> None:
         """Ensure MT5 connection is alive before any operation."""
         if not self.conn_manager.ensure_connected():
             raise RuntimeError("MT5 connection lost and reconnection failed")
@@ -679,6 +809,7 @@ class MT5Executor:
         """
         Open live position on MT5 demo account.
         Implements same interface as backtest TradeExecutor.
+        Includes idempotency guard and live risk checks.
         """
         self._ensure_connection()
         
@@ -687,31 +818,39 @@ class MT5Executor:
         risk_at_stop = abs(config.entry_price - config.stop_price) * config.position_size * 100
         risk_pct = risk_at_stop / self.equity * 100 if self.equity > 0 else 0
         
-        # Risk Manager checks
-        # 1. Concurrent exposure cap
+        # Get current bar key for idempotency
+        entry_time = config.entry_time.to_pydatetime() if hasattr(config.entry_time, 'to_pydatetime') else config.entry_time
+        bar_key = self._get_bar_key(entry_time)
+        
+        # Check idempotency - skip if same signal for same bar already processed
+        if self._is_duplicate_signal(config.symbol, bar_key, config.signal):
+            self.audit_logger.log_signal(
+                config, config.entry_price,
+                risk_check_passed=False,
+                rejection_reason=f"DUPLICATE_SIGNAL: signal {config.signal} for bar {bar_key} already processed",
+                risk_at_stop=risk_at_stop, risk_pct=risk_pct
+            )
+            return False
+        
+        # 1. Concurrent exposure cap - check LIVE MT5 positions
+        live_position_value = self._get_live_open_positions_value(config.symbol)
         can_open, reason = self.risk_manager.can_open_position(
             config.symbol,
-            config.position_size * config.entry_price,
+            live_position_value + config.position_size * config.entry_price,
             self.equity
         )
         
-        risk_decision = "APPROVED" if can_open else "REJECTED"
         self.audit_logger.log_risk_decision(
-            config, decision=decision, reason=reason,
-            position_value=config.position_size * config.entry_price,
-            equity=self.equity,
-            per_trade_risk_pct=1.0,  # from config
-            concurrent_cap_pct=30.0,  # from risk_manager
-            drawdown_pct=0.0  # would need to compute
+            config, "REJECTED" if not can_open else "APPROVED", reason,
+            config.position_size * config.entry_price, self.equity,
+            risk_pct, 50.0, 0.0
         )
         
         if not can_open:
             self.audit_logger.log_signal(
                 config, config.entry_price,
-                risk_check_passed=False,
-                rejection_reason=reason,
-                risk_at_stop=abs(config.entry_price - config.stop_price) * config.position_size * 100,
-                risk_pct=risk_at_stop / self.equity * 100 if self.equity > 0 else 0
+                risk_check_passed=False, rejection_reason=reason,
+                risk_at_stop=risk_at_stop, risk_pct=risk_pct
             )
             return False
         
@@ -721,20 +860,20 @@ class MT5Executor:
             self.audit_logger.log_risk_decision(
                 config, "REJECTED", reason,
                 config.position_size * config.entry_price, self.equity,
-                1.0, 30.0, 0.0
+                risk_pct, 50.0, 0.0
             )
             self.audit_logger.log_signal(
                 config, config.entry_price,
                 risk_check_passed=False, rejection_reason=reason,
-                risk_at_stop=abs(config.entry_price - config.stop_price) * config.position_size * 100,
-                risk_pct=risk_at_stop / self.equity * 100 if self.equity > 0 else 0
+                risk_at_stop=risk_at_stop, risk_pct=risk_pct
             )
             return False
         
+        # All risk checks passed - log approval
         self.audit_logger.log_risk_decision(
             config, "APPROVED", "All risk checks passed",
             config.position_size * config.entry_price, self.equity,
-            1.0, 30.0, 0.0
+            risk_pct, 50.0, 0.0
         )
         
         self.audit_logger.log_signal(
@@ -747,6 +886,7 @@ class MT5Executor:
         spec = self.symbol_resolver.get_symbol_info(config.symbol)
         fill = self.order_router.send_order(config, spec)
         
+        # ALWAYS log the order_send() result (success or failure)
         if fill.success:
             # Open position tracking
             self.open_positions[config.symbol] = {
@@ -763,10 +903,14 @@ class MT5Executor:
             
             # Log fill with slippage
             self.audit_logger.log_fill(fill, config, config.entry_price)
-            
             return True
-        
-        return False
+        else:
+            # Log failed order too
+            self.audit_logger.log_risk_event(
+                "ORDER_FAILED", fill.comment, self.equity, 0.0, 0.0,
+                self.risk_manager.kill_switch_halted
+            )
+            return False
     
     def update_position(self, symbol: str, current_price: float, current_time: datetime) -> dict:
         """Update live position - check stops/TP/time exit."""

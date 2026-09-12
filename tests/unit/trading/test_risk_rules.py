@@ -12,11 +12,27 @@ from mars.apps.trading.system.vol_scaled_system import (
 )
 from mars.apps.trading.signals.trend_breakout import TrendSignalFactory
 from mars.apps.trading.demo_trading_system import DemoTradingSystem
+import tempfile
+import os
+
+
+def make_risk_manager(equity, max_position_pct=1.0, tmpdir=None):
+    """Create isolated RiskManager with unique kill-switch file."""
+    kill_switch_file = os.path.join(tmpdir, "risk_kill_switch.json") if tmpdir else None
+    return RiskManager(kill_switch_file=kill_switch_file)
+
+
+def make_risk_manager_with_params(equity, max_position_pct=1.0, max_daily_loss_pct=0.02,
+                                   max_weekly_loss_pct=0.05, max_monthly_loss_pct=0.10,
+                                   max_drawdown_pct=0.15, tmpdir=None):
+    """Create isolated RiskManager with custom parameters."""
+    kill_switch_file = os.path.join(tmpdir, "risk_kill_switch.json") if tmpdir else None
+    return RiskManager(kill_switch_file=kill_switch_file)
 
 
 class TestMaxRiskPerTrade:
     """Rule 1: MAX RISK PER TRADE (0.5-1% of account equity at stop-loss distance)"""
-    
+
     def test_risk_at_stop_distribution(self):
         """Verify all trades have risk-at-stop <= 1% of equity at entry"""
         system = DemoTradingSystem(equity=100000, signal_type='donchian', donchian_window=20, session='london')
@@ -33,12 +49,9 @@ class TestMaxRiskPerTrade:
         positions = positions.loc[common_idx]
 
         equity = 100000
-        risk_manager = RiskManager(
-            max_daily_loss_pct=0.02, max_weekly_loss_pct=0.05,
-            max_monthly_loss_pct=0.10, max_drawdown_pct=0.15,
-            max_position_pct=1.0,
-        )
+        risk_manager = RiskManager()
         risk_manager.reset_daily(equity)
+        risk_manager.select_tier_for_equity(equity)
         executor = TradeExecutor(equity, risk_manager, system.sizer)
 
         trades_info = []
@@ -100,12 +113,12 @@ class TestMaxRiskPerTrade:
             t['risk_pct_of_equity'] = risk_pct
 
         trades_df = pd.DataFrame(trades_info)
-        
+
         # Assertions
         assert len(trades_df) > 0, "Should have captured trades"
         assert trades_df['risk_pct_of_equity'].max() <= 1.0, \
             f"Found trade with risk-at-stop > 1%: {trades_df['risk_pct_of_equity'].max():.4f}%"
-        
+
         # Report full distribution
         print(f"\n=== RULE 1: MAX RISK PER TRADE ===")
         print(f"Total trades: {len(trades_df)}")
@@ -121,49 +134,43 @@ class TestMaxRiskPerTrade:
 
 class TestMaxDailyLossCircuitBreaker:
     """Rule 2: MAX DAILY LOSS CIRCUIT BREAKER"""
-    
-    def test_daily_loss_limit_halts_trading(self):
+
+    def test_daily_loss_limit_halts_trading(self, tmp_path):
         """Simulate losing sequence breaching daily loss limit mid-session"""
         equity = 100000
-        risk_manager = RiskManager(
-            max_daily_loss_pct=0.02,  # 2% daily loss limit
-            max_weekly_loss_pct=0.05,
-            max_monthly_loss_pct=0.10,
-            max_drawdown_pct=0.15,
-            max_position_pct=1.0,
-        )
+        risk_manager = RiskManager(kill_switch_file=str(tmp_path / "risk_kill_switch.json"))
         risk_manager.reset_daily(equity)
-        
+
         # Initially can trade
         can_trade, violations = risk_manager.check_limits()
         assert can_trade is True
         assert len(violations) == 0
-        
+
         # Accumulate losses below limit
         risk_manager.update_pnl(-1000)  # -1%
         can_trade, violations = risk_manager.check_limits()
         assert can_trade is True
-        
+
         # Accumulate more losses but still below 2%
         risk_manager.update_pnl(-800)  # -1.8% total
         can_trade, violations = risk_manager.check_limits()
         assert can_trade is True
-        
+
         # Breach the 2% limit
         risk_manager.update_pnl(-300)  # -2.1% total
         can_trade, violations = risk_manager.check_limits()
         assert can_trade is False, "Should halt trading when daily loss limit breached"
         assert any("Daily loss limit exceeded" in v for v in violations), f"Violations: {violations}"
-        
+
         # Verify it stays halted for the rest of the day
         can_trade2, _ = risk_manager.check_limits()
         assert can_trade2 is False, "Should remain halted"
-        
+
         # Reset at next day boundary - should be able to trade again
         risk_manager.reset_daily(equity - 2100)  # New equity after losses
         can_trade3, _ = risk_manager.check_limits()
         assert can_trade3 is True, "Should reset and allow trading on new day"
-        
+
         print("\n=== RULE 2: MAX DAILY LOSS CIRCUIT BREAKER ===")
         print("Daily loss limit correctly halts trading when breached")
         print("Daily loss limit correctly resets at day boundary")
@@ -172,113 +179,110 @@ class TestMaxDailyLossCircuitBreaker:
 
 class TestMaxConcurrentOpenRiskCap:
     """Rule 3: MAX CONCURRENT OPEN RISK CAP"""
-    
-    def test_concurrent_position_cap(self):
+
+    def test_concurrent_position_cap(self, tmp_path):
         """Verify system rejects positions that would exceed max concurrent risk"""
         equity = 100000
-        risk_manager = RiskManager(
-            max_daily_loss_pct=0.02, max_weekly_loss_pct=0.05,
-            max_monthly_loss_pct=0.10, max_drawdown_pct=0.15,
-            max_position_pct=0.30,  # 30% max position per symbol
-        )
+        risk_manager = RiskManager(kill_switch_file=str(tmp_path / "risk_kill_switch.json"))
         risk_manager.reset_daily(equity)
-        
+
         sizing_config = SizingConfig(target_vol=0.15, max_leverage=3.0, min_leverage=0.01, kelly_fraction=0.5)
         sizer = VolScaledSizer(sizing_config, garch_variant="garch")
-        
+
         executor = TradeExecutor(equity, risk_manager, sizer)
-        
-        # Test the 30% position cap directly via risk_manager
-        # Position value = 20 * 2000 = 40000 > 30000 (30% of 100k)
-        config_over_cap = TradeConfig(
-            symbol='XAUUSD', signal=1, entry_price=2000.0, stop_price=1980.0,
-            take_profit=2050.0, position_size=20.0, max_hold_hours=24,
-            risk_pct=0.01, entry_time=pd.Timestamp('2024-01-02 11:00:00', tz='UTC')
-        )
-        
-        # This should fail due to 30% cap (40000 > 30000)
-        success_over_cap = executor.open_position(config_over_cap)
-        assert success_over_cap is False, "Position exceeding 30% cap should be rejected"
-        
-        # Position value = 10 * 2000 = 20000 < 30000 (under 30% cap)
-        config_under_cap = TradeConfig(
-            symbol='XAUUSD', signal=1, entry_price=2000.0, stop_price=1980.0,
-            take_profit=2050.0, position_size=10.0, max_hold_hours=24,
-            risk_pct=0.01, entry_time=pd.Timestamp('2024-01-02 11:00:00', tz='UTC')
-        )
-        
-        # But this fails due to 1% per-trade risk limit in executor
-        # Let's test the risk_manager directly instead
+
+        # Test the tier's max_concurrent_trades limit directly via risk_manager
+        # First select tier for equity
+        risk_manager.select_tier_for_equity(equity)
+
+        # At $100k equity, tier has max_concurrent_trades=6
+        tier = risk_manager.get_current_tier()
+        assert tier["max_concurrent_trades"] == 6
+
+        # Test the max_concurrent_trades limit directly via risk_manager
         can_open, reason = risk_manager.can_open_position('XAUUSD', 20000.0, equity)
-        assert can_open is True, f"Position under 30% cap should be allowed: {reason}"
+        # Should pass for first trade
+        assert can_open is True
+
+        # Simulate having max_concurrent_trades open
+        # Add 6 positions manually (tier allows 6 max)
+        for i in range(6):
+            risk_manager.current_positions[f'XAUUSD_{i}'] = {
+                "symbol": "XAUUSD", "entry_price": 2000.0, "position_size": 0.5
+            }
         
-        can_open2, reason2 = risk_manager.can_open_position('XAUUSD', 40000.0, equity)
-        assert can_open2 is False, f"Position over 30% cap should be rejected: {reason2}"
-        assert "exceeds max 30.0% of equity" in reason2
-        
-        # Clean up
-        executor.close_position('XAUUSD', 2000.0, 'test_cleanup')
-        
+        # Try to open 7th - should fail if max_concurrent_trades=6
+        can_open2, reason2 = risk_manager.can_open_position('XAUUSD', 20000.0, equity)
+        # At $100k equity, tier has max_concurrent_trades=6, so 7th should fail
+        assert can_open2 is False
+        assert "Max concurrent trades (6)" in reason2
+
         print("\n=== RULE 3: MAX CONCURRENT OPEN RISK CAP ===")
-        print("System correctly rejects positions exceeding max concurrent risk cap (30%)")
+        print("System correctly rejects positions exceeding max concurrent risk cap")
         print("PASSED ✓")
 
 
 class TestMaxDrawdownKillSwitch:
     """Rule 4: MAX DRAWDOWN KILL-SWITCH"""
-    
-    def test_max_drawdown_halt_and_reset(self):
+
+    def test_max_drawdown_halt_and_reset(self, tmp_path):
         """Simulate equity decline breaching max drawdown threshold"""
         equity = 100000
-        # Set weekly/monthly limits very high to isolate drawdown test
-        risk_manager = RiskManager(
-            max_daily_loss_pct=0.02, max_weekly_loss_pct=0.50,
-            max_monthly_loss_pct=0.50, max_drawdown_pct=0.15,  # 15% max DD
-            max_position_pct=1.0,
-        )
+        risk_manager = RiskManager(kill_switch_file=str(tmp_path / "risk_kill_switch.json"))
         risk_manager.reset_daily(equity)
-        
+
         # Set peak equity
         risk_manager.peak_equity = equity
         risk_manager.current_equity = equity
-        
+
         # Initially can trade
         can_trade, violations = risk_manager.check_limits()
         assert can_trade is True
-        
+
         # Simulate gradual decline over multiple days with proper daily resets
+        # We need to also reset weekly/monthly PnL to isolate drawdown test
         # Day 1: lose 2%
         risk_manager.update_pnl(-2000)
         risk_manager.reset_daily(risk_manager.current_equity)
+        risk_manager.reset_weekly(risk_manager.current_equity)
+        risk_manager.monthly_pnl = 0.0  # Reset monthly for isolation
         risk_manager.peak_equity = equity  # Keep peak at original
-        
+
         # Day 2: lose 3%
         risk_manager.update_pnl(-3000)
         risk_manager.reset_daily(risk_manager.current_equity)
-        
+        risk_manager.reset_weekly(risk_manager.current_equity)
+        risk_manager.monthly_pnl = 0.0
+
         # Day 3: lose 4% 
         risk_manager.update_pnl(-4000)
         risk_manager.reset_daily(risk_manager.current_equity)
-        
+        risk_manager.reset_weekly(risk_manager.current_equity)
+        risk_manager.monthly_pnl = 0.0
+
         # Day 4: lose 5% - total from peak = 14%
         risk_manager.update_pnl(-5000)
         risk_manager.reset_daily(risk_manager.current_equity)
+        risk_manager.reset_weekly(risk_manager.current_equity)
+        risk_manager.monthly_pnl = 0.0
         current_dd = (risk_manager.peak_equity - risk_manager.current_equity) / risk_manager.peak_equity
         can_trade, violations = risk_manager.check_limits()
         assert can_trade is True, f"Should allow trading at {current_dd:.2%} drawdown"
-        
+
         # Day 5: lose 3% - total from peak = 17% (breach 15%)
         risk_manager.update_pnl(-3000)
         risk_manager.reset_daily(risk_manager.current_equity)
+        risk_manager.reset_weekly(risk_manager.current_equity)
+        risk_manager.monthly_pnl = 0.0
         current_dd = (risk_manager.peak_equity - risk_manager.current_equity) / risk_manager.peak_equity
         can_trade, violations = risk_manager.check_limits()
         assert can_trade is False, f"Should halt ALL trading at {current_dd:.2%} drawdown"
         assert any("Max drawdown exceeded" in v for v in violations), f"Violations: {violations}"
-        
+
         # Verify forced liquidation is available
         liquidation = risk_manager.forced_liquidation()
         # (Currently returns empty dict - would need broker integration)
-        
+
         # State persistence check - risk_manager state is in-memory only
         # This is a FLAG for demo/live use (not a test failure)
         print("\n=== RULE 4: MAX DRAWDOWN KILL-SWITCH ===")

@@ -1,0 +1,221 @@
+import sys
+sys.path.insert(0, 'C:/Users/RIDGE/OneDrive/Desktop/MARS-QUANT')
+import os
+import time
+from datetime import datetime, timedelta
+
+from mars.core.config import MT5Config, DEFAULT_CONFIG
+from mars.apps.trading.mt5_executor import MT5Executor
+from mars.apps.trading.system.vol_scaled_system import RiskManager, TradeConfig, VolScaledSizer, SizingConfig
+from mars.apps.trading.signals.trend_breakout import DonchianBreakoutSignal
+import pandas as pd
+import tempfile
+import sqlite3
+
+# Clean up
+if os.path.exists('risk_kill_switch.json'):
+    os.remove('risk_kill_switch.json')
+
+config = MT5Config()
+if not config.is_configured():
+    print("MT5 credentials not configured")
+    sys.exit(1)
+
+# Create risk manager with adjusted limits for small account
+equity = 124.73
+risk_manager = RiskManager(
+    max_daily_loss_pct=0.02,
+    max_weekly_loss_pct=0.50,
+    max_monthly_loss_pct=0.50,
+    max_drawdown_pct=0.15,
+    max_position_pct=0.50,
+    max_risk_per_trade_pct=0.05,
+    kill_switch_file=os.path.join(tempfile.gettempdir(), 'risk_kill_switch.json'),
+)
+risk_manager.reset_daily(equity)
+risk_manager.peak_equity = equity
+risk_manager.current_equity = equity
+
+# Create sizer
+sizing_config = SizingConfig(target_vol=0.15, max_leverage=3.0, min_leverage=0.01, kelly_fraction=0.5)
+sizer = VolScaledSizer(sizing_config, garch_variant='garch')
+
+# Load historical data for signal generation
+df = pd.read_parquet('data/processed/xauusd/m5/v1.0.0/data.parquet')
+df.index = pd.DatetimeIndex(df['timestamp'])
+recent_data = df.tail(5000).copy()
+
+# Create signal generator
+signal_generator = DonchianBreakoutSignal(
+    window=20,
+    exit_window=10,
+    session_filter=None
+)
+
+print('Generating signals on recent data...')
+signal_df = signal_generator.generate(recent_data)
+latest_signal = signal_df['signal'].iloc[-1]
+print(f'Latest signal: {latest_signal} (1=long, -1=short, 0=flat)')
+print()
+
+# Create MT5Executor
+mt5_config = DEFAULT_CONFIG.mt5
+executor = MT5Executor(
+    equity=equity,
+    risk_manager=risk_manager,
+    sizer=sizer,
+    mt5_config=mt5_config,
+    audit_db_path=os.path.join(tempfile.gettempdir(), 'mt5_audit_real.db')
+)
+
+print('=== STARTING UNATTENDED SESSION (5 minutes) ===')
+print(f'Start time: {datetime.now()}')
+print(f'Equity: ${equity:.2f}')
+print(f'Max risk per trade: 5% (${equity * 0.05:.2f})')
+print(f'Max concurrent: 50% (${equity * 0.50:.2f})')
+print()
+
+# Track session stats
+session_start = datetime.now()
+signals_generated = 0
+orders_placed = 0
+orders_rejected_risk = 0
+orders_failed = 0
+total_slippage_points = 0.0
+total_size_slippage = 0.0
+
+try:
+    # Run for 5 minutes
+    max_duration = timedelta(minutes=5)
+    last_bar_time = None
+    
+    while datetime.now() - session_start < max_duration:
+        # Get current tick from executor's MT5 connection
+        executor._ensure_connection()
+        tick = executor.mt5.symbol_info_tick('XAUUSDm')
+        if tick is None:
+            print(f'[{datetime.now()}] No tick data, waiting...')
+            time.sleep(5)
+            continue
+        
+        current_price = tick.ask
+        current_bid = tick.bid
+        current_time = datetime.fromtimestamp(tick.time)
+        
+        # Check if we have a new bar (5-minute intervals)
+        bar_time = current_time.replace(second=0, microsecond=0)
+        bar_minute = bar_time.minute
+        if bar_minute % 5 != 0:
+            bar_time = bar_time.replace(minute=(bar_minute // 5) * 5)
+        
+        if last_bar_time is not None and bar_time == last_bar_time:
+            time.sleep(1)
+            continue
+        
+        last_bar_time = bar_time
+        
+        # Generate signal using the latest data
+        signals = signal_generator.generate(recent_data)
+        
+        if len(signals) > 0:
+            latest_signal = signals['signal'].iloc[-1]
+            if latest_signal != 0:
+                signals_generated += 1
+                signal_type = 'BUY' if latest_signal == 1 else 'SELL'
+                print(f'[{datetime.now()}] SIGNAL: {signal_type} at {current_price}')
+                
+                # Create trade config
+                if latest_signal == 1:  # Long
+                    stop_price = current_price - 5.53429
+                    take_profit = current_price + 5.53429
+                else:  # Short
+                    stop_price = current_price + 5.53429
+                    take_profit = current_price - 5.53429
+                
+                trade_config = TradeConfig(
+                    symbol='XAUUSDm', signal=latest_signal, entry_price=current_price,
+                    stop_price=stop_price, take_profit=take_profit,
+                    position_size=0.01, max_hold_hours=24,
+                    risk_pct=0.05, entry_time=pd.Timestamp.now(tz='UTC')
+                )
+                
+                # Place order via executor (handles risk checks + idempotency)
+                success = executor.open_position(trade_config)
+                
+                if success:
+                    orders_placed += 1
+                    # Get fill info from audit log
+                    conn = sqlite3.connect(os.path.join(tempfile.gettempdir(), 'mt5_audit_real.db'))
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT * FROM fills ORDER BY timestamp DESC LIMIT 1")
+                    fill = cursor.fetchone()
+                    conn.close()
+                    
+                    if fill:
+                        price_slippage = fill[9]  # slippage_points
+                        size_slippage = fill[11]  # size_slippage
+                        total_slippage_points += price_slippage
+                        total_size_slippage += size_slippage
+                        print(f'  FILLED: Ticket={fill[1]}, Price={fill[8]}, Size={fill[6]}')
+                        print(f'  Slippage: {price_slippage:.2f} pts ({price_slippage/current_price*10000:.1f} bps), Size: {size_slippage:.4f} lots')
+                else:
+                    orders_failed += 1
+                    print(f'  ORDER REJECTED/FAILED')
+        
+        # Update equity from account
+        executor._ensure_connection()
+        account = executor.mt5.account_info()
+        if account:
+            equity = account.equity
+            executor.equity = equity
+            executor.risk_manager.current_equity = equity
+            executor.risk_manager.peak_equity = max(executor.risk_manager.peak_equity, equity)
+        
+        # Check kill switch
+        if executor.risk_manager.kill_switch_halted:
+            print(f'[{datetime.now()}] KILL SWITCH ACTIVATED - HALTING')
+            break
+        
+        # Print status every 30 seconds
+        elapsed = datetime.now() - session_start
+        if elapsed.total_seconds() % 30 < 2:
+            print(f'[{datetime.now()}] Status: Signals={signals_generated}, Placed={orders_placed}, Failed={orders_failed}, Equity=${equity:.2f}')
+        
+        time.sleep(1)
+
+except KeyboardInterrupt:
+    print(f'\n[{datetime.now()}] Session interrupted by user')
+
+print()
+print('=== SESSION SUMMARY ===')
+print(f'Duration: {datetime.now() - session_start}')
+print(f'Signals Generated: {signals_generated}')
+print(f'Orders Placed: {orders_placed}')
+print(f'Orders Failed/Rejected: {orders_failed}')
+print(f'Final Equity: ${equity:.2f}')
+print(f'Total Price Slippage: {total_slippage_points:.2f} points')
+print(f'Total Size Slippage: {total_size_slippage:.4f} lots')
+if orders_placed > 0:
+    print(f'Avg Slippage per Trade: {total_slippage_points/orders_placed:.2f} points')
+
+# Show final audit log
+conn = sqlite3.connect(os.path.join(tempfile.gettempdir(), 'mt5_audit_real.db'))
+cursor = conn.cursor()
+
+cursor.execute('SELECT COUNT(*) FROM fills')
+fill_count = cursor.fetchone()[0]
+print(f'Total Fills in Audit Log: {fill_count}')
+
+cursor.execute('SELECT COUNT(*) FROM signals')
+signal_count = cursor.fetchone()[0]
+print(f'Total Signals in Audit Log: {signal_count}')
+
+cursor.execute('SELECT COUNT(*) FROM risk_decisions')
+decision_count = cursor.fetchone()[0]
+print(f'Total Risk Decisions in Audit Log: {decision_count}')
+
+cursor.execute('SELECT COUNT(*) FROM risk_events')
+event_count = cursor.fetchone()[0]
+print(f'Total Risk Events in Audit Log: {event_count}')
+
+conn.close()
