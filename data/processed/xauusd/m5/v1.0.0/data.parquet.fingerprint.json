@@ -1,6 +1,6 @@
 {
   "algorithm": "sha256",
-  "digest": "693bec59a5b5842d33ed91fb4014c70688dc10b846611d95bc632668da2c1786",
+  "digest": "2c485209b55fe7a89aff595ad630527d5d81b4ea7dafbde9befba65cc8c675a7",
   "row_count": 2400599,
   "column_names": [
     "timestamp",
@@ -8,7 +8,10 @@
     "high",
     "low",
     "close",
-    "volume"
+    "volume",
+    "date",
+    "instrument",
+    "granularity"
   ],
-  "created_at": "2026-09-07T02:23:37.719213Z"
+  "created_at": "2026-09-12T11:35:31.077363Z"
 }

@@ -1,10 +1,10 @@
 {
-  "dataset_id": "xauusd_m5_v1.0.0_5578cedd",
+  "dataset_id": "xauusd_m5_1.0.0_b28cd6d3",
   "layer": "processed",
   "symbol": "XAUUSD",
   "timeframe": "M5",
   "version": "1.0.0",
-  "source": "csv_dukascopy",
+  "source": "histdata_dukascopy",
   "timezone": "UTC",
   "start_ts": "2003-05-05T00:05:00Z",
   "end_ts": "2026-04-29T09:55:00Z",
@@ -14,11 +14,14 @@
     "high",
     "low",
     "close",
-    "volume"
+    "volume",
+    "date",
+    "instrument",
+    "granularity"
   ],
   "fingerprint": {
     "algorithm": "sha256",
-    "digest": "693bec59a5b5842d33ed91fb4014c70688dc10b846611d95bc632668da2c1786",
+    "digest": "2c485209b55fe7a89aff595ad630527d5d81b4ea7dafbde9befba65cc8c675a7",
     "row_count": 2400599,
     "column_names": [
       "timestamp",
@@ -26,33 +29,17 @@
       "high",
       "low",
       "close",
-      "volume"
+      "volume",
+      "date",
+      "instrument",
+      "granularity"
     ],
-    "created_at": "2026-09-07T02:23:37.719213Z"
+    "created_at": "2026-09-12T11:35:31.077363Z"
   },
   "parent_dataset_id": null,
   "tags": [
-    "ingestion_pipeline",
-    "gold",
-    "5min"
+    "ingestion_pipeline"
   ],
-  "extra": {
-    "validation_report": {
-      "passed": true,
-      "errors": 0,
-      "warnings": 2,
-      "issues": [
-        {"code": "MISSING_CANDLES_WEEKEND", "severity": "info", "count": 25, "message": "25 gaps consistent with weekend/session breaks."},
-        {"code": "MISSING_CANDLES", "severity": "warning", "count": 5, "message": "5 anomalous gaps detected (multi-day feed outages in 2004, 2006, 2009, 2011).", "examples": ["2004-05-13: 9 days", "2006-01-14: 4 days", "2009-04-26: 3 days", "2009-05-07: 9 days", "2011-04-13: 3 days"]},
-        {"code": "BAD_TICK_EXTREME_RETURN", "severity": "warning", "count": 2336, "message": "2336 bars with |z-return| > 8.0 scattered across 2003-2026, concentrated in 2008, 2013, 2020, 2026."},
-        {"code": "SPREAD_MISSING", "severity": "info", "count": 1, "message": "No 'spread' column present; skip spread validation."}
-      ]
-    },
-    "quality_notes": {
-      "extreme_returns": "Distributed across 2003-2026; not confined to 2003. Peak years: 2008 (610), 2013 (157), 2020 (167), 2026 (324). Manual spot-check of sampled extremes confirms genuine volatility spikes (e.g., 2020-03 COVID, 2008 GFC), not vendor stitching errors. No truncation of start date recommended.",
-      "gap_handling": "5 anomalous multi-day feed outages recorded: 2004-05-13 (9 days), 2006-01-14 (4 days), 2009-04-26 (3 days), 2009-05-07 (9 days), 2011-04-13 (3 days). Realized-vol trailing windows MUST exclude sessions immediately after these gaps (returns across multi-day gaps are not valid 5-min returns). Feature code updated to flag/exclude sessions adjacent to gaps > 1 hour.",
-      "start_date_recommendation": "No truncation of 2003 data recommended. Extreme returns in 2003 (49 total) are genuine early-market behavior, not vendor errors. However, realized_vol_trailing_20 requires ~20 sessions warm-up; first ~20 sessions of 2003 should be treated as unstable."
-    }
-  },
-  "created_at": "2026-09-07T02:23:37.733061Z"
+  "extra": {},
+  "created_at": "2026-09-12T11:35:31.079104Z"
 }

@@ -1,28 +1,28 @@
 {
-  "dataset_id": "dxy_daily_v1.0.0_9c6a0566",
+  "dataset_id": "dxy_daily_v1.0.0_84f5879f",
   "layer": "processed",
   "symbol": "DXY",
   "timeframe": "D",
   "version": "1.0.0",
   "source": "fred",
   "timezone": "UTC",
-  "start_ts": "2020-01-02T00:00:00Z",
-  "end_ts": "2024-12-31T00:00:00Z",
-  "row_count": 1304,
+  "start_ts": "2006-01-03T00:00:00Z",
+  "end_ts": "2026-09-07T00:00:00Z",
+  "row_count": 5395,
   "columns": [
     "close",
     "volume"
   ],
   "fingerprint": {
     "algorithm": "sha256",
-    "digest": "b95037d443f67dd82d73f7a1c935586e1c650629a70a88d28bfcea8c304376e5",
-    "row_count": 1304,
+    "digest": "fd4d531378e1334262bd16f16e93c4135f61786ebf66e1f1f06f79d031829718",
+    "row_count": 5395,
     "column_names": [
       "timestamp",
       "close",
       "volume"
     ],
-    "created_at": "2026-09-07T17:58:00.880388Z"
+    "created_at": "2026-09-12T11:37:15.331660Z"
   },
   "parent_dataset_id": null,
   "tags": [
@@ -31,5 +31,5 @@
     "hyp_c"
   ],
   "extra": {},
-  "created_at": "2026-09-07T17:58:00.880388Z"
+  "created_at": "2026-09-12T11:37:15.331660Z"
 }

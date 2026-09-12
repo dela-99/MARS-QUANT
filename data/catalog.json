@@ -188,5 +188,155 @@
     ],
     "extra": {},
     "created_at": "2026-09-07T17:58:06.338965Z"
+  },
+  "xauusd_m5_1.0.0_b28cd6d3": {
+    "dataset_id": "xauusd_m5_1.0.0_b28cd6d3",
+    "layer": "processed",
+    "symbol": "XAUUSD",
+    "timeframe": "M5",
+    "version": "1.0.0",
+    "source": "histdata_dukascopy",
+    "timezone": "UTC",
+    "start_ts": "2003-05-05T00:05:00Z",
+    "end_ts": "2026-04-29T09:55:00Z",
+    "row_count": 2400599,
+    "columns": [
+      "open",
+      "high",
+      "low",
+      "close",
+      "volume",
+      "date",
+      "instrument",
+      "granularity"
+    ],
+    "fingerprint": {
+      "algorithm": "sha256",
+      "digest": "2c485209b55fe7a89aff595ad630527d5d81b4ea7dafbde9befba65cc8c675a7",
+      "row_count": 2400599,
+      "column_names": [
+        "timestamp",
+        "open",
+        "high",
+        "low",
+        "close",
+        "volume",
+        "date",
+        "instrument",
+        "granularity"
+      ],
+      "created_at": "2026-09-12T11:35:31.077363Z"
+    },
+    "parent_dataset_id": null,
+    "tags": [
+      "ingestion_pipeline"
+    ],
+    "extra": {},
+    "created_at": "2026-09-12T11:35:31.079104Z"
+  },
+  "dxy_daily_v1.0.0_84f5879f": {
+    "dataset_id": "dxy_daily_v1.0.0_84f5879f",
+    "layer": "processed",
+    "symbol": "DXY",
+    "timeframe": "D",
+    "version": "1.0.0",
+    "source": "fred",
+    "timezone": "UTC",
+    "start_ts": "2006-01-03T00:00:00Z",
+    "end_ts": "2026-09-07T00:00:00Z",
+    "row_count": 5395,
+    "columns": [
+      "close",
+      "volume"
+    ],
+    "fingerprint": {
+      "algorithm": "sha256",
+      "digest": "fd4d531378e1334262bd16f16e93c4135f61786ebf66e1f1f06f79d031829718",
+      "row_count": 5395,
+      "column_names": [
+        "timestamp",
+        "close",
+        "volume"
+      ],
+      "created_at": "2026-09-12T11:37:15.331660Z"
+    },
+    "parent_dataset_id": null,
+    "tags": [
+      "fred",
+      "macro",
+      "hyp_c"
+    ],
+    "extra": {},
+    "created_at": "2026-09-12T11:37:15.331660Z"
+  },
+  "real_yield_10y_daily_v1.0.0_4e5ce4c5": {
+    "dataset_id": "real_yield_10y_daily_v1.0.0_4e5ce4c5",
+    "layer": "processed",
+    "symbol": "REAL_YIELD_10Y",
+    "timeframe": "D",
+    "version": "1.0.0",
+    "source": "fred",
+    "timezone": "UTC",
+    "start_ts": "2003-01-03T00:00:00Z",
+    "end_ts": "2026-09-11T00:00:00Z",
+    "row_count": 6181,
+    "columns": [
+      "close",
+      "volume"
+    ],
+    "fingerprint": {
+      "algorithm": "sha256",
+      "digest": "599f6e24488a919a335e5db11649524b1e5f93d8d34488bfe15d17b078f760d5",
+      "row_count": 6181,
+      "column_names": [
+        "timestamp",
+        "close",
+        "volume"
+      ],
+      "created_at": "2026-09-12T11:37:20.768486Z"
+    },
+    "parent_dataset_id": null,
+    "tags": [
+      "fred",
+      "macro",
+      "hyp_c"
+    ],
+    "extra": {},
+    "created_at": "2026-09-12T11:37:20.768486Z"
+  },
+  "vix_daily_v1.0.0_4a1ae4bb": {
+    "dataset_id": "vix_daily_v1.0.0_4a1ae4bb",
+    "layer": "processed",
+    "symbol": "VIX",
+    "timeframe": "D",
+    "version": "1.0.0",
+    "source": "fred",
+    "timezone": "UTC",
+    "start_ts": "2003-01-02T00:00:00Z",
+    "end_ts": "2026-09-11T00:00:00Z",
+    "row_count": 6182,
+    "columns": [
+      "close",
+      "volume"
+    ],
+    "fingerprint": {
+      "algorithm": "sha256",
+      "digest": "13ff7b79e8cb6b36329000a4fa7b117a6ee2fb3d2acbbb204f419c6df7711394",
+      "row_count": 6182,
+      "column_names": [
+        "timestamp",
+        "close",
+        "volume"
+      ],
+      "created_at": "2026-09-12T11:37:25.144440Z"
+    },
+    "parent_dataset_id": null,
+    "tags": [
+      "fred",
+      "macro",
+      "hyp_c"
+    ],
+    "extra": {},
+    "created_at": "2026-09-12T11:37:25.144440Z"
   }
 }

@@ -1,11 +1,11 @@
 {
   "algorithm": "sha256",
-  "digest": "75eca572d3e06b5f3f2a162a30bc9e011f7f0f35d68dc34a4388705c5126eb8e",
-  "row_count": 1304,
+  "digest": "599f6e24488a919a335e5db11649524b1e5f93d8d34488bfe15d17b078f760d5",
+  "row_count": 6181,
   "column_names": [
     "timestamp",
     "close",
     "volume"
   ],
-  "created_at": "2026-09-07T17:58:03.529481Z"
+  "created_at": "2026-09-12T11:37:20.768486Z"
 }
