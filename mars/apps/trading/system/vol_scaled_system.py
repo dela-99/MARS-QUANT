@@ -264,7 +264,7 @@ class RiskManager:
         self.kill_switch_drawdown_at_trigger: float = 0.0
         self.kill_switch_requires_manual_reset = True
 
-        # Load persisted kill-switch state on init
+        # Load persisted state on init (includes peak_equity)
         self._load_kill_switch_state()
 
     def select_tier_for_equity(self, equity: float) -> dict:
@@ -334,7 +334,7 @@ class RiskManager:
         return self._current_tier["reward_risk_ratio"]
 
     def _load_kill_switch_state(self) -> None:
-        """Load kill-switch state from disk if it exists."""
+        """Load kill-switch state and peak_equity from disk if it exists."""
         try:
             import os
             if os.path.exists(self.KILL_SWITCH_FILE):
@@ -344,18 +344,23 @@ class RiskManager:
                 self.kill_switch_triggered_at = datetime.fromisoformat(state['triggered_at']) if state.get('triggered_at') else None
                 self.kill_switch_drawdown_at_trigger = state.get('drawdown_at_trigger', 0.0)
                 self.kill_switch_requires_manual_reset = state.get('requires_manual_reset', True)
+                # Load persisted peak_equity if available and greater than current
+                persisted_peak = state.get('peak_equity')
+                if persisted_peak is not None and persisted_peak > self.peak_equity:
+                    self.peak_equity = persisted_peak
         except Exception as e:
             # If loading fails, start fresh (don't block initialization)
             pass
 
     def _save_kill_switch_state(self) -> None:
-        """Save kill-switch state to disk."""
+        """Save kill-switch state and peak_equity to disk."""
         try:
             state = {
                 'halted': self.kill_switch_halted,
                 'triggered_at': self.kill_switch_triggered_at.isoformat() if self.kill_switch_triggered_at else None,
                 'drawdown_at_trigger': self.kill_switch_drawdown_at_trigger,
                 'requires_manual_reset': self.kill_switch_requires_manual_reset,
+                'peak_equity': self.peak_equity,
             }
             with open(self.KILL_SWITCH_FILE, 'w') as f:
                 json.dump(state, f)
@@ -364,12 +369,13 @@ class RiskManager:
             pass
 
     def update_pnl(self, pnl: float) -> None:
-        """Update PnL tracking after each trade."""
+        """Update PnL tracking after each trade and persist peak_equity."""
         self.daily_pnl += pnl
         self.weekly_pnl += pnl
         self.monthly_pnl += pnl
         self.current_equity += pnl
         self.peak_equity = max(self.peak_equity, self.current_equity)
+        self._save_kill_switch_state()
 
     def reset_weekly(self, equity: float) -> None:
         """Call at start of each trading week."""

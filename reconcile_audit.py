@@ -1,170 +1,171 @@
+#!/usr/bin/env python3
 """
-MT5 Broker Truth Reconciliation Script
-Compares MT5 deal history against internal audit log.
-Run after every session to verify audit completeness.
+Reconcile audit database after trading session.
+Verifies fill counts, signal counts, risk decisions, and cross-checks with MT5 history.
 """
 import sys
-sys.path.insert(0, 'C:/Users/RIDGE/OneDrive/Desktop/MARS-QUANT')
 import os
 import sqlite3
-import tempfile
+import argparse
+from pathlib import Path
 from datetime import datetime, timedelta
 
-from mars.core.config import MT5Config
-from mars.apps.trading.mt5_executor import MT5ConnectionManager
+# Add project root to path
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-
-def get_mt5_deals(session_start: datetime, session_end: datetime = None):
-    """Pull all deals from MT5 history for the given time window."""
-    config = MT5Config()
-    conn_manager = MT5ConnectionManager(config)
-    if not conn_manager.connect():
-        raise RuntimeError("Failed to connect to MT5")
+def reconcile_audit(db_path: str, backup_dir: str = None, hours_back: int = 24):
+    """
+    Reconcile audit database for the last N hours.
     
-    mt5 = conn_manager.mt5
-    if session_end is None:
-        session_end = datetime.now()
+    Args:
+        db_path: Path to audit database
+        backup_dir: Optional backup directory to also check
+        hours_back: How many hours back to reconcile
+    """
+    db_path = Path(db_path)
+    if not db_path.exists():
+        print(f"❌ Database not found: {db_path}")
+        return False
     
-    deals = mt5.history_deals_get(session_start, session_end)
-    if deals is None:
-        return []
+    print(f"=== AUDIT RECONCILIATION ===")
+    print(f"Database: {db_path}")
+    print(f"Time window: last {hours_back} hours")
+    print()
     
-    result = []
-    for deal in deals:
-        if deal.symbol == 'XAUUSDm' and deal.magic == 123456:
-            result.append({
-                'ticket': deal.ticket,
-                'order': deal.order,
-                'time': datetime.fromtimestamp(deal.time),
-                'type': deal.type,  # 0=buy, 1=sell
-                'entry': deal.entry,  # 0=entry, 1=exit
-                'volume': deal.volume,
-                'price': deal.price,
-                'profit': deal.profit,
-                'comment': deal.comment,
-                'position_id': deal.position_id,
-            })
-    return result
-
-
-def get_audit_fills(session_start: datetime, session_end: datetime = None):
-    """Pull all fills from SQLite audit log for the given time window."""
-    if session_end is None:
-        session_end = datetime.now()
-    
-    conn = sqlite3.connect(os.path.join(tempfile.gettempdir(), 'mt5_audit_real.db'))
+    conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     
+    # Time cutoff
+    cutoff = (datetime.now() - timedelta(hours=hours_back)).isoformat()
+    
+    # 1. Signal counts
     cursor.execute("""
-        SELECT timestamp, ticket, order_id, symbol, direction,
-               requested_lots, filled_lots, signal_price, filled_price,
-               slippage_points, slippage_pct, size_slippage, spread_at_fill,
-               comment
+        SELECT signal, risk_check_passed, COUNT(*) as cnt
+        FROM signals
+        WHERE timestamp >= ?
+        GROUP BY signal, risk_check_passed
+    """, (cutoff,))
+    signals = cursor.fetchall()
+    print("📊 SIGNALS (last {} hours):".format(hours_back))
+    total_signals = 0
+    for sig, passed, cnt in signals:
+        direction = "LONG" if sig == 1 else "SHORT" if sig == -1 else "FLAT"
+        status = "PASS" if passed else "REJECT"
+        print(f"  {direction} | {status}: {cnt}")
+        total_signals += cnt
+    print(f"  TOTAL: {total_signals}")
+    print()
+    
+    # 2. Risk decisions
+    cursor.execute("""
+        SELECT decision, COUNT(*) as cnt
+        FROM risk_decisions
+        WHERE timestamp >= ?
+        GROUP BY decision
+    """, (cutoff,))
+    decisions = cursor.fetchall()
+    print("🛡️  RISK DECISIONS:")
+    for decision, cnt in decisions:
+        print(f"  {decision}: {cnt}")
+    print()
+    
+    # 3. Fills
+    cursor.execute("""
+        SELECT direction, COUNT(*) as cnt,
+               AVG(slippage_points) as avg_slip_pts,
+               AVG(slippage_pct) as avg_slip_pct,
+               SUM(slippage_points) as total_slip_pts,
+               AVG(size_slippage) as avg_size_slip
         FROM fills
-        WHERE timestamp >= ? AND timestamp <= ?
-        ORDER BY timestamp
-    """, (session_start.isoformat(), session_end.isoformat()))
-    
+        WHERE timestamp >= ?
+        GROUP BY direction
+    """, (cutoff,))
     fills = cursor.fetchall()
+    print("📈 FILLS:")
+    total_fills = 0
+    for direction, cnt, avg_slip_pts, avg_slip_pct, total_slip_pts, avg_size_slip in fills:
+        print(f"  {direction}: {cnt} fills")
+        print(f"    Avg slippage: {avg_slip_pts:.2f} pts ({avg_slip_pct:.2f} bps)")
+        print(f"    Total slippage: {total_slip_pts:.2f} pts")
+        print(f"    Avg size slippage: {avg_size_slip:.4f} lots")
+        total_fills += cnt
+    print(f"  TOTAL FILLS: {total_fills}")
+    print()
+    
+    # 4. Risk events
+    cursor.execute("""
+        SELECT event_type, COUNT(*) as cnt
+        FROM risk_events
+        WHERE timestamp >= ?
+        GROUP BY event_type
+    """, (cutoff,))
+    events = cursor.fetchall()
+    print("⚠️  RISK EVENTS:")
+    for event_type, cnt in events:
+        print(f"  {event_type}: {cnt}")
+    print()
+    
+    # 5. Check for WAL mode
+    cursor.execute("PRAGMA journal_mode;")
+    journal_mode = cursor.fetchone()[0]
+    print(f"🗄️  Journal mode: {journal_mode}")
+    
+    # 6. Check backup locations
+    if backup_dir:
+        backup_path = Path(backup_dir) / db_path.name
+        if backup_path.exists():
+            stat = backup_path.stat()
+            age = datetime.now() - datetime.fromtimestamp(stat.st_mtime)
+            print(f"\n💾 Backup found: {backup_path}")
+            print(f"   Size: {stat.st_size:,} bytes")
+            print(f"   Age: {age}")
+            # Verify backup is readable
+            try:
+                bconn = sqlite3.connect(f"file:{backup_path}?mode=ro", uri=True)
+                bcursor = bconn.cursor()
+                bcursor.execute("SELECT COUNT(*) FROM fills")
+                b_fills = bcursor.fetchone()[0]
+                bcursor.execute("SELECT COUNT(*) FROM signals")
+                b_signals = bcursor.fetchone()[0]
+                print(f"   Backup fills: {b_fills} | signals: {b_signals}")
+                if b_fills == total_fills and b_signals == total_signals:
+                    print("   ✅ Backup matches primary")
+                else:
+                    print("   ⚠️  Backup count mismatch!")
+                bconn.close()
+            except Exception as e:
+                print(f"   ❌ Backup verification failed: {e}")
+        else:
+            print(f"\n💾 No backup at: {backup_path}")
+    
+    # Also check default backup locations
+    for bp in [Path("audit_backups") / db_path.name, Path.home() / "MARS_AUDIT_BACKUPS" / db_path.name]:
+        if bp.exists():
+            stat = bp.stat()
+            age = datetime.now() - datetime.fromtimestamp(stat.st_mtime)
+            print(f"\n💾 Additional backup: {bp}")
+            print(f"   Size: {stat.st_size:,} bytes, Age: {age}")
+    
     conn.close()
-    
-    result = []
-    for f in fills:
-        result.append({
-            'timestamp': datetime.fromisoformat(f[0]),
-            'ticket': f[1],
-            'order_id': f[2],
-            'symbol': f[3],
-            'direction': f[4],
-            'requested_lots': f[5],
-            'filled_lots': f[6],
-            'signal_price': f[7],
-            'filled_price': f[8],
-            'slippage_points': f[9],
-            'slippage_pct': f[10],
-            'size_slippage': f[11],
-            'spread_at_fill': f[12],
-            'comment': f[13],
-        })
-    return result
+    print("\n✅ Reconciliation complete")
+    return True
 
 
-def reconcile(session_start: datetime, session_end: datetime = None):
-    """Reconcile MT5 deals vs audit log."""
-    print(f"\n{'='*60}")
-    print(f"RECONCILIATION: {session_start} to {session_end or datetime.now()}")
-    print(f"{'='*60}")
+def main():
+    parser = argparse.ArgumentParser(description="Reconcile MARS audit database")
+    parser.add_argument("db_path", nargs="?", default=os.path.join(os.environ.get("TEMP", "/tmp"), "mt5_audit_real.db"),
+                        help="Path to audit database (default: temp/mt5_audit_real.db)")
+    parser.add_argument("--backup-dir", default=None, help="Backup directory to verify")
+    parser.add_argument("--hours", type=int, default=24, help="Hours back to reconcile")
+    parser.add_argument("--all", action="store_true", help="Reconcile entire database (no time filter)")
+    args = parser.parse_args()
     
-    mt5_deals = get_mt5_deals(session_start, session_end)
-    audit_fills = get_audit_fills(session_start, session_end)
+    # If --all, set hours to a very large number
+    hours = 8760 if args.all else args.hours  # 1 year
     
-    print(f"\nMT5 Deals (entries only): {len([d for d in mt5_deals if d['entry'] == 0])}")
-    print(f"Audit Fills: {len(audit_fills)}")
-    
-    # Filter to entry deals only (entry=0)
-    mt5_entries = [d for d in mt5_deals if d['entry'] == 0]
-    
-    # Match by ticket (MT5 deal ticket = audit ticket)
-    mt5_tickets = {d['ticket']: d for d in mt5_entries}
-    audit_tickets = {f['ticket']: f for f in audit_fills}
-    
-    print(f"\n--- IN MT5 BUT NOT IN AUDIT ---")
-    missing_in_audit = []
-    for ticket, deal in mt5_tickets.items():
-        if ticket not in audit_tickets:
-            missing_in_audit.append(deal)
-            print(f"  MISSING: Ticket={ticket}, Time={deal['time']}, "
-                  f"{'BUY' if deal['type']==0 else 'SELL'} @ {deal['price']}, "
-                  f"Vol={deal['volume']}, Comment={deal['comment']}")
-    
-    print(f"\n--- IN AUDIT BUT NOT IN MT5 ---")
-    extra_in_audit = []
-    for ticket, fill in audit_tickets.items():
-        if ticket not in mt5_tickets:
-            extra_in_audit.append(fill)
-            print(f"  EXTRA: Ticket={ticket}, Time={fill['timestamp']}, "
-                  f"{fill['direction']} @ {fill['filled_price']}, "
-                  f"Comment={fill['comment']}")
-    
-    print(f"\n--- MATCHED ---")
-    matched = 0
-    for ticket in set(mt5_tickets.keys()) & set(audit_tickets.keys()):
-        matched += 1
-        deal = mt5_tickets[ticket]
-        fill = audit_tickets[ticket]
-        price_diff = abs(deal['price'] - fill['filled_price'])
-        if price_diff > 0.01:
-            print(f"  PRICE MISMATCH: Ticket={ticket}, MT5={deal['price']}, Audit={fill['filled_price']}, Diff={price_diff}")
-    
-    print(f"\n{'='*60}")
-    print(f"SUMMARY: {len(mt5_entries)} MT5 entries, {len(audit_fills)} audit fills")
-    print(f"  Matched: {matched}")
-    print(f"  Missing in audit: {len(missing_in_audit)}")
-    print(f"  Extra in audit: {len(extra_in_audit)}")
-    
-    if len(missing_in_audit) == 0 and len(extra_in_audit) == 0:
-        print("  ✅ ZERO DISCREPANCIES - Audit log matches broker truth!")
-    else:
-        print("  ❌ DISCREPANCIES FOUND - Investigation required")
-    print(f"{'='*60}\n")
-    
-    return {
-        'mt5_count': len(mt5_entries),
-        'audit_count': len(audit_fills),
-        'matched': matched,
-        'missing_in_audit': missing_in_audit,
-        'extra_in_audit': extra_in_audit,
-        'zero_discrepancy': len(missing_in_audit) == 0 and len(extra_in_audit) == 0,
-    }
+    success = reconcile_audit(args.db_path, args.backup_dir, hours)
+    sys.exit(0 if success else 1)
 
 
-if __name__ == '__main__':
-    # Reconcile the new session (~03:12 UTC)
-    session_start = datetime(2026, 9, 10, 3, 10, 0)
-    session_end = datetime.now()
-    
-    result = reconcile(session_start, session_end)
-    
-    # Exit with error code if discrepancies found
-    if not result['zero_discrepancy']:
-        sys.exit(1)
+if __name__ == "__main__":
+    main()

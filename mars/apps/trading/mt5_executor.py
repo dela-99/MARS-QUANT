@@ -459,17 +459,29 @@ class MT5OrderRouter:
 
 
 class MT5AuditLogger:
-    """Persists all trading activity to SQLite for audit trail."""
+    """Persists all trading activity to SQLite for audit trail with WAL mode and auto-backup."""
     
     def __init__(self, db_path: str = "mt5_audit.db"):
         self.db_path = Path(db_path)
+        # Backup locations: primary (project root) + secondary (outside git)
+        self.backup_paths = [
+            Path("audit_backups") / self.db_path.name,  # Primary: ./audit_backups/
+            Path(os.environ.get("MARS_AUDIT_BACKUP_DIR", str(Path.home() / "MARS_AUDIT_BACKUPS"))) / self.db_path.name  # Secondary: env or ~/MARS_AUDIT_BACKUPS
+        ]
+        # Ensure backup directories exist
+        for bp in self.backup_paths:
+            bp.parent.mkdir(parents=True, exist_ok=True)
         self._init_db()
         self._lock = Lock()
-    
+
     def _init_db(self):
-        """Initialize SQLite database with audit tables."""
+        """Initialize SQLite database with audit tables and WAL mode."""
         import sqlite3
         conn = sqlite3.connect(self.db_path)
+        # Enable WAL mode for durability and concurrent access
+        conn.execute("PRAGMA journal_mode=WAL;")
+        conn.execute("PRAGMA synchronous=NORMAL;")
+        conn.execute("PRAGMA wal_autocheckpoint=1000;")
         cursor = conn.cursor()
         
         cursor.execute("""
@@ -656,6 +668,26 @@ class MT5AuditLogger:
                 equity, drawdown_pct, daily_pnl, kill_switch_active
             ))
             conn.commit()
+
+    def backup(self) -> list[Path]:
+        """Backup audit database to all configured backup locations."""
+        import shutil
+        backed_up = []
+        for backup_path in self.backup_paths:
+            try:
+                # Use copy2 to preserve metadata
+                shutil.copy2(self.db_path, backup_path)
+                # Also backup WAL and SHM files if they exist
+                for suffix in ['-wal', '-shm']:
+                    src = self.db_path.with_suffix(self.db_path.suffix + suffix)
+                    dst = backup_path.with_suffix(backup_path.suffix + suffix)
+                    if src.exists():
+                        shutil.copy2(src, dst)
+                backed_up.append(backup_path)
+                print(f"  ✅ Audit DB backed up to: {backup_path}")
+            except Exception as e:
+                print(f"  ⚠️  Backup failed to {backup_path}: {e}")
+        return backed_up
 
 
 class MT5Executor:
@@ -1043,8 +1075,15 @@ class MT5Executor:
         }
     
     def shutdown(self):
-        """Clean shutdown."""
+        """Clean shutdown with audit DB backup."""
         self.conn_manager.shutdown()
+        # Backup audit database on shutdown
+        try:
+            backed_up = self.audit_logger.backup()
+            if backed_up:
+                print(f"  ✅ Audit DB backed up to {len(backed_up)} location(s) on shutdown")
+        except Exception as e:
+            print(f"  ⚠️  Audit DB backup on shutdown failed: {e}")
         print("MT5Executor shutdown complete")
 
 
