@@ -1,5 +1,5 @@
 from pathlib import Path
-root=Path(r'C:\Users\RIDGE\OneDrive\Desktop\MARS-QUANT')
+root=Path(r'C:\Users\RIDGE\MARS-QUANT')
 base=root/'mars'/'libs'/'learning'
 def w(rel,text):
     p=base/rel; p.parent.mkdir(parents=True,exist_ok=True); p.write_text(text.strip()+'\n',encoding='utf-8')
