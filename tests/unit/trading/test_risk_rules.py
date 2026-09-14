@@ -138,7 +138,8 @@ class TestMaxDailyLossCircuitBreaker:
     def test_daily_loss_limit_halts_trading(self, tmp_path):
         """Simulate losing sequence breaching daily loss limit mid-session"""
         equity = 100000
-        risk_manager = RiskManager(kill_switch_file=str(tmp_path / "risk_kill_switch.json"))
+        risk_manager = RiskManager(kill_switch_file=str(tmp_path / "risk_kill_switch.json"),
+                                   max_consecutive_losses=5)  # Disable consecutive loss for this test
         risk_manager.reset_daily(equity)
 
         # Initially can trade
@@ -452,6 +453,168 @@ class TestPeakEquityPersistence:
         
         print("✅ peak_equity correctly persists across restarts")
         print("✅ Drawdown math uses true historical peak, not reset value")
+
+
+class TestAggregateConcurrentRiskCap:
+    """Test that tier risk_pct is a CEILING on total concurrent risk, not per-trade independent."""
+    
+    def test_aggregate_risk_cap_enforced(self, tmp_path):
+        """Open one trade at full risk budget, second trade must be rejected or sized down."""
+        equity = 500.0  # $100-1000 tier: 3% risk, max 2 concurrent trades
+        risk_manager = RiskManager(
+            kill_switch_file=str(tmp_path / "risk_kill_switch.json"),
+            max_consecutive_losses=5  # Disable for this test
+        )
+        risk_manager.current_equity = equity
+        risk_manager.peak_equity = equity
+        risk_manager.select_tier_for_equity(equity)
+        
+        tier = risk_manager.get_current_tier()
+        assert tier["risk_pct_per_trade"] == 0.03  # 3%
+        assert tier["max_concurrent_trades"] == 2
+        
+        max_total_risk = equity * 0.03  # $15
+        
+        # --- Trade 1: Use full risk budget ---
+        # 3% of $500 = $15. 10 pts * lots * 100 = $15 => lots = 0.015
+        config1 = TradeConfig(
+            symbol='XAUUSD', signal=1, entry_price=2000.0, stop_price=1990.0,
+            position_size=0.015, max_hold_hours=24, risk_pct=0.03, entry_time=pd.Timestamp.now(tz='UTC')
+        )
+        # Risk = 10 pts * 0.015 lots * 100 = $15 (full 3% budget)
+        
+        # Check aggregate risk for first trade - should pass (no open risk yet)
+        ok1, reason1 = risk_manager.check_aggregate_risk(config1, equity)
+        assert ok1 is True, f"First trade should pass: {reason1}"
+        
+        # Register the position risk
+        stop_distance = abs(config1.entry_price - config1.stop_price)
+        risk_per_contract = stop_distance * 100
+        risk_at_stop = config1.position_size * risk_per_contract
+        risk_manager.register_position_risk('XAUUSD', risk_at_stop)
+        assert risk_manager.total_open_risk == 15.0
+        
+        # --- Trade 2: Attempt to open second trade while first is open ---
+        config2 = TradeConfig(
+            symbol='XAUUSD', signal=-1, entry_price=2000.0, stop_price=2010.0,
+            position_size=0.015, max_hold_hours=24, risk_pct=0.03, entry_time=pd.Timestamp.now(tz='UTC')
+        )
+        # Risk = 10 pts * 0.015 lots * 100 = $15
+        
+        # Check aggregate risk for second trade - should FAIL (would exceed $15 total)
+        ok2, reason2 = risk_manager.check_aggregate_risk(config2, equity)
+        assert ok2 is False, f"Second trade should be rejected due to aggregate cap"
+        assert "AGGREGATE_RISK_CAP" in reason2 or "aggregate" in reason2.lower()
+        
+        print("✅ Aggregate concurrent risk cap correctly enforced")
+        print(f"   First trade risk: ${risk_at_stop:.2f}")
+        print(f"   Second trade rejected: {reason2}")
+
+
+class TestConsecutiveLossCircuitBreaker:
+    """Test the consecutive loss circuit breaker halts trading after N losses."""
+    
+    def test_consecutive_loss_halt_after_two_losses(self, tmp_path):
+        """After 2 consecutive losses, new signals should be halted."""
+        equity = 10000.0
+        risk_manager = RiskManager(
+            kill_switch_file=str(tmp_path / "risk_kill_switch.json"),
+            max_consecutive_losses=2,
+            consecutive_loss_cooldown_hours=1  # 1 hour cooldown for test
+        )
+        risk_manager.current_equity = equity
+        risk_manager.peak_equity = equity
+        # Disable daily/weekly/monthly loss limits for this test
+        risk_manager.max_daily_loss_pct = 1.0
+        risk_manager.max_weekly_loss_pct = 1.0
+        risk_manager.max_monthly_loss_pct = 1.0
+        
+        # Initially can trade
+        can_trade, violations = risk_manager.check_limits()
+        assert can_trade is True
+        assert risk_manager.consecutive_losses == 0
+        assert risk_manager.consecutive_loss_halted is False
+        
+        # First loss (small enough to not hit daily limit)
+        risk_manager.update_pnl(-50.0)  # -0.5%
+        can_trade, _ = risk_manager.check_limits()
+        assert can_trade is True
+        assert risk_manager.consecutive_losses == 1
+        assert risk_manager.consecutive_loss_halted is False
+        
+        # Second loss - should trigger halt
+        risk_manager.update_pnl(-30.0)  # -0.3% more
+        can_trade, violations = risk_manager.check_limits()
+        assert can_trade is False
+        assert risk_manager.consecutive_losses == 2
+        assert risk_manager.consecutive_loss_halted is True
+        assert any("CONSECUTIVE LOSS HALT" in v for v in violations)
+        
+        print("✅ Consecutive loss halt triggered after 2 losses")
+    
+    def test_consecutive_loss_cooldown_expiry(self, tmp_path):
+        """After cooldown period, trading should resume."""
+        equity = 10000.0
+        risk_manager = RiskManager(
+            kill_switch_file=str(tmp_path / "risk_kill_switch.json"),
+            max_consecutive_losses=2,
+            consecutive_loss_cooldown_hours=0.01  # ~36 seconds for test
+        )
+        risk_manager.current_equity = equity
+        risk_manager.peak_equity = equity
+        # Disable daily/weekly/monthly loss limits for this test
+        risk_manager.max_daily_loss_pct = 1.0
+        risk_manager.max_weekly_loss_pct = 1.0
+        risk_manager.max_monthly_loss_pct = 1.0
+        
+        # Trigger halt
+        risk_manager.update_pnl(-50.0)
+        risk_manager.update_pnl(-30.0)
+        assert risk_manager.consecutive_loss_halted is True
+        
+        # Wait for cooldown to expire
+        import time
+        time.sleep(40)  # Wait longer than 36 seconds
+        
+        # Should now be able to trade
+        can_trade, violations = risk_manager.check_limits()
+        assert can_trade is True, f"Should resume after cooldown: {violations}"
+        assert risk_manager.consecutive_loss_halted is False
+        assert risk_manager.consecutive_losses == 0
+        
+        print("✅ Consecutive loss cooldown expiry works")
+    
+    def test_win_resets_consecutive_losses_but_not_halt(self, tmp_path):
+        """A win after losses resets counter but doesn't clear active halt."""
+        equity = 10000.0
+        risk_manager = RiskManager(
+            kill_switch_file=str(tmp_path / "risk_kill_switch.json"),
+            max_consecutive_losses=2,
+            consecutive_loss_cooldown_hours=24  # Long cooldown
+        )
+        risk_manager.current_equity = equity
+        risk_manager.peak_equity = equity
+        # Disable daily/weekly/monthly loss limits for this test
+        risk_manager.max_daily_loss_pct = 1.0
+        risk_manager.max_weekly_loss_pct = 1.0
+        risk_manager.max_monthly_loss_pct = 1.0
+        
+        # Two losses -> halt
+        risk_manager.update_pnl(-50.0)
+        risk_manager.update_pnl(-30.0)
+        assert risk_manager.consecutive_loss_halted is True
+        
+        # One win - counter resets but halt remains
+        risk_manager.update_pnl(20.0)
+        assert risk_manager.consecutive_losses == 0
+        assert risk_manager.consecutive_loss_halted is True  # Halt persists until cooldown
+        
+        # Should still be halted
+        can_trade, violations = risk_manager.check_limits()
+        assert can_trade is False
+        assert any("CONSECUTIVE LOSS HALT" in v for v in violations)
+        
+        print("✅ Win resets counter but halt persists until cooldown")
 
 
 if __name__ == "__main__":

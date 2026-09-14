@@ -205,8 +205,9 @@ class RiskManager:
     - Max position size per symbol — from current tier
     - Max correlation exposure — from current tier
     - Daily loss limit — FIXED across all tiers
-    - Per-trade risk % — from current tier
+    - Per-trade risk % — from current tier (now a CEILING on total concurrent risk)
     - Min-lot override handling with hard ceiling
+    - Consecutive loss circuit breaker — halts new signals after N consecutive losses
     """
 
     # Default persistence file for kill-switch state
@@ -214,6 +215,7 @@ class RiskManager:
 
     # Risk tiers: (min_equity, max_equity, max_concurrent_trades, risk_pct_per_trade, reward_risk_ratio)
     # Tier is selected at session start based on equity and locked for the session
+    # risk_pct_per_trade is now the MAXIMUM TOTAL RISK across ALL concurrent positions
     RISK_TIERS = [
         (0,      100,    1, 0.07, 3.0),      # $0-100: 7% risk, 1 trade max
         (100,    1000,   2, 0.03, 2.5),      # $100-1k: 3% risk, 2 trades max
@@ -230,9 +232,15 @@ class RiskManager:
     # Min-lot override ceiling — no single trade may exceed this risk regardless of tier/min-lot
     MIN_LOT_OVERRIDE_CEILING_PCT = 0.15  # 15% hard ceiling
 
+    # Consecutive loss circuit breaker
+    DEFAULT_MAX_CONSECUTIVE_LOSSES = 2
+    DEFAULT_CONSECUTIVE_LOSS_COOLDOWN_HOURS = 24  # 0 = remainder of session
+
     def __init__(
         self,
         kill_switch_file: Optional[str] = None,
+        max_consecutive_losses: Optional[int] = None,
+        consecutive_loss_cooldown_hours: Optional[int] = None,
     ) -> None:
         # Fixed thresholds
         self.max_daily_loss_pct = self.FIXED_MAX_DAILY_LOSS_PCT
@@ -263,6 +271,17 @@ class RiskManager:
         self.kill_switch_triggered_at: Optional[datetime] = None
         self.kill_switch_drawdown_at_trigger: float = 0.0
         self.kill_switch_requires_manual_reset = True
+
+        # Consecutive loss circuit breaker state
+        self.max_consecutive_losses = max_consecutive_losses or self.DEFAULT_MAX_CONSECUTIVE_LOSSES
+        self.consecutive_loss_cooldown_hours = consecutive_loss_cooldown_hours if consecutive_loss_cooldown_hours is not None else self.DEFAULT_CONSECUTIVE_LOSS_COOLDOWN_HOURS
+        self.consecutive_losses = 0
+        self.consecutive_loss_halted = False
+        self.consecutive_loss_halted_at: Optional[datetime] = None
+        self.last_trade_outcome: Optional[str] = None  # "win" or "loss"
+
+        # Aggregate concurrent risk tracking
+        self.total_open_risk = 0.0  # Sum of risk_at_stop for all open positions
 
         # Load persisted state on init (includes peak_equity)
         self._load_kill_switch_state()
@@ -314,7 +333,7 @@ class RiskManager:
 
     @property
     def max_risk_per_trade_pct(self) -> float:
-        """Current tier's per-trade risk percentage."""
+        """Current tier's per-trade risk percentage (now a ceiling on total concurrent risk)."""
         if self._current_tier is None:
             raise RuntimeError("Tier not selected")
         return self._current_tier["risk_pct_per_trade"]
@@ -377,12 +396,70 @@ class RiskManager:
         self.peak_equity = max(self.peak_equity, self.current_equity)
         self._save_kill_switch_state()
 
+        # Update consecutive loss tracking
+        if pnl < 0:
+            self.consecutive_losses += 1
+            self.last_trade_outcome = "loss"
+        elif pnl > 0:
+            self.consecutive_losses = 0
+            self.last_trade_outcome = "win"
+
+        # Check consecutive loss circuit breaker
+        if self.consecutive_losses >= self.max_consecutive_losses:
+            self._trigger_consecutive_loss_halt()
+
+    def _trigger_consecutive_loss_halt(self) -> None:
+        """Trigger the consecutive loss circuit breaker halt."""
+        if not self.consecutive_loss_halted:
+            self.consecutive_loss_halted = True
+            self.consecutive_loss_halted_at = datetime.now()
+            self._log_risk_event(
+                "CONSECUTIVE_LOSS_HALT",
+                f"Consecutive loss circuit breaker triggered after {self.consecutive_losses} consecutive losses. "
+                f"Max allowed: {self.max_consecutive_losses}. "
+                f"Cooldown: {self.consecutive_loss_cooldown_hours} hours (0 = remainder of session).",
+                self.current_equity, 0.0, self.daily_pnl, self.kill_switch_halted
+            )
+
+    def _check_consecutive_loss_cooldown(self) -> bool:
+        """
+        Check if consecutive loss cooldown period has elapsed.
+        Returns True if cooldown is over and trading can resume.
+        """
+        if not self.consecutive_loss_halted:
+            return True
+
+        if self.consecutive_loss_halted_at is None:
+            return True
+
+        if self.consecutive_loss_cooldown_hours == 0:
+            # 0 = remainder of session (never auto-clear)
+            return False
+
+        elapsed_hours = (datetime.now() - self.consecutive_loss_halted_at).total_seconds() / 3600
+        if elapsed_hours >= self.consecutive_loss_cooldown_hours:
+            self.consecutive_loss_halted = False
+            self.consecutive_loss_halted_at = None
+            self.consecutive_losses = 0
+            self._log_risk_event(
+                "CONSECUTIVE_LOSS_COOLDOWN_EXPIRED",
+                f"Consecutive loss cooldown expired after {elapsed_hours:.1f} hours. Trading resumed.",
+                self.current_equity, 0.0, self.daily_pnl, self.kill_switch_halted
+            )
+            return True
+        return False
+
     def reset_weekly(self, equity: float) -> None:
         """Call at start of each trading week."""
         self.weekly_pnl = 0.0
         self.current_equity = equity
         self.peak_equity = max(self.peak_equity, equity)
         self.trades_today = 0
+        # Reset consecutive loss tracker at week boundary (configurable)
+        self.consecutive_losses = 0
+        self.consecutive_loss_halted = False
+        self.consecutive_loss_halted_at = None
+        self.last_trade_outcome = None
 
     def reset_monthly(self, equity: float) -> None:
         """Call at start of each trading month."""
@@ -390,6 +467,11 @@ class RiskManager:
         self.current_equity = equity
         self.peak_equity = max(self.peak_equity, equity)
         self.trades_today = 0
+        # Reset consecutive loss tracker at month boundary (configurable)
+        self.consecutive_losses = 0
+        self.consecutive_loss_halted = False
+        self.consecutive_loss_halted_at = None
+        self.last_trade_outcome = None
 
     def check_limits(self) -> tuple[bool, list[str]]:
         """
@@ -400,6 +482,14 @@ class RiskManager:
         # Check kill-switch first - if halted, block all trading
         if self.kill_switch_halted and self.kill_switch_requires_manual_reset:
             return False, [f"KILL-SWITCH ACTIVE: Drawdown {self.kill_switch_drawdown_at_trigger:.2%} exceeded at {self.kill_switch_triggered_at}. Manual reset required."]
+
+        # Check consecutive loss halt
+        if self.consecutive_loss_halted:
+            # Check if cooldown has expired
+            if self._check_consecutive_loss_cooldown():
+                pass  # Cooldown expired, allow trading
+            else:
+                return False, [f"CONSECUTIVE LOSS HALT: {self.consecutive_losses} consecutive losses. Cooldown active for {self.consecutive_loss_cooldown_hours} hours."]
 
         violations = []
 
@@ -447,8 +537,61 @@ class RiskManager:
 
         return True, "OK"
 
+    def check_aggregate_risk(self, config: "TradeConfig", equity: float) -> tuple[bool, str]:
+        """
+        Check if adding this trade would exceed the tier's TOTAL concurrent risk ceiling.
+        This is the AGGREGATE risk cap - the sum of all open position risks plus this
+        new trade's risk must not exceed tier_risk_pct * equity.
+        
+        Logic:
+        - Min-lot trades that exceed tier budget are exceptions handled by per-trade check
+          (MIN_LOT_OVERRIDE if under 15% ceiling, REJECT if over ceiling)
+        - ALL trades that exceed tier budget (min-lot or not) pass through to per-trade check
+          which handles ceiling logic
+        - Trades within tier budget are subject to aggregate cap
+        """
+        if self._current_tier is None:
+            return False, "Tier not selected — cannot check aggregate risk"
+
+        tier_risk_pct = self._current_tier["risk_pct_per_trade"]
+        max_total_risk = equity * tier_risk_pct
+
+        stop_distance = abs(config.entry_price - config.stop_price)
+        risk_per_contract = stop_distance * 100  # XAUUSD: 1 pip = $1 per oz, 100 oz per lot
+        new_trade_risk = config.position_size * risk_per_contract
+        
+        actual_risk_pct = new_trade_risk / equity
+        is_min_lot = config.position_size <= 0.01
+        exceeds_tier = actual_risk_pct > tier_risk_pct
+
+        # ALL trades exceeding tier budget pass through to per-trade check
+        # (min-lot gets MIN_LOT_OVERRIDE if under 15%, non-min-lot gets ceiling rejection)
+        if exceeds_tier:
+            return True, "OK (exceeds tier -> per-trade handles override/ceiling)"
+
+        # For trades within tier budget, enforce aggregate cap
+        projected_total_risk = self.total_open_risk + new_trade_risk
+        if projected_total_risk > max_total_risk:
+            if self.total_open_risk >= max_total_risk:
+                return False, (
+                    f"Aggregate risk cap reached: current open risk ${self.total_open_risk:.2f} "
+                    f"equals/exceeds limit ${max_total_risk:.2f}. New trade risk ${new_trade_risk:.2f} rejected."
+                )
+            else:
+                remaining_risk_budget = max_total_risk - self.total_open_risk
+                return False, (
+                    f"Aggregate risk cap would be exceeded: current ${self.total_open_risk:.2f} + "
+                    f"new ${new_trade_risk:.2f} = ${projected_total_risk:.2f} > limit ${max_total_risk:.2f}. "
+                    f"Remaining budget: ${remaining_risk_budget:.2f}"
+                )
+
+        return True, "OK"
+
     def check_per_trade_risk(self, config: "TradeConfig", equity: float) -> tuple[bool, str]:
-        """Check if trade risk exceeds current tier's per-trade risk limit with min-lot override handling."""
+        """
+        Check if trade risk exceeds current tier's per-trade risk limit with min-lot override handling.
+        This now also includes the aggregate risk check.
+        """
         if self._current_tier is None:
             return False, "Tier not selected — cannot check trade risk"
 
@@ -459,7 +602,12 @@ class RiskManager:
         risk_per_contract = stop_distance * 100  # XAUUSD: 1 pip = $1 per oz, 100 oz per lot
         total_risk = config.position_size * risk_per_contract
 
-        # Check against tier's intended risk
+        # First check aggregate risk cap
+        aggregate_ok, aggregate_reason = self.check_aggregate_risk(config, equity)
+        if not aggregate_ok:
+            return False, f"AGGREGATE_RISK_CAP: {aggregate_reason}"
+
+        # Then check per-trade risk (with min-lot override)
         if total_risk > max_risk:
             # MIN-LOT OVERRIDE CHECK
             # If the trade uses min lot and risk exceeds tier target but is under ceiling
@@ -487,6 +635,33 @@ class RiskManager:
             return True, f"OK (MIN_LOT_OVERRIDE: intended {tier_risk_pct:.1%}, actual {actual_risk_pct:.2%})"
 
         return True, "OK"
+
+    def register_position_risk(self, symbol: str, risk_at_stop: float, is_min_lot_override: bool = False) -> None:
+        """Register a new position's risk-at-stop for aggregate tracking."""
+        if is_min_lot_override:
+            # Min-lot override trades don't consume the aggregate risk budget
+            # They are tracked separately for monitoring but don't consume the tier budget
+            self.current_positions[symbol] = {
+                "risk_at_stop": risk_at_stop,
+                "entry_time": datetime.now(),
+                "is_min_lot_override": True,
+            }
+        else:
+            self.total_open_risk += risk_at_stop
+            self.current_positions[symbol] = {
+                "risk_at_stop": risk_at_stop,
+                "entry_time": datetime.now(),
+                "is_min_lot_override": False,
+            }
+
+    def unregister_position_risk(self, symbol: str) -> None:
+        """Remove a position's risk-at-stop from aggregate tracking when closed."""
+        if symbol in self.current_positions:
+            risk_at_stop = self.current_positions[symbol].get("risk_at_stop", 0.0)
+            is_min_lot_override = self.current_positions[symbol].get("is_min_lot_override", False)
+            if not is_min_lot_override:
+                self.total_open_risk = max(0.0, self.total_open_risk - risk_at_stop)
+            del self.current_positions[symbol]
 
     def _log_min_lot_override_event(self, config: "TradeConfig", equity: float,
                                      intended_risk_pct: float, actual_risk_pct: float,
@@ -554,376 +729,11 @@ class RiskManager:
         # Also reset tier lock for new day (session boundary)
         self._tier_locked = False
         self._current_tier = None
-
-    def reset_weekly(self, equity: float) -> None:
-        """Call at start of each trading week."""
-        self.weekly_pnl = 0.0
-        self.current_equity = equity
-        self.peak_equity = max(self.peak_equity, equity)
-        self.trades_today = 0
-
-    def reset_monthly(self, equity: float) -> None:
-        """Call at start of each trading month."""
-        self.monthly_pnl = 0.0
-        self.current_equity = equity
-        self.peak_equity = max(self.peak_equity, equity)
-        self.trades_today = 0
-
-    def check_limits(self) -> tuple[bool, list[str]]:
-        """
-        Check all risk limits.
-
-        Returns (can_trade, violations_list)
-        """
-        # Check kill-switch first - if halted, block all trading
-        if self.kill_switch_halted and self.kill_switch_requires_manual_reset:
-            return False, [f"KILL-SWITCH ACTIVE: Drawdown {self.kill_switch_drawdown_at_trigger:.2%} exceeded at {self.kill_switch_triggered_at}. Manual reset required."]
-
-        violations = []
-
-        # Daily loss limit
-        if self.daily_pnl < -self.max_daily_loss_pct * self.current_equity:
-            violations.append(f"Daily loss limit exceeded: {self.daily_pnl:.2%}")
-
-        # Weekly loss limit
-        if self.weekly_pnl < -self.max_weekly_loss_pct * self.current_equity:
-            violations.append(f"Weekly loss limit exceeded: {self.weekly_pnl:.2%}")
-
-        # Monthly loss limit
-        if self.monthly_pnl < -self.max_monthly_loss_pct * self.current_equity:
-            violations.append(f"Monthly loss limit exceeded: {self.monthly_pnl:.2%}")
-
-        # Max drawdown
-        current_dd = (self.peak_equity - self.current_equity) / self.peak_equity
-        if current_dd > self.max_drawdown_pct:
-            violations.append(f"Max drawdown exceeded: {current_dd:.2%}")
-            # Trigger kill-switch
-            if not self.kill_switch_halted:
-                self.kill_switch_halted = True
-                self.kill_switch_triggered_at = datetime.now()
-                self.kill_switch_drawdown_at_trigger = current_dd
-                self.kill_switch_requires_manual_reset = True
-                self._save_kill_switch_state()
-
-        return len(violations) == 0, violations
-
-    def can_open_position(self, symbol: str, position_value: float, equity: float) -> tuple[bool, str]:
-        """Check if new position can be opened using current tier's limits."""
-        can_trade, violations = self.check_limits()
-        if not can_trade:
-            return False, "; ".join(violations)
-
-        # Position size limit (concurrent exposure cap) — from current tier
-        if self._current_tier is None:
-            return False, "Tier not selected — cannot open position"
-
-        max_concurrent_trades = self._current_tier["max_concurrent_trades"]
-        # Count current open trades for this symbol (and total)
-        current_trades = sum(1 for pos in self.current_positions.values() if pos.get("symbol") == symbol)
-        if current_trades >= max_concurrent_trades:
-            return False, f"Max concurrent trades ({max_concurrent_trades}) reached for {symbol}"
-
-        return True, "OK"
-
-    def check_per_trade_risk(self, config: "TradeConfig", equity: float) -> tuple[bool, str]:
-        """Check if trade risk exceeds current tier's per-trade risk limit with min-lot override handling."""
-        if self._current_tier is None:
-            return False, "Tier not selected — cannot check trade risk"
-
-        tier_risk_pct = self._current_tier["risk_pct_per_trade"]
-        max_risk = equity * tier_risk_pct
-
-        stop_distance = abs(config.entry_price - config.stop_price)
-        risk_per_contract = stop_distance * 100  # XAUUSD: 1 pip = $1 per oz, 100 oz per lot
-        total_risk = config.position_size * risk_per_contract
-
-        # Check against tier's intended risk
-        if total_risk > max_risk:
-            # MIN-LOT OVERRIDE CHECK
-            # If the trade uses min lot and risk exceeds tier target but is under ceiling
-            min_lot = 0.01  # XAUUSDm min lot
-            min_lot_risk = min_lot * risk_per_contract
-            actual_risk_pct = total_risk / equity
-            ceiling_pct = self.MIN_LOT_OVERRIDE_CEILING_PCT
-
-            if actual_risk_pct > self.MIN_LOT_OVERRIDE_CEILING_PCT:
-                # Hard ceiling exceeded — REJECT
-                self._log_min_lot_override_event(
-                    config, equity, tier_risk_pct, actual_risk_pct,
-                    min_lot_risk, "REJECTED_CEILING_EXCEEDED"
-                )
-                return False, (
-                    f"Trade risk ${total_risk:.2f} ({actual_risk_pct:.2%}) exceeds "
-                    f"hard ceiling {ceiling_pct:.0%} — trade REJECTED"
-                )
-
-            # Log min-lot override but allow
-            self._log_min_lot_override_event(
-                config, equity, tier_risk_pct, actual_risk_pct,
-                min_lot_risk, "ALLOWED_MIN_LOT_OVERRIDE"
-            )
-            return True, f"OK (MIN_LOT_OVERRIDE: intended {tier_risk_pct:.1%}, actual {actual_risk_pct:.2%})"
-
-        return True, "OK"
-
-    def _log_min_lot_override_event(self, config: "TradeConfig", equity: float,
-                                     intended_risk_pct: float, actual_risk_pct: float,
-                                     min_lot_risk: float, event_type: str) -> None:
-        """Log min-lot override event for audit trail."""
-        self._log_risk_event(
-            "MIN_LOT_OVERRIDE",
-            f"{event_type}: intended={intended_risk_pct:.2%}, actual={actual_risk_pct:.2%}, "
-            f"min_lot_risk=${min_lot_risk:.2f}, equity=${equity:.2f}",
-            equity, 0.0, 0.0, self.kill_switch_halted
-        )
-
-    def _log_risk_event(self, event_type: str, details: str,
-                        equity: float, drawdown_pct: float,
-                        daily_pnl: float, kill_switch_active: bool) -> None:
-        """Log risk event to audit database."""
-        import sqlite3
-        from pathlib import Path
-        db_path = Path(self.KILL_SWITCH_FILE).with_suffix('.risk_events.db')
-        try:
-            with sqlite3.connect(db_path) as conn:
-                cursor = conn.cursor()
-                cursor.execute("""
-                    CREATE TABLE IF NOT EXISTS risk_events (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        timestamp TEXT NOT NULL,
-                        event_type TEXT NOT NULL,
-                        details TEXT,
-                        equity REAL,
-                        drawdown_pct REAL,
-                        daily_pnl REAL,
-                        kill_switch_active BOOLEAN
-                    )
-                """)
-                cursor.execute("""
-                    INSERT INTO risk_events (timestamp, event_type, details, equity, drawdown_pct, daily_pnl, kill_switch_active)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                """, (datetime.now().isoformat(), event_type, details, equity, drawdown_pct, daily_pnl, kill_switch_active))
-                conn.commit()
-        except Exception as e:
-            # Log but don't crash
-            pass
-
-    def manual_reset_kill_switch(self) -> None:
-        """Manually reset the kill-switch (operator action required)."""
-        self.kill_switch_halted = False
-        self.kill_switch_triggered_at = None
-        self.kill_switch_drawdown_at_trigger = 0.0
-        self.kill_switch_requires_manual_reset = False
-        # Reset peak equity to current equity to accept the drawdown and prevent immediate re-trigger
-        self.peak_equity = self.current_equity
-        self._save_kill_switch_state()
-
-    def forced_liquidation(self) -> dict[str, float]:
-        """Return all positions to liquidate (placeholder - implement with broker)."""
-        return {symbol: -pos for symbol, pos in self.current_positions.items()}
-
-    def reset_daily(self, equity: float) -> None:
-        """Call at start of each trading day."""
-        self.daily_pnl = 0.0
-        # Note: weekly_pnl and monthly_pnl are NOT reset daily - they accumulate
-        self.current_equity = equity
-        self.peak_equity = max(self.peak_equity, equity)
-        self.trades_today = 0
-        # Also reset tier lock for new day (session boundary)
-        self._tier_locked = False
-        self._current_tier = None
-
-    def reset_weekly(self, equity: float) -> None:
-        """Call at start of each trading week."""
-        self.weekly_pnl = 0.0
-        self.current_equity = equity
-        self.peak_equity = max(self.peak_equity, equity)
-        self.trades_today = 0
-
-    def reset_monthly(self, equity: float) -> None:
-        """Call at start of each trading month."""
-        self.monthly_pnl = 0.0
-        self.current_equity = equity
-        self.peak_equity = max(self.peak_equity, equity)
-        self.trades_today = 0
-
-    def check_limits(self) -> tuple[bool, list[str]]:
-        """
-        Check all risk limits.
-
-        Returns (can_trade, violations_list)
-        """
-        # Check kill-switch first - if halted, block all trading
-        if self.kill_switch_halted and self.kill_switch_requires_manual_reset:
-            return False, [f"KILL-SWITCH ACTIVE: Drawdown {self.kill_switch_drawdown_at_trigger:.2%} exceeded at {self.kill_switch_triggered_at}. Manual reset required."]
-
-        violations = []
-
-        # Daily loss limit
-        if self.daily_pnl < -self.max_daily_loss_pct * self.current_equity:
-            violations.append(f"Daily loss limit exceeded: {self.daily_pnl:.2%}")
-
-        # Weekly loss limit
-        if self.weekly_pnl < -self.max_weekly_loss_pct * self.current_equity:
-            violations.append(f"Weekly loss limit exceeded: {self.weekly_pnl:.2%}")
-
-        # Monthly loss limit
-        if self.monthly_pnl < -self.max_monthly_loss_pct * self.current_equity:
-            violations.append(f"Monthly loss limit exceeded: {self.monthly_pnl:.2%}")
-
-        # Max drawdown
-        current_dd = (self.peak_equity - self.current_equity) / self.peak_equity
-        if current_dd > self.max_drawdown_pct:
-            violations.append(f"Max drawdown exceeded: {current_dd:.2%}")
-            # Trigger kill-switch
-            if not self.kill_switch_halted:
-                self.kill_switch_halted = True
-                self.kill_switch_triggered_at = datetime.now()
-                self.kill_switch_drawdown_at_trigger = current_dd
-                self.kill_switch_requires_manual_reset = True
-                self._save_kill_switch_state()
-
-        return len(violations) == 0, violations
-
-    def can_open_position(self, symbol: str, position_value: float, equity: float) -> tuple[bool, str]:
-        """Check if new position can be opened using current tier's limits."""
-        can_trade, violations = self.check_limits()
-        if not can_trade:
-            return False, "; ".join(violations)
-
-        # Position size limit (concurrent exposure cap) — from current tier
-        if self._current_tier is None:
-            return False, "Tier not selected — cannot open position"
-
-        max_concurrent_trades = self._current_tier["max_concurrent_trades"]
-        # Count current open trades for this symbol (and total)
-        current_trades = sum(1 for pos in self.current_positions.values() if pos.get("symbol") == symbol)
-        if current_trades >= max_concurrent_trades:
-            return False, f"Max concurrent trades ({max_concurrent_trades}) reached for {symbol}"
-
-        return True, "OK"
-
-    def check_per_trade_risk(self, config: "TradeConfig", equity: float) -> tuple[bool, str]:
-        """Check if trade risk exceeds current tier's per-trade risk limit with min-lot override handling."""
-        if self._current_tier is None:
-            return False, "Tier not selected — cannot check trade risk"
-
-        tier_risk_pct = self._current_tier["risk_pct_per_trade"]
-        max_risk = equity * tier_risk_pct
-
-        stop_distance = abs(config.entry_price - config.stop_price)
-        risk_per_contract = stop_distance * 100  # XAUUSD: 1 pip = $1 per oz, 100 oz per lot
-        total_risk = config.position_size * risk_per_contract
-
-        # Check against tier's intended risk
-        if total_risk > max_risk:
-            # MIN-LOT OVERRIDE CHECK
-            # If the trade uses min lot and risk exceeds tier target but is under ceiling
-            min_lot = 0.01  # XAUUSDm min lot
-            min_lot_risk = min_lot * risk_per_contract
-            actual_risk_pct = total_risk / equity
-            ceiling_pct = self.MIN_LOT_OVERRIDE_CEILING_PCT
-
-            if actual_risk_pct > self.MIN_LOT_OVERRIDE_CEILING_PCT:
-                # Hard ceiling exceeded — REJECT
-                self._log_min_lot_override_event(
-                    config, equity, tier_risk_pct, actual_risk_pct,
-                    min_lot_risk, "REJECTED_CEILING_EXCEEDED"
-                )
-                return False, (
-                    f"Trade risk ${total_risk:.2f} ({actual_risk_pct:.2%}) exceeds "
-                    f"hard ceiling {ceiling_pct:.0%} — trade REJECTED"
-                )
-
-            # Log min-lot override but allow
-            self._log_min_lot_override_event(
-                config, equity, tier_risk_pct, actual_risk_pct,
-                min_lot_risk, "ALLOWED_MIN_LOT_OVERRIDE"
-            )
-            return True, f"OK (MIN_LOT_OVERRIDE: intended {tier_risk_pct:.1%}, actual {actual_risk_pct:.2%})"
-
-        return True, "OK"
-
-    def _log_min_lot_override_event(self, config: "TradeConfig", equity: float,
-                                     intended_risk_pct: float, actual_risk_pct: float,
-                                     min_lot_risk: float, event_type: str) -> None:
-        """Log min-lot override event for audit trail."""
-        self._log_risk_event(
-            "MIN_LOT_OVERRIDE",
-            f"{event_type}: intended={intended_risk_pct:.2%}, actual={actual_risk_pct:.2%}, "
-            f"min_lot_risk=${min_lot_risk:.2f}, equity=${equity:.2f}",
-            equity, 0.0, 0.0, self.kill_switch_halted
-        )
-
-    def _log_risk_event(self, event_type: str, details: str,
-                        equity: float, drawdown_pct: float,
-                        daily_pnl: float, kill_switch_active: bool) -> None:
-        """Log risk event to audit database."""
-        import sqlite3
-        from pathlib import Path
-        db_path = Path(self.KILL_SWITCH_FILE).with_suffix('.risk_events.db')
-        try:
-            with sqlite3.connect(db_path) as conn:
-                cursor = conn.cursor()
-                cursor.execute("""
-                    CREATE TABLE IF NOT EXISTS risk_events (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        timestamp TEXT NOT NULL,
-                        event_type TEXT NOT NULL,
-                        details TEXT,
-                        equity REAL,
-                        drawdown_pct REAL,
-                        daily_pnl REAL,
-                        kill_switch_active BOOLEAN
-                    )
-                """)
-                cursor.execute("""
-                    INSERT INTO risk_events (timestamp, event_type, details, equity, drawdown_pct, daily_pnl, kill_switch_active)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                """, (datetime.now().isoformat(), event_type, details, equity, drawdown_pct, daily_pnl, kill_switch_active))
-                conn.commit()
-        except Exception as e:
-            # Log but don't crash
-            pass
-
-    def manual_reset_kill_switch(self) -> None:
-        """Manually reset the kill-switch (operator action required)."""
-        self.kill_switch_halted = False
-        self.kill_switch_triggered_at = None
-        self.kill_switch_drawdown_at_trigger = 0.0
-        self.kill_switch_requires_manual_reset = False
-        # Reset peak equity to current equity to accept the drawdown and prevent immediate re-trigger
-        self.peak_equity = self.current_equity
-        self._save_kill_switch_state()
-
-    def forced_liquidation(self) -> dict[str, float]:
-        """Return all positions to liquidate (placeholder - implement with broker)."""
-        return {symbol: -pos for symbol, pos in self.current_positions.items()}
-
-    def reset_daily(self, equity: float) -> None:
-        """Call at start of each trading day."""
-        self.daily_pnl = 0.0
-        # Note: weekly_pnl and monthly_pnl are NOT reset daily - they accumulate
-        self.current_equity = equity
-        self.peak_equity = max(self.peak_equity, equity)
-        self.trades_today = 0
-        # Also reset tier lock for new day (session boundary)
-        self._tier_locked = False
-        self._current_tier = None
-
-    def reset_weekly(self, equity: float) -> None:
-        """Call at start of each trading week."""
-        self.weekly_pnl = 0.0
-        self.current_equity = equity
-        self.peak_equity = max(self.peak_equity, equity)
-        self.trades_today = 0
-
-    def reset_monthly(self, equity: float) -> None:
-        """Call at start of each trading month."""
-        self.monthly_pnl = 0.0
-        self.current_equity = equity
-        self.peak_equity = max(self.peak_equity, equity)
-        self.trades_today = 0
+        # Reset consecutive loss tracker at day boundary (configurable)
+        self.consecutive_losses = 0
+        self.consecutive_loss_halted = False
+        self.consecutive_loss_halted_at = None
+        self.last_trade_outcome = None
 
 
 @dataclass
@@ -976,6 +786,18 @@ class TradeExecutor:
         if not can_open:
             return False
 
+        # Determine if this is a min-lot override trade
+        stop_distance = abs(config.entry_price - config.stop_price)
+        risk_per_contract = stop_distance * 100  # XAUUSD: 1 pip = $1 per oz, 100 oz per lot
+        total_risk = config.position_size * risk_per_contract
+        actual_risk_pct = total_risk / self.equity
+        tier_risk_pct = self.risk_manager.max_risk_per_trade_pct
+        is_min_lot_override = (
+            config.position_size <= 0.01 and
+            actual_risk_pct > tier_risk_pct and
+            actual_risk_pct <= self.risk_manager.MIN_LOT_OVERRIDE_CEILING_PCT
+        )
+
         # Open position
         self.open_positions[config.symbol] = {
             "entry_price": config.entry_price,
@@ -986,6 +808,11 @@ class TradeExecutor:
             "max_hold_hours": config.max_hold_hours,
             "entry_equity": self.equity,
         }
+
+        # Register risk for aggregate tracking
+        risk_at_stop = config.position_size * risk_per_contract
+        self.risk_manager.register_position_risk(config.symbol, risk_at_stop, is_min_lot_override)
+
         return True
 
     def update_position(self, symbol: str, current_price: float, current_time: pd.Timestamp) -> dict:
@@ -1039,6 +866,7 @@ class TradeExecutor:
             pnl = (entry_price - price) * 100 * abs(position_size)
 
         self.risk_manager.update_pnl(pnl)
+        self.risk_manager.unregister_position_risk(symbol)
         self.equity += pnl
         self.closed_trades.append({
             "symbol": symbol,

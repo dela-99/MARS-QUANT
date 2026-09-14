@@ -39,11 +39,42 @@ class TestConsolidatedRiskLimits:
         assert tier["risk_pct_per_trade"] == 0.01
 
         # Test 1: Trade that EXCEEDS tier's risk limit but UNDER ceiling -> ALLOWED with MIN_LOT_OVERRIDE
+        # This must be a MIN-LOT trade (position_size <= 0.01) to qualify for MIN_LOT_OVERRIDE
         # stop_distance = 50 points, risk_per_contract = 5000
-        # position_size = 1.0 lot -> total_risk = 5000 (5% of 100k) -> under 15% ceiling
+        # position_size = 0.01 lot (min lot) -> total_risk = 50 (0.05% of 100k) -> under tier limit actually
+        # To exceed tier (1% = $1000) but be under ceiling (15% = $15000):
+        # Need risk between $1000 and $15000 at min-lot 0.01
+        # risk = 0.01 * stop_distance * 100 = stop_distance
+        # So stop_distance must be between 1000 and 15000 points
+        # Let's use stop_distance = 5000 points (50000 pips = 500 points... wait)
+        # risk = position_size * stop_distance * 100
+        # 0.01 * stop_distance * 100 = stop_distance
+        # So stop_distance = 5000 gives $5000 risk (5% of 100k, exceeds 1% tier but under 15% ceiling)
         config_exceeds_tier = TradeConfig(
-            symbol='XAUUSD', signal=1, entry_price=2000.0, stop_price=1950.0,
-            take_profit=2100.0, position_size=1.0, max_hold_hours=24,
+            symbol='XAUUSD', signal=1, entry_price=2000.0, stop_price=1500.0,  # 500 points = 5000 pips? No...
+            take_profit=2500.0, position_size=0.01, max_hold_hours=24,
+            risk_pct=0.01, entry_time=pd.Timestamp('2024-01-01 10:00:00', tz='UTC')
+        )
+        # stop_distance = 500, risk_per_contract = 50000, min_lot_risk = 0.01 * 50000 = 500 (0.5%)
+        # Need stop_distance = 1000 for $1000 risk (1% = tier)
+        # Need stop_distance = 5000 for $5000 risk (5% = exceeds tier, under 15% ceiling)
+        # So entry=2000, stop=1500 gives 500 points stop_distance
+        # risk_per_contract = 500 * 100 = 50000
+        # min_lot_risk = 0.01 * 50000 = 500 (0.5% of 100k) - that's UNDER tier
+        # Need stop_distance = 1000 for $1000 = 1% (tier limit)
+        # Need stop_distance = 5000 for $5000 = 5% (exceeds tier, under ceiling)
+        # So entry=2000, stop=1500 (500 pts) gives 0.5% - under tier
+        # entry=2000, stop=1000 (1000 pts) gives 1% - at tier
+        # entry=2000, stop=500 (1500 pts) gives 1.5% - exceeds tier
+        # Let's use entry=2000, stop=1500 = 500 points? No, 2000-1500=500
+        # Wait: 2000 - 1500 = 500 points = 5000 pips
+        # risk_per_contract = 500 * 100 = 50,000
+        # 0.01 lot * 50,000 = $500 = 0.5% - still under 1% tier
+        # Need entry=2000, stop=1000 for 1000 points -> 1% at min lot
+        # entry=2000, stop=500 for 1500 points -> 1.5% exceeds tier, under ceiling
+        config_exceeds_tier = TradeConfig(
+            symbol='XAUUSD', signal=1, entry_price=2000.0, stop_price=500.0,
+            take_profit=2100.0, position_size=0.01, max_hold_hours=24,
             risk_pct=0.01, entry_time=pd.Timestamp('2024-01-01 10:00:00', tz='UTC')
         )
 

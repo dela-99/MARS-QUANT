@@ -215,8 +215,8 @@ def main():
                         conn.close()
 
                         if fill:
-                            price_slippage = fill[9]
-                            size_slippage = fill[11]
+                            price_slippage = fill[14]  # slippage_points
+                            size_slippage = fill[16]   # size_slippage
                             total_slippage_points += price_slippage
                             total_size_slippage += size_slippage
                             print(f'  FILLED: Ticket={fill[1]}, Price={fill[8]}, Size={fill[6]}')

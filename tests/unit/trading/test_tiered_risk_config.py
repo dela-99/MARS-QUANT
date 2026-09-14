@@ -124,6 +124,7 @@ class TestTieredRiskConfigAcceptance:
         # Simulate session boundary - equity grows to $5000 (Tier 2)
         # reset_daily clears tier lock, then select new tier
         risk_manager.reset_daily(5000)
+        executor.equity = 5000  # Sync executor equity with risk manager
         risk_manager.select_tier_for_equity(5000)
         new_tier = risk_manager.get_current_tier()
         assert new_tier["risk_pct_per_trade"] == 0.015  # Tier 2
