@@ -209,3 +209,10 @@ marimo/_lsp/
 __marimo__/
 data/raw/*.csv
 data/processed/**/*.parquet
+
+# risk/kill-switch state files
+risk_kill_switch*.json
+risk_kill_switch*.db
+risk_kill_switch*.db-*
+audit_backups/
+.jcode_learning_*.py

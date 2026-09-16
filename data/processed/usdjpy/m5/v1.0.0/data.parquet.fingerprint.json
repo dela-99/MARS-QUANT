@@ -1,0 +1,17 @@
+{
+  "algorithm": "sha256",
+  "digest": "56961b422b4a0fc36b9bf56d15da0d03685d57c85fedc0c5340721ff687d6177",
+  "row_count": 385700,
+  "column_names": [
+    "timestamp",
+    "open",
+    "high",
+    "low",
+    "close",
+    "volume",
+    "spread",
+    "<DATE>",
+    "<TIME>"
+  ],
+  "created_at": "2026-09-16T10:17:20.467078Z"
+}

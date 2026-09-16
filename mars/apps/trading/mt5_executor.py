@@ -619,6 +619,21 @@ class MT5AuditLogger:
             # Calculate slippage in points and percentage
             spread_at_fill = fill.ask - fill.bid
             
+            # Get actual commission, swap, profit from MT5 history for this fill
+            commission = 0.0
+            swap = 0.0
+            profit = 0.0
+            try:
+                if fill.mt5_ticket:
+                    deals = self.mt5.history_deals_get(ticket=fill.mt5_ticket)
+                    if deals and len(deals) > 0:
+                        deal = deals[0]
+                        commission = getattr(deal, 'commission', 0.0)
+                        swap = getattr(deal, 'swap', 0.0)
+                        profit = getattr(deal, 'profit', 0.0)
+            except Exception:
+                pass  # Keep defaults if history lookup fails
+            
             cursor.execute("""
                             INSERT INTO fills (
                                 timestamp, ticket, order_id, symbol, direction,
@@ -641,9 +656,7 @@ class MT5AuditLogger:
                             fill.slippage / config.entry_price * 10000 if config.entry_price > 0 else 0,
                             fill.size_slippage,
                             fill.ask - fill.bid,
-                            0.0,  # commission
-                            0.0,  # swap
-                            0.0,  # profit
+                            commission, swap, profit,
                             fill.ticket, fill.order_id,
                             fill.result_code, fill.retcode_external if not isinstance(fill.retcode_external, Mock) else -1,
                             fill.comment

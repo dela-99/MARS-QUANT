@@ -27,6 +27,13 @@ COLUMN_ALIASES: Mapping[str, str] = {
     "High": "high",
     "Low": "low",
     "Close": "close",
+    "<OPEN>": "open",
+    "<HIGH>": "high",
+    "<LOW>": "low",
+    "<CLOSE>": "close",
+    "<TICKVOL>": "volume",
+    "<VOL>": "volume",
+    "<SPREAD>": "spread",
     "Volume": "volume",
     "tick_volume": "volume",
     "real_volume": "volume",
@@ -69,6 +76,11 @@ class OHLCVNormalizer(DataNormalizer):
         # Rename known aliases
         rename_map = {c: COLUMN_ALIASES[c] for c in frame.columns if c in COLUMN_ALIASES}
         frame = frame.rename(columns=rename_map)
+
+        # Handle duplicate columns after rename (e.g., <TICKVOL> and <VOL> both map to "volume")
+        if frame.columns.duplicated().any():
+            # Keep first occurrence of each column name
+            frame = frame.loc[:, ~frame.columns.duplicated(keep='first')]
 
         # Promote timestamp column to index if needed
         if "timestamp" in frame.columns:

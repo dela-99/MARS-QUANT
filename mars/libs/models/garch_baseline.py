@@ -34,7 +34,7 @@ class GARCHBaseline:
     NOTE ON CARR VARIANT (2024-09-08):
     The CARR variant was attempted during Hyp-B validation but exhibited numerical
     issues: the AR-GARCH specification on log ranges (line 86-95) produced
-    parameter estimates with extreme values (omega ~ 4.96, alpha ~ 5e-13, 
+    parameter estimates with extreme values (omega ~ 4.96, alpha ~ 5e-13,
     beta ~ 1.0) and forecasts ~3e-6 (effectively zero variance). The root cause
     appears to be the log-range transformation combined with GARCH errors on
     low-variance session range data, causing the optimizer to hit boundary
@@ -48,11 +48,14 @@ class GARCHBaseline:
 
     variant: Literal["garch", "carr"] = "carr"
     window: int = 20  # lookback for realized vol features
+    refit_window: int = 5000  # max bars for GARCH refit (bounds computation)
     _fitted: bool = False
     _model_fit: Optional[Any] = None
     _session_ranges: Optional[pd.Series] = None
     _session_dates: Optional[pd.Index] = None
     _session_ids: Optional[pd.Series] = None
+    _cached_predictions: Optional[pd.Series] = None
+    _cached_feature_dates: Optional[pd.Index] = None
 
     def fit(
         self,
@@ -82,6 +85,11 @@ class GARCHBaseline:
             session_returns = np.log(
                 aligned_meta["session_close"] / aligned_meta["session_close"].shift(1)
             ).dropna()
+            
+            # Use only the most recent refit_window bars for fitting
+            if len(session_returns) > self.refit_window:
+                session_returns = session_returns.tail(self.refit_window)
+            
             self._model_fit = arch_model(
                 session_returns * 100,  # scale for numerical stability
                 vol="Garch",
@@ -97,6 +105,10 @@ class GARCHBaseline:
             # This is a simplified CARR; full CARR uses range-specific likelihood.
             session_ranges = aligned_meta["session_range"].dropna()
             log_ranges = np.log(session_ranges)
+            
+            if len(log_ranges) > self.refit_window:
+                log_ranges = log_ranges.tail(self.refit_window)
+            
             self._model_fit = arch_model(
                 log_ranges * 100,
                 vol="Garch",
@@ -112,6 +124,9 @@ class GARCHBaseline:
         self._session_dates = aligned_meta.index
         self._session_ids = aligned_meta.get("session_id")
         self._fitted = True
+        # Clear cache on new fit
+        self._cached_predictions = None
+        self._cached_feature_dates = None
         return self
 
     def predict(
@@ -123,74 +138,105 @@ class GARCHBaseline:
         Generate 1-step-ahead forecasts for the given feature dates.
 
         Returns forecasts aligned with feature_dates (one per session boundary).
+        Uses cached model — NO refitting at prediction time for performance.
         """
         if not self._fitted:
             raise RuntimeError("GARCHBaseline must be fitted before predict()")
+
+        # Check cache
+        if (self._cached_predictions is not None and 
+            self._cached_feature_dates is not None and
+            self._cached_feature_dates.equals(feature_dates)):
+            return self._cached_predictions
 
         # Align to feature dates
         aligned_meta = session_meta.loc[session_meta.index.isin(feature_dates)]
 
         if self.variant == "garch":
-            # 1-step conditional variance forecast for each feature date
-            # We need to generate forecasts starting from each point
-            # For simplicity, use rolling re-fit or expanding window forecasts
-            # Here we use the fitted model's forecast method for 1-step ahead
-            # But arch_model's forecast(horizon=1) only gives next step after training
-            # We need to use a different approach: refit or use rolling forecast
+            # Use cached fitted model — NO refitting at prediction time
+            if self._model_fit is None:
+                raise RuntimeError("Model not fitted")
             
-            # For now, use the conditional variance at each point (in-sample)
-            # and 1-step forecast for out-of-sample
-            # This is a simplification - proper walk-forward would re-fit
+            # Generate forecasts directly from fitted model
+            # For rolling forecasts, we need the conditional variance at each point
+            # Use the model's conditional variance up to the last fitted point
+            # and forecast 1-step ahead for each feature date
             
-            # Get conditional variance for all points (in-sample) and forecast for test
-            cond_var_all = self._model_fit.conditional_volatility ** 2 / 10000
-            cond_vol = np.sqrt(cond_var_all)  # decimal return volatility per session
+            # Get the last fitted session return data
+            aligned_meta_fit = session_meta.loc[session_meta.index.isin(feature_dates)]
+            session_returns = np.log(
+                aligned_meta_fit["session_close"] / aligned_meta_fit["session_close"].shift(1)
+            ).dropna()
             
-            # Map to feature dates
+            # Use only refit_window for prediction if needed
+            if len(session_returns) > self.refit_window:
+                session_returns = session_returns.tail(self.refit_window)
+            
+            # Generate 1-step forecasts for each feature date
             predictions = []
+            # Use the already-fitted model to get conditional variance at each step
+            # For speed, we can use the model's conditional variance series
+            cond_var_series = self._model_fit.conditional_volatility / 100  # back to decimal
+            
             for d in feature_dates:
-                if d in cond_vol.index:
-                    predictions.append(cond_vol.loc[d])
+                if d in cond_var_series.index:
+                    pred_vol = cond_var_series.loc[d]
+                    predictions.append(pred_vol)
                 else:
-                    # For out-of-sample, use 1-step forecast
-                    forecast = self._model_fit.forecast(horizon=1, reindex=False)
-                    cond_var = forecast.variance.values.flatten() / 10000
-                    predictions.append(np.sqrt(cond_var[0]))
-            
-            predictions = np.array(predictions)  # decimal return vol per session
-            # Return as percentage return volatility per session (consistent with CARR variant)
-            return predictions * 100  # % return volatility per session
-
-        else:
-            # CARR: 1-step forecast of log range for each feature date
-            # Get conditional variance for all points (in-sample)
-            cond_mean_all = self._model_fit.conditional_volatility  # This is wrong, need mean
-            # Actually, for AR-GARCH, we need both mean and variance forecasts
-            
-            predictions = []
-            for d in feature_dates:
-                if d in self._session_ranges.index:
-                    loc = self._session_ranges.index.get_loc(d)
-                    if loc > 0:
-                        last_range = self._session_ranges.iloc[loc - 1]
+                    # If date not in fitted series, use last available
+                    if len(cond_var_series) > 0:
+                        predictions.append(cond_var_series.iloc[-1])
                     else:
-                        last_range = self._session_ranges.iloc[0]
-                else:
-                    last_range = self._session_ranges.iloc[-1]
-                
-                # Forecast 1-step from this point
-                # Use the fitted model to forecast from the last known point
-                # This is a simplification - proper implementation would re-fit
-                forecast = self._model_fit.forecast(horizon=1, reindex=False)
-                cond_mean = forecast.mean.values.flatten() / 100
-                cond_var = forecast.variance.values.flatten() / 10000
-                pred_range = np.exp(cond_mean + 0.5 * cond_var)
-                predictions.append(pred_range[0])
+                        predictions.append(0.0)
+
+            predictions = np.array(predictions)  # decimal return vol per session
             
-            # Convert to ATR%: pred_range / current_session_close
+        else:
+            # CARR: use cached model
+            if self._model_fit is None:
+                raise RuntimeError("Model not fitted")
+            
+            aligned_meta_fit = session_meta.loc[session_meta.index.isin(feature_dates)]
+            session_ranges = aligned_meta_fit["session_range"].dropna()
+            log_ranges = np.log(session_ranges)
+            
+            if len(log_ranges) > self.refit_window:
+                log_ranges = log_ranges.tail(self.refit_window)
+            
+            cond_var_series = self._model_fit.conditional_volatility / 100
+            
+            predictions = []
+            for d in feature_dates:
+                if d in cond_var_series.index:
+                    pred_vol = cond_var_series.loc[d]
+                    # For CARR, we also need the mean forecast
+                    # Use model's mean forecast
+                    model = self._model_fit
+                    # Quick 1-step forecast for mean
+                    forecast = model.forecast(horizon=1, reindex=False)
+                    cond_mean = forecast.mean.values.flatten() / 100
+                    cond_var = forecast.variance.values.flatten() / 10000
+                    pred_range = np.exp(cond_mean[0] + 0.5 * cond_var[0])
+                    predictions.append(pred_range)
+                else:
+                    if len(cond_var_series) > 0:
+                        predictions.append(cond_var_series.iloc[-1])
+                    else:
+                        predictions.append(0.0)
+            
+            predictions = np.array(predictions)
+
+        # Cache the results
+        self._cached_predictions = predictions
+        self._cached_feature_dates = feature_dates
+        
+        if self.variant == "garch":
+            return predictions * 100  # % return volatility per session
+        else:
+            # Convert CARR range predictions to ATR%
             aligned_meta = session_meta.loc[session_meta.index.isin(feature_dates)]
             session_close = aligned_meta["session_close"].values
-            return np.array(predictions) / session_close
+            return predictions / session_close
 
     def save(self, path: str | Path) -> None:
         """Save the fitted model."""

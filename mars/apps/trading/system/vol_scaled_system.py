@@ -131,6 +131,7 @@ class VolScaledSizer:
         signal: pd.Series | np.ndarray | pd.DataFrame,
         equity: float,
         forecast_vol: Optional[pd.Series] = None,
+        contract_multiplier: float = 100.0,  # 100 for XAUUSD (1 lot = 100 oz), 100000 for FX pairs
     ) -> pd.DataFrame:
         """
         Compute position sizes for each bar given signal and vol forecast.
@@ -172,9 +173,7 @@ class VolScaledSizer:
         # Position value = equity * leverage
         position_value = equity * leverage
 
-        # Convert to contracts (assuming 1 contract = 100 oz for XAUUSD,
-        # or use contract multiplier from broker)
-        contract_multiplier = 100  # 1 lot = 100 oz
+        # Convert to contracts using provided contract multiplier
         position_size = position_value / (price_aligned["close"] * contract_multiplier)
 
         # Cap by max position % of equity

@@ -15,9 +15,19 @@ from mars.core.config import MT5Config, DEFAULT_CONFIG
 from mars.apps.trading.mt5_executor import MT5Executor
 from mars.apps.trading.system.vol_scaled_system import RiskManager, TradeConfig, VolScaledSizer, SizingConfig
 from mars.apps.trading.signals.trend_breakout import DonchianBreakoutSignal
+from mars.libs.features.volatility.range import ATRFeature
 import pandas as pd
 import tempfile
 import sqlite3
+
+
+def compute_current_atr(price_df: pd.DataFrame, window: int = 14) -> float:
+    """Compute current ATR from live bar data."""
+    atr_feat = ATRFeature(window=window)
+    result = atr_feat.compute(price_df)
+    atr_series = result.data['atr']
+    current_atr = atr_series.iloc[-1]
+    return float(current_atr)
 
 
 def main():
@@ -122,6 +132,10 @@ def main():
     latest_signal = signal_df['signal'].iloc[-1]
     print(f'Latest signal: {latest_signal} (1=long, -1=short, 0=flat)')
 
+    # --- Fit sizer on historical data ---
+    print("Fitting sizer on historical data...")
+    sizer.fit(recent_data)
+
     # --- Create MT5Executor with tiered RiskManager ---
     executor = MT5Executor(
         equity=live_equity,
@@ -147,7 +161,7 @@ def main():
         executor.shutdown()
         return 0
 
-    # --- LIVE SESSION LOOP (unchanged from original) ---
+    # --- LIVE SESSION LOOP ---
     session_start = datetime.now()
     signals_generated = 0
     orders_placed = 0
@@ -181,6 +195,46 @@ def main():
 
             last_bar_time = bar_time
 
+            # --- REFRESH BAR DATA FROM MT5 FOR LIVE SIGNALS ---
+            # Fetch recent M5 bars from MT5 for live signal generation
+            rates = executor.mt5.copy_rates_from_pos('XAUUSDm', 5, 0, 5000)  # M5 timeframe, 5000 bars
+            if rates is not None and len(rates) > 0:
+                live_df = pd.DataFrame(rates)
+                live_df['timestamp'] = pd.to_datetime(live_df['time'], unit='s', utc=True)
+                live_df.set_index('timestamp', inplace=True)
+                live_df.rename(columns={'open': 'open', 'high': 'high', 'low': 'low', 'close': 'close', 
+                                         'tick_volume': 'volume', 'spread': 'spread', 'real_volume': 'real_volume'}, 
+                               inplace=True)
+                
+                # --- VALIDATION PIPELINE (same as historical data) ---
+                from mars.libs.data.loaders import normalize_ohlcv
+                from mars.libs.data.validation import validate_ohlcv
+                
+                # Normalize (column aliasing, UTC enforcement, deduplication)
+                live_df = normalize_ohlcv(live_df, symbol='XAUUSDm', timeframe='M5', assume_utc=True)
+                
+                # Validate (monotonic timestamps, OHLC consistency, duplicates)
+                validation_report = validate_ohlcv(live_df, strict=False)  # warn don't crash
+                if not validation_report.ok:
+                    # Log validation failure as risk event, skip this polling cycle
+                    # RiskManager is already imported at module level
+                    if hasattr(executor, 'audit_logger'):
+                        executor.audit_logger.log_risk_event(
+                            event_type="LIVE_DATA_VALIDATION_FAILED",
+                            details=f"Live bar validation failed: {'; '.join(validation_report.errors)}",
+                            equity=live_equity,
+                            drawdown_pct=0.0,
+                            daily_pnl=0.0,
+                            kill_switch_active=False
+                        )
+                    print(f"[{datetime.now()}] WARNING: Live data validation failed: {validation_report.errors}")
+                    time.sleep(1)
+                    continue
+                if validation_report.warnings:
+                    print(f"[{datetime.now()}] Live data validation warnings: {validation_report.warnings}")
+                
+                recent_data = live_df.tail(5000).copy()
+
             signals = signal_generator.generate(recent_data)
 
             if len(signals) > 0:
@@ -190,17 +244,36 @@ def main():
                     signal_type = 'BUY' if latest_signal == 1 else 'SELL'
                     print(f'[{datetime.now()}] SIGNAL: {signal_type} at {current_price}')
 
+                    # --- COMPUTE LIVE ATR AND POSITION SIZE VIA VOLSCALEDSIZER ---
+                    # Compute current ATR from live data
+                    atr_window = 14
+                    atr_feat = ATRFeature(window=atr_window)
+                    atr_result = atr_feat.compute(recent_data)
+                    current_atr = atr_result.data['atr'].iloc[-1]
+                    
+                    # Get vol forecast and compute position size via VolScaledSizer
+                    forecast_vol = sizer.forecast_vol(recent_data)
+                    signal_series = signals['signal']
+                    positions_df = sizer.compute_position_size(recent_data, signal_series, live_equity, forecast_vol)
+                    position_size = positions_df['position_size'].iloc[-1] if len(positions_df) > 0 else 0
+                    
+                    # Use min lot as floor
+                    min_lot = 0.01
+                    if position_size < min_lot:
+                        position_size = min_lot
+                    
+                    # Compute stop/take based on ATR
                     if latest_signal == 1:
-                        stop_price = current_price - 5.53429
-                        take_profit = current_price + 5.53429
+                        stop_price = current_price - 2.0 * current_atr
+                        take_profit = current_price + 2.0 * current_atr
                     else:
-                        stop_price = current_price + 5.53429
-                        take_profit = current_price - 5.53429
+                        stop_price = current_price + 2.0 * current_atr
+                        take_profit = current_price - 2.0 * current_atr
 
                     trade_config = TradeConfig(
                         symbol='XAUUSDm', signal=latest_signal, entry_price=current_price,
                         stop_price=stop_price, take_profit=take_profit,
-                        position_size=0.01, max_hold_hours=24,
+                        position_size=position_size, max_hold_hours=24,
                         risk_pct=0.05, entry_time=pd.Timestamp.now(tz='UTC')
                     )
 
