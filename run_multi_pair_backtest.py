@@ -18,11 +18,14 @@ import numpy as np
 from datetime import datetime
 from typing import Dict, Any, Optional
 
-from mars.apps.trading.signals.trend_breakout import DonchianBreakoutSignal
 from mars.apps.trading.system.vol_scaled_system import (
-    VolScaledSizer, SizingConfig, RiskManager, TradeExecutor, TradeConfig
+    VolScaledSizer, SizingConfig, RiskManager, TradeExecutor, TradeConfig,
+    calculate_equity_floor
 )
-from mars.apps.trading.signals.mtf_gate import MTFGate
+from mars.apps.trading.system.pair_config import (
+    PAIR_CONFIG, get_enabled_symbols, create_signal_generator, get_pair_config,
+    get_data_path, get_contract_specs
+)
 from mars.libs.evaluation.metrics import classification_metrics
 
 
@@ -33,18 +36,21 @@ SYMBOL_CONFIGS = {
         'data_path': 'data/processed/eurusd/m5/v1.0.0/data.parquet',
         'pip_size': 0.0001,
         'contract_size': 100000,  # 1 lot = 100,000 units
+        'quote_currency': 'USD',
     },
     'USDJPY': {
         'symbol': 'USDJPYm',
         'data_path': 'data/processed/usdjpy/m5/v1.0.0/data.parquet',
         'pip_size': 0.01,
         'contract_size': 100000,
+        'quote_currency': 'JPY',
     },
     'EURGBP': {
         'symbol': 'EURGBPm',
         'data_path': 'data/processed/eurgbp/m5/v1.0.0/data.parquet',
         'pip_size': 0.0001,
         'contract_size': 100000,
+        'quote_currency': 'GBP',
     },
     'XAUUSD': {
         'symbol': 'XAUUSDm',
@@ -86,37 +92,7 @@ def load_symbol_data(symbol: str, start: str = "2020-01-01") -> pd.DataFrame:
     return df[["open", "high", "low", "close", "volume"]]
 
 
-def compute_equity_floor(symbol: str, risk_pct: float = 0.03, stop_mult: float = 2.0) -> float:
-    """
-    Compute equity floor for a symbol.
-    
-    floor = (min_lot × contract_size × stop_distance_in_price) / risk_pct
-    stop_distance = ATR × stop_mult (using typical ATR for the pair)
-    """
-    config = SYMBOL_CONFIGS[symbol]
-    min_lot = 0.01
-    contract_size = config['contract_size']
-    
-    # Typical ATR values for M5 (approximate)
-    typical_atr = {
-        'EURUSD': 0.00045,   # ~4.5 pips
-        'USDJPY': 0.045,     # ~4.5 pips  
-        'EURGBP': 0.00040,   # ~4.0 pips
-        'XAUUSD': 0.55,      # ~55 pips (0.55 points)
-    }
-    
-    atr = typical_atr.get(symbol, 0.0005)
-    stop_distance = atr * 2.0  # 2.0x ATR stop
-    
-    # Risk in currency per min lot at this stop distance
-    risk_per_min_lot = min_lot * contract_size * (stop_distance / config['pip_size']) * config['pip_size']
-    # Actually: risk = min_lot * contract_size * stop_distance (in price units)
-    risk_per_min_lot = min_lot * contract_size * stop_distance
-    
-    # Equity needed so this risk equals risk_pct of equity
-    equity_floor = risk_per_min_lot / risk_pct
-    
-    return equity_floor
+
 
 
 def run_backtest_for_symbol(
@@ -125,26 +101,55 @@ def run_backtest_for_symbol(
     end: str = "2024-12-31",
     equity: float = 10000.0,
 ) -> Dict[str, Any]:
-    """Run full backtest for a single symbol."""
+    """Run full backtest for a single symbol using PAIR_CONFIG."""
     
     print(f"\n{'='*60}")
     print(f"BACKTEST: {symbol} M5")
     print(f"{'='*60}")
     
-    config = SYMBOL_CONFIGS[symbol]
+    # Get pair config for strategy parameters
+    pair_cfg = get_pair_config(symbol)
+    if not pair_cfg.get("enabled", True):
+        print(f"Symbol {symbol} is DISABLED: {pair_cfg.get('disabled_reason', 'No reason provided')}")
+        return {'error': f'Symbol {symbol} disabled', 'symbol': symbol}
+    
+    # Get contract specs
+    contract_specs = get_contract_specs(symbol)
     
     # Load data
     print(f"Loading {symbol} M5 data...")
-    df = load_symbol_data(symbol, start="2020-01-01")
-    df = df[df.index <= pd.Timestamp(end, tz="UTC")]
+    data_path = get_data_path(symbol)
+    df = pd.read_parquet(data_path)
+    
+    # Handle timestamp column - it should be a datetime column
+    if "timestamp" in df.columns:
+        df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True)
+        df = df.set_index("timestamp").sort_index()
+    elif isinstance(df.index, pd.DatetimeIndex):
+        df = df.sort_index()
+    else:
+        raise ValueError(f"No timestamp column or datetime index found")
+    
+    # Filter by start/end date
+    start_ts = pd.Timestamp(start, tz="UTC")
+    end_ts = pd.Timestamp(end, tz="UTC")
+    df = df[(df.index >= start_ts) & (df.index <= end_ts)]
     print(f"Loaded {len(df)} bars from {df.index[0]} to {df.index[-1]}")
     
-    # Create signal generator
-    signal_generator = DonchianBreakoutSignal(
-        window=20,
-        exit_window=10,
-        session_filter=None
-    )
+    # Ensure OHLC columns
+    required_cols = ["open", "high", "low", "close"]
+    for col in required_cols:
+        if col not in df.columns:
+            raise ValueError(f"Missing required column: {col}")
+    
+    # Ensure volume column exists
+    if "volume" not in df.columns:
+        df["volume"] = 0.0
+    
+    df = df[["open", "high", "low", "close", "volume"]]
+    
+    # Create signal generator from PAIR_CONFIG
+    signal_generator = create_signal_generator(symbol)
     
     # Create sizer
     sizing_config = SizingConfig(
@@ -161,7 +166,7 @@ def run_backtest_for_symbol(
     sizer.fit(df)
     
     # Generate signals
-    print("Generating Donchian breakout signals...")
+    print("Generating signals...")
     signals_df = signal_generator.generate(df)
     signal_dist = signals_df['signal'].value_counts().to_dict()
     print(f"Signal distribution: {signal_dist}")
@@ -172,7 +177,7 @@ def run_backtest_for_symbol(
     
     # Compute position sizes
     print("Computing position sizes...")
-    contract_mult = config['contract_size']  # Use contract_size from config
+    contract_mult = contract_specs['contract_size']  # Use contract_size from config
     positions_df = sizer.compute_position_size(
         df, signals_df['signal'], equity, forecast_vol, contract_multiplier=contract_mult
     )
@@ -182,15 +187,21 @@ def run_backtest_for_symbol(
     positions_df['position_size'] = positions_df['position_size'].clip(lower=min_lot)
     
     # Run simulation with RiskManager
-    config = {
-        'symbol': SYMBOL_CONFIGS[symbol]['symbol'],
-        'pip_size': SYMBOL_CONFIGS[symbol]['pip_size'],
-        'contract_size': SYMBOL_CONFIGS[symbol]['contract_size'],
+    sim_config = {
+        'symbol': contract_specs['symbol'],
+        'pip_size': contract_specs['pip_size'],
+        'contract_size': contract_specs['contract_size'],
+        'quote_currency': contract_specs.get('quote_currency', 'USD'),
     }
     
+    # Get strategy-specific params from PAIR_CONFIG
+    stop_mult = pair_cfg.get("stop_multiplier", 2.0)
+    reward_mult = pair_cfg.get("rr_ratio", 2.5)
+    atr_window = 14
+    
     results = run_simulation(
-        df, signals_df, positions_df, equity, config,
-        atr_window=14, stop_mult=2.0, reward_mult=2.5
+        df, signals_df, positions_df, equity, sim_config,
+        atr_window=atr_window, stop_mult=stop_mult, reward_mult=reward_mult
     )
     
     return results
@@ -214,6 +225,21 @@ def run_simulation(
     atr_result = atr_feat.compute(df)
     df = df.copy()
     df['ATRr_14'] = atr_result.data['atr']
+    
+    # Quote currency conversion rate (for non-USD quoted pairs)
+    # For backtest, we use a fixed rate; in live trading this would come from MT5
+    quote_currency = config.get('quote_currency', 'USD')
+    if quote_currency == 'JPY':
+        # Approximate JPY/USD rate (100 JPY = 1 USD)
+        quote_to_usd = 0.01
+    elif quote_currency == 'GBP':
+        # Approximate GBP/USD rate (1 GBP = 1.25 USD)
+        quote_to_usd = 1.25
+    else:
+        quote_to_usd = 1.0  # USD quoted
+    
+    # Contract size multiplier (what 1 lot represents)
+    contract_size = config.get('contract_size', 100000)
     
     # Align all data
     common_idx = df.index.intersection(signals_df.index).intersection(positions_df.index)
@@ -245,27 +271,32 @@ def run_simulation(
             if pos['signal'] == 1:
                 # Long position
                 if price <= pos['stop_price']:
-                    pnl = (pos['stop_price'] - pos['entry_price']) * pos['position_size'] * 100
+                    # P&L in quote currency, then convert to USD
+                    pnl_quote = (pos['stop_price'] - pos['entry_price']) * pos['position_size'] * contract_size
+                    pnl = pnl_quote
                     trades.append({'time': time, 'pnl': pnl, 'reason': 'SL'})
                     open_positions.pop(symbol, None)
                 elif price >= pos['take_profit']:
-                    pnl = (pos['take_profit'] - pos['entry_price']) * pos['position_size'] * 100
+                    pnl_quote = (pos['take_profit'] - pos['entry_price']) * pos['position_size'] * contract_size
+                    pnl = pnl_quote
                     trades.append({'time': time, 'pnl': pnl, 'reason': 'TP'})
                     open_positions.pop(symbol, None)
             else:
                 # Short position
                 if price >= pos['stop_price']:
-                    pnl = (pos['entry_price'] - pos['stop_price']) * pos['position_size'] * 100
+                    pnl_quote = (pos['entry_price'] - pos['stop_price']) * pos['position_size'] * contract_size
+                    pnl = pnl_quote
                     trades.append({'time': time, 'pnl': pnl, 'reason': 'SL'})
                     open_positions.pop(symbol, None)
                 elif price <= pos['take_profit']:
-                    pnl = (pos['entry_price'] - pos['take_profit']) * pos['position_size'] * 100
+                    pnl_quote = (pos['entry_price'] - pos['take_profit']) * pos['position_size'] * contract_size
+                    pnl = pnl_quote
                     trades.append({'time': time, 'pnl': pnl, 'reason': 'TP'})
                     open_positions.pop(symbol, None)
         
         # Enter new position
         prev_signal = signals['signal'].iloc[i-1] if i > 0 else 0
-        if signal != 0 and signal != prev_signal and 'XAUUSD' not in open_positions and position_size > 0:
+        if signal != 0 and signal != prev_signal and config['symbol'] not in open_positions and position_size > 0:
             atr = row.get('ATRr_14', 0.5)
             stop_distance = atr * 2.0
             
@@ -277,8 +308,8 @@ def run_simulation(
                 take_profit = price - stop_distance * 2.5
             
             from mars.apps.trading.system.vol_scaled_system import TradeConfig
-            config = TradeConfig(
-                symbol='XAUUSD',
+            trade_config = TradeConfig(
+                symbol=config['symbol'],
                 signal=signal,
                 entry_price=price,
                 stop_price=stop_price,
@@ -291,14 +322,17 @@ def run_simulation(
             
             # Check risk
             can_open, _ = risk_manager.can_open_position(
-                'XAUUSD', position_size * price, equity
+                config['symbol'], position_size * price, equity
             )
             if can_open:
+                # Risk at stop in USD
+                risk_at_stop_quote = position_size * abs(price - stop_price) * contract_size
+                risk_at_stop_usd = risk_at_stop_quote * quote_to_usd
                 risk_manager.register_position_risk(
-                    'XAUUSD', 
-                    position_size * abs(price - stop_price) * 100
+                    config['symbol'], 
+                    risk_at_stop_usd
                 )
-                open_positions['XAUUSD'] = {
+                open_positions[config['symbol']] = {
                     'entry_price': price,
                     'stop_price': stop_price,
                     'take_profit': take_profit,
@@ -310,16 +344,19 @@ def run_simulation(
     
     # Compute metrics
     trades_df = pd.DataFrame(trades)
-    equity_series = pd.Series(equity_curve)
+    
+    # Create equity series with datetime index for proper Sharpe calculation
+    # equity_curve has one entry per bar + initial, so use the common_idx
+    equity_series = pd.Series(equity_curve[1:], index=common_idx[:len(equity_curve)-1])
     
     if len(trades_df) == 0:
         return {'error': 'No trades executed'}
     
     total_return = (equity_curve[-1] - equity_curve[0]) / equity_curve[0]
     
-    # Sharpe
-    returns = equity_series.pct_change().dropna()
-    sharpe = returns.mean() / returns.std() * np.sqrt(252 * 288) if returns.std() > 0 else 0  # M5 bars
+    # Sharpe - daily returns
+    daily_returns = equity_series.resample('D').last().pct_change().dropna()
+    sharpe = daily_returns.mean() / daily_returns.std() * np.sqrt(252) if daily_returns.std() > 0 else 0
     
     # Max drawdown
     peak = equity_series.expanding().max()
@@ -341,7 +378,7 @@ def run_simulation(
     avg_loss = trades_df[trades_df['pnl'] < 0]['pnl'].mean() if losses > 0 else 0
     
     return {
-        'symbol': 'XAUUSD',  # placeholder
+        'symbol': symbol,
         'total_trades': len(trades_df),
         'total_return': total_return,
         'sharpe': sharpe,
@@ -382,7 +419,9 @@ def main():
     print("M.A.R.S. Multi-Pair Backtest")
     print("=" * 60)
     
-    symbols = ['EURUSD', 'USDJPY', 'EURGBP', 'XAUUSD']
+    # Get enabled symbols from PAIR_CONFIG
+    symbols = get_enabled_symbols()
+    print(f"Enabled symbols: {symbols}")
     all_results = {}
     
     for symbol in symbols:
@@ -397,6 +436,13 @@ def main():
             traceback.print_exc()
             all_results[symbol] = {'error': str(e)}
     
+    # Also report disabled symbols
+    from mars.apps.trading.system.pair_config import PAIR_CONFIG
+    disabled = [s for s, c in PAIR_CONFIG.items() if not c.get("enabled", True)]
+    for symbol in disabled:
+        print(f"\n{symbol}: DISABLED - {PAIR_CONFIG[symbol].get('disabled_reason', 'No reason')}")
+        all_results[symbol] = {'error': 'DISABLED', 'disabled_reason': PAIR_CONFIG[symbol].get('disabled_reason')}
+    
     # Summary comparison
     print("\n" + "="*60)
     print("SUMMARY COMPARISON")
@@ -407,15 +453,40 @@ def main():
         if 'error' not in results:
             print(f"{symbol:<10} {results['total_trades']:>8} {results['total_return']:>9.2%} {results['sharpe']:>8.2f} {results['max_drawdown']:>7.2%} {results['win_rate']:>7.2%} {results['profit_factor']:>8.2f}")
         else:
-            print(f"{symbol:<10} {'ERROR':>8}")
+            status = results.get('error', 'ERROR')
+            if status == 'DISABLED':
+                print(f"{symbol:<10} {'DISABLED':>8}")
+            else:
+                print(f"{symbol:<10} {'ERROR':>8}")
     
     # Equity floors
     print("\n" + "="*60)
-    print("EQUITY FLOORS (3% risk, 2.0x ATR stop, min_lot=0.01)")
+    print("EQUITY FLOORS (15% ceiling, 2.0x ATR stop, min_lot=0.01)")
     print("="*60)
-    for symbol in ['EURUSD', 'USDJPY', 'EURGBP', 'XAUUSD']:
-        floor = compute_equity_floor(symbol)
-        print(f"{symbol}: ${floor:.2f}")
+    for symbol in get_enabled_symbols():
+        config = get_contract_specs(symbol)
+        min_lot = 0.01
+        contract_size = config['contract_size']
+        # Typical ATR values for M5 (approximate)
+        typical_atr = {
+            'EURUSDm': 0.00045,   # ~4.5 pips
+            'USDJPYm': 0.045,     # ~4.5 pips
+            'EURGBPm': 0.00040,   # ~4.0 pips
+            'XAUUSDm': 0.55,      # ~55 pips (0.55 points)
+        }
+        atr = typical_atr.get(config['symbol'], 0.0005)
+        stop_multiplier = 2.0
+        ceiling_pct = 0.15
+        # Get quote_to_usd
+        quote_currency = config.get('quote_currency', 'USD')
+        if quote_currency == 'JPY':
+            quote_to_usd = 0.01
+        elif quote_currency == 'GBP':
+            quote_to_usd = 1.25
+        else:
+            quote_to_usd = 1.0
+        floor = calculate_equity_floor(min_lot, contract_size, atr, stop_multiplier, ceiling_pct, quote_to_usd)
+        print(f"{config['symbol']}: ${floor:.2f}")
     
     return all_results
 

@@ -27,6 +27,52 @@ class SizingConfig:
     kelly_fraction: float = 0.5       # Kelly fraction for sizing
 
 
+def calculate_equity_floor(
+    min_lot: float,
+    contract_size: float,
+    atr: float,
+    stop_multiplier: float,
+    ceiling_pct: float,
+    quote_to_usd: float = 1.0,
+) -> float:
+    """
+    Calculate the minimum equity required so that a min-lot trade's risk
+    does not exceed the specified ceiling percentage.
+
+    Formula: equity_floor = (min_lot * contract_size * atr * stop_multiplier * quote_to_usd) / ceiling_pct
+
+    This represents the equity level at which the min-lot position's risk-at-stop
+    equals the ceiling percentage of account equity. Below this equity, any trade
+    at min-lot size would exceed the ceiling and require an override (or be rejected).
+
+    Parameters
+    ----------
+    min_lot : float
+        Minimum lot size allowed by broker (typically 0.01)
+    contract_size : float
+        Contract size (units per lot): 100,000 for FX, 100 for XAUUSD
+    atr : float
+        Current ATR value in price units (e.g., 0.000235 for EURUSD, 3.62 for XAUUSD)
+    stop_multiplier : float
+        Stop distance multiplier (typically 2.0 for 2x ATR stop)
+    ceiling_pct : float
+        Risk ceiling as decimal (e.g., 0.15 for 15% hard ceiling)
+    quote_to_usd : float, optional
+        Conversion factor from quote currency to USD (default 1.0 for USD-quoted pairs).
+        For example, for USDJPY, quote_to_usd = 1 / current_USDJPY_rate.
+
+    Returns
+    -------
+    float
+        Minimum equity required in USD.
+    """
+    stop_distance = atr * stop_multiplier
+    risk_per_min_lot = min_lot * contract_size * stop_distance * quote_to_usd
+    equity_floor = risk_per_min_lot / ceiling_pct
+    return equity_floor
+
+
+
 class VolScaledSizer:
     """
     Volatility-scaled position sizer using CARR/GARCH vol forecasts.

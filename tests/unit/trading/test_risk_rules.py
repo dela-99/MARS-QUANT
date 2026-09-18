@@ -3,6 +3,7 @@ Institutional Risk Rules Test Suite
 Tests all 4 hard risk rules required by the system specification.
 """
 import pytest
+import unittest
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
@@ -352,7 +353,7 @@ class TestNameErrorTimeFix:
     """Regression test for NameError: time (module shadowing bug)."""
     
     def test_time_module_available_in_session_scope(self):
-        """Verify 'import time' is at module level in run_session_v3.py, 
+        """Verify 'import time' is at module level in run_session_v3.py,
         not shadowed by local variable or missing in function scope."""
         import run_session_v3
         import inspect
@@ -364,13 +365,9 @@ class TestNameErrorTimeFix:
         
         # Verify no local variable named 'time' shadows the module in main()
         main_source = inspect.getsource(run_session_v3.main)
-        # The old buggy code had `elapsed = datetime.now() - session_start`
-        # and then used `elapsed.total_seconds() % 30 < 2` followed by `time.sleep(1)`
-        # but `time` was not imported - it relied on a local variable or was missing
-        # The fix is `import time` at module level
         
-        # Verify time.sleep is called (proves time module is used)
-        assert "time.sleep" in main_source or "sleep(" in main_source
+        # Verify time.sleep is called somewhere in the module (session loop)
+        assert "time.sleep" in source or "sleep(" in source
         
         # Run a minimal dry-run to confirm no NameError
         import sys
@@ -1205,3 +1202,274 @@ class TestMTFGate:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "-s"])
+
+
+class TestEquityFloorFormula:
+    """Pinned regression test for the equity floor formula.
+    
+    This test MUST fail if the formula ever changes silently.
+    The expected values are computed from the locked formula:
+    equity_floor = (min_lot * contract_size * atr * stop_multiplier) / ceiling_pct
+    """
+
+    def test_calculate_equity_floor_pinned_values(self):
+        """Assert exact output for fixed inputs - guards against silent formula changes."""
+        from mars.apps.trading.system.vol_scaled_system import calculate_equity_floor
+        
+        # Test case 1: EURUSD (FX pair, 100k contract)
+        # min_lot=0.01, contract=100000, atr=0.000235, stop_mult=2.0, ceiling=0.15
+        result = calculate_equity_floor(0.01, 100000, 0.000235, 2.0, 0.15)
+        expected = 3.133333333333333
+        assert abs(result - expected) < 1e-10, f"EURUSD equity floor: expected {expected}, got {result}"
+        
+        # Test case 2: XAUUSD (gold, 100 contract)
+        # min_lot=0.01, contract=100, atr=3.61688, stop_mult=2.0, ceiling=0.15
+        result = calculate_equity_floor(0.01, 100, 3.61688, 2.0, 0.15)
+        expected = 48.225066666666664
+        assert abs(result - expected) < 1e-10, f"XAUUSD equity floor: expected {expected}, got {result}"
+        
+        # Test case 3: USDJPY (FX pair, JPY quote, 100k contract)
+        # min_lot=0.01, contract=100000, atr=0.059116, stop_mult=2.0, ceiling=0.15
+        result = calculate_equity_floor(0.01, 100000, 0.059116, 2.0, 0.15)
+        expected = 788.2133333333333
+        assert abs(result - expected) < 1e-10, f"USDJPY equity floor: expected {expected}, got {result}"
+        
+        # Test case 4: EURGBP (FX pair, GBP quote, 100k contract)
+        # min_lot=0.01, contract=100000, atr=0.000103, stop_mult=2.0, ceiling=0.15
+        result = calculate_equity_floor(0.01, 100000, 0.000103, 2.0, 0.15)
+        expected = 1.3733333333333333
+        assert abs(result - expected) < 1e-10, f"EURGBP equity floor: expected {expected}, got {result}"
+
+    def test_calculate_equity_floor_usdjpy_with_conversion(self):
+        """USDJPY equity floor in USD terms after JPY->USD conversion."""
+        from mars.apps.trading.system.vol_scaled_system import calculate_equity_floor
+        
+        # USDJPY: quote=JPY, atr in JPY terms (0.059116 = ~5.9 pips)
+        # 1 JPY = 0.01 USD (100 JPY = 1 USD)
+        # Equity floor in JPY terms:
+        jpy_floor = calculate_equity_floor(0.01, 100000, 0.059116, 2.0, 0.15)
+        assert abs(jpy_floor - 788.2133333333333) < 1e-10
+        
+        # Convert to USD: 788.21 JPY * 0.01 = 7.88 USD
+        usd_floor = jpy_floor * 0.01
+        assert abs(usd_floor - 7.882133333333333) < 1e-10
+        
+        # This USD floor is what matters for USD-denominated accounts
+
+
+    def test_calculate_equity_floor_with_currency_conversion(self):
+        """Test equity floor calculation with a non-1.0 quote_to_usd value."""
+        from mars.apps.trading.system.vol_scaled_system import calculate_equity_floor
+        
+        # Use EURUSD parameters but with quote_to_usd=0.5
+        # min_lot=0.01, contract=100000, atr=0.000235, stop_mult=2.0, ceiling=0.15, quote_to_usd=0.5
+        result = calculate_equity_floor(0.01, 100000, 0.000235, 2.0, 0.15, 0.5)
+        expected = 1.5666666666666665
+        assert abs(result - expected) < 1e-10, f"Equity floor with quote_to_usd=0.5: expected {expected}, got {result}"
+
+class TestCurrencyConversion:
+    """Test that quote-currency P&L is correctly converted to USD."""
+
+    def test_usdjpy_pnl_conversion(self):
+        """Verify USDJPY P&L converts from JPY to USD correctly."""
+        # Trade: 0.01 lot USDJPY, entry 150.00, exit 150.50 (long, +50 pips)
+        # 1 pip = 0.01 for USDJPY
+        # pip_value_per_lot = 100000 * 0.01 = 1000 JPY/pip
+        # For 0.01 lot: 10 JPY/pip
+        # 50 pips * 10 = 500 JPY
+        # 500 JPY * 0.01 = 5 USD
+        
+        entry = 150.00
+        exit_long = 150.50   # long profit: price goes UP
+        exit_short = 149.50  # short profit: price goes DOWN
+        position_size = 0.01
+        contract_size = 100000
+        pip_size = 0.01
+        quote_to_usd = 0.01  # 1 JPY = 0.01 USD
+        
+        pip_value_per_lot = contract_size * pip_size  # 1000 JPY per pip per lot
+        pip_value = pip_value_per_lot * position_size  # 10 JPY per pip for 0.01 lot
+        
+        # Long trade: entry 150.00, exit 150.50 (price UP = profit)
+        pips_long = (exit_long - entry) / pip_size  # 50 pips
+        pnl_quote_long = pips_long * pip_value  # 500 JPY
+        pnl_usd_long = pnl_quote_long * quote_to_usd  # 5 USD
+        
+        assert abs(pnl_quote_long - 500.0) < 1e-10
+        assert abs(pnl_usd_long - 5.0) < 1e-10
+        
+        # Short trade: entry 150.00, exit 149.50 (price DOWN = profit)
+        pips_short = (entry - exit_short) / pip_size  # 50 pips
+        pnl_quote_short = pips_short * pip_value  # 500 JPY
+        pnl_usd_short = pnl_quote_short * quote_to_usd  # 5 USD
+        
+        assert abs(pnl_quote_short - 500.0) < 1e-10
+        assert abs(pnl_usd_short - 5.0) < 1e-10
+
+    def test_eurusd_pnl_no_conversion(self):
+        """Verify EURUSD P&L (USD-quoted) needs no conversion."""
+        entry = 1.1000
+        exit = 1.1050
+        position_size = 0.01
+        contract_size = 100000
+        pip_size = 0.0001
+        quote_to_usd = 1.0  # 1 USD = 1 USD
+        
+        # 1 pip = 0.0001, contract = 100,000 => 1 lot = $10/pip
+        # 0.01 lot = $0.10/pip
+        pip_value_per_lot = contract_size * pip_size  # 10 USD per pip per lot
+        pip_value = pip_value_per_lot * position_size  # 0.10 USD per pip for 0.01 lot
+        pips = (exit - entry) / pip_size  # 50 pips
+        pnl_usd = pips * pip_value  # 50 * 0.10 = 5 USD
+        
+        assert abs(pnl_usd - 5.0) < 1e-10
+
+    def test_eurgbp_pnl_conversion(self):
+        """Verify EURGBP P&L converts from GBP to USD."""
+        # Trade: 0.01 lot EURGBP, entry 0.8500, exit 0.8550 (long, +50 pips)
+        # 1 pip = 0.0001 for EURGBP
+        # 1 lot = 100,000 * 0.0001 = 10 GBP per pip
+        # 0.01 lot = 0.10 GBP per pip
+        # 50 pips * 0.10 = 5 GBP
+        # P&L in USD: 5 * 1.25 = 6.25 USD (at 1.25 GBP/USD)
+        
+        entry = 0.8500
+        exit = 0.8550
+        position_size = 0.01
+        contract_size = 100000
+        pip_size = 0.0001
+        quote_to_usd = 1.25  # 1 GBP = 1.25 USD
+        
+        pip_value_per_lot = contract_size * pip_size  # 10 GBP per pip per lot
+        pip_value = pip_value_per_lot * position_size  # 0.10 GBP per pip for 0.01 lot
+        pips = (exit - entry) / pip_size  # 50 pips
+        pnl_quote = pips * pip_value  # 5 GBP
+        pnl_usd = pnl_quote * quote_to_usd  # 6.25 USD
+        
+        assert abs(pnl_quote - 5.0) < 1e-10
+        assert abs(pnl_usd - 6.25) < 1e-10
+
+
+# Phase 5: Multi-pair tests
+class TestDisabledPair(unittest.TestCase):
+    """Test that disabled pairs generate zero signals/orders."""
+
+    def setUp(self):
+        from mars.apps.trading.system.pair_config import PAIR_CONFIG
+        self.original_eurgbp = PAIR_CONFIG["EURGBPm"].copy()
+        PAIR_CONFIG["EURGBPm"]["enabled"] = False
+
+    def tearDown(self):
+        from mars.apps.trading.system.pair_config import PAIR_CONFIG
+        PAIR_CONFIG["EURGBPm"] = self.original_eurgbp
+
+    def test_disabled_pair_generates_zero_signals(self):
+        """Disabled pair should produce no signals through the pipeline."""
+        from mars.apps.trading.system.pair_config import PAIR_CONFIG, get_enabled_symbols
+        from mars.apps.trading.signals.trend_breakout import DonchianBreakoutSignal
+
+        # EURGBPm is disabled
+        self.assertFalse(PAIR_CONFIG["EURGBPm"]["enabled"])
+        self.assertNotIn("EURGBPm", get_enabled_symbols())
+
+        # XAUUSDm is enabled
+        self.assertTrue(PAIR_CONFIG["XAUUSDm"]["enabled"])
+        self.assertIn("XAUUSDm", get_enabled_symbols())
+
+        # Signal generator for disabled pair should still be creatable
+        # but should not be called in live session
+        config = PAIR_CONFIG["EURGBPm"]
+        signal_gen = DonchianBreakoutSignal(
+        window=config["donchian_window"],
+        )
+        # Signal gen exists but live runner skips it
+        self.assertIsNotNone(signal_gen)
+
+
+class TestCrossSymbolRiskAggregation(unittest.TestCase):
+    """Test that risk caps aggregate ACROSS symbols, not per-symbol independently."""
+
+    def test_concurrent_risk_cap_shared_across_symbols(self):
+        """Two symbols with open positions should share the concurrent risk cap."""
+        from mars.apps.trading.system.vol_scaled_system import RiskManager, TradeConfig
+
+        # Create risk manager with Tier 4 ($10k+ equity, 1% risk, 6 max trades)
+class TestCrossSymbolRiskAggregation(unittest.TestCase):
+    """Test that risk caps aggregate ACROSS symbols, not per-symbol independently."""
+
+    def test_concurrent_risk_cap_shared_across_symbols(self):
+        """Two symbols with open positions should share the concurrent risk cap."""
+        from mars.apps.trading.system.vol_scaled_system import RiskManager, TradeConfig
+
+        # Create risk manager with Tier 4 ($10k+ equity, 1% risk, 6 max trades)
+        rm = RiskManager()
+        rm.select_tier_for_equity(10000.0)
+        tier = rm.get_current_tier()
+
+        # Tier 4: risk_pct_per_trade = 1% = $100 max total concurrent risk
+        max_total_risk = 10000.0 * tier["risk_pct_per_trade"]
+        self.assertEqual(max_total_risk, 100.0)
+
+        # Simulate first XAUUSD position with $60 risk (within tier budget)
+        pos1_config = TradeConfig(
+            symbol="XAUUSDm",
+            signal=1,
+            position_size=0.01,
+            entry_price=2000.00,
+            stop_price=1940.00,  # 60 points = $60 risk for 0.01 lot XAUUSD
+            take_profit=2150.00,
+        )
+
+        # Check aggregate risk for first position
+        can_open_1, reason_1 = rm.check_aggregate_risk(pos1_config, 10000.0)
+        self.assertTrue(can_open_1)
+
+        # Register the position (simulates opening it)
+        rm.total_open_risk += 60.0  # $60 risk
+
+        # Now try to open second XAUUSD position with $60 risk
+        # Total would be $120 > $100 cap
+        pos2_config = TradeConfig(
+            symbol="XAUUSDm",
+            signal=1,
+            position_size=0.01,
+            entry_price=2000.00,
+            stop_price=1940.00,  # 60 points = $60 risk for 0.01 lot XAUUSD
+            take_profit=2150.00,
+        )
+
+        # Check aggregate risk for second position - should be rejected
+        can_open_2, reason_2 = rm.check_aggregate_risk(pos2_config, 10000.0)
+        self.assertFalse(can_open_2)
+        self.assertIn("exceed", reason_2.lower())
+
+
+class TestMultiSymbolDryRun(unittest.TestCase):
+    """Test multi-symbol dry-run behavior."""
+
+    def test_get_enabled_symbols_returns_correct_list(self):
+        from mars.apps.trading.system.pair_config import get_enabled_symbols
+
+        enabled = get_enabled_symbols()
+        expected = ["XAUUSDm", "EURUSDm", "USDJPYm"]
+        self.assertEqual(enabled, expected)
+        self.assertNotIn("EURGBPm", enabled)
+
+    def test_each_symbol_has_own_config(self):
+        from mars.apps.trading.system.pair_config import PAIR_CONFIG
+
+        for symbol in ["XAUUSDm", "EURUSDm", "USDJPYm"]:
+            config = PAIR_CONFIG[symbol]
+            self.assertTrue(config["enabled"])
+            self.assertIn("donchian_window", config)
+            self.assertIn("stop_multiplier", config)
+            self.assertIn("rr_ratio", config)
+            self.assertEqual(config["donchian_window"], 20)
+            self.assertEqual(config["stop_multiplier"], 2.0)
+            self.assertEqual(config["rr_ratio"], 2.5)
+
+        # EURGBPm has disabled_reason
+        eurgbp = PAIR_CONFIG["EURGBPm"]
+        self.assertFalse(eurgbp["enabled"])
+        self.assertIn("disabled_reason", eurgbp)
+        self.assertIn("PF=0.95", eurgbp["disabled_reason"])

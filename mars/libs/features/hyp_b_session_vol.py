@@ -213,12 +213,13 @@ class HypBSessionVolFeatures:
 
         for day in price.index.normalize().unique():
             day_date = day.date()
+            day_start = pd.Timestamp(day_date, tz="UTC")
+            day_end = day_start + pd.Timedelta(days=1)
+            day_mask = (price.index >= day_start) & (price.index < day_end)
+            day_bars = price[day_mask]
 
             # Asia: 00:00-08:00 UTC
-            try:
-                asia = price.loc[str(day_date)].between_time("00:00", "07:59")
-            except KeyError:
-                asia = price.iloc[0:0]
+            asia = day_bars.between_time("00:00", "07:59")
 
             if not asia.empty:
                 session_rows.append(self._make_session_row(
@@ -226,10 +227,7 @@ class HypBSessionVolFeatures:
                 ))
 
             # London: 08:00-13:00 UTC (non-overlap part)
-            try:
-                london = price.loc[str(day_date)].between_time("08:00", "12:59")
-            except KeyError:
-                london = price.iloc[0:0]
+            london = day_bars.between_time("08:00", "12:59")
 
             if not london.empty:
                 session_rows.append(self._make_session_row(
@@ -237,10 +235,7 @@ class HypBSessionVolFeatures:
                 ))
 
             # Overlap: 13:00-17:00 UTC (London/NY overlap)
-            try:
-                overlap = price.loc[str(day_date)].between_time("13:00", "16:59")
-            except KeyError:
-                overlap = price.iloc[0:0]
+            overlap = day_bars.between_time("13:00", "16:59")
 
             if not overlap.empty:
                 session_rows.append(self._make_session_row(
@@ -248,10 +243,7 @@ class HypBSessionVolFeatures:
                 ))
 
             # NY: 17:00-22:00 UTC
-            try:
-                ny = price.loc[str(day_date)].between_time("17:00", "21:59")
-            except KeyError:
-                ny = price.iloc[0:0]
+            ny = day_bars.between_time("17:00", "21:59")
 
             if not ny.empty:
                 session_rows.append(self._make_session_row(
