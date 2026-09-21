@@ -19,8 +19,9 @@ PAIR_CONFIG = {
         "enabled": True,
         "donchian_window": 20,
         "exit_window": 10,
+        "stop_mode": "atr",
         "stop_multiplier": 2.0,
-        "rr_ratio": 2.5,
+        "rr_ratio": 3.0,
         "session_filter": "all",
     },
     "EURUSDm": {
@@ -28,8 +29,10 @@ PAIR_CONFIG = {
         "enabled": True,
         "donchian_window": 20,
         "exit_window": 10,
-        "stop_multiplier": 2.0,
-        "rr_ratio": 2.5,
+        "stop_mode": "fixed_pips",
+        "risk_pips": 5.0,
+        "pip_size": 0.0001,
+        "rr_ratio": 3.0,
         "session_filter": "all",
     },
     "USDJPYm": {
@@ -37,8 +40,10 @@ PAIR_CONFIG = {
         "enabled": True,
         "donchian_window": 20,
         "exit_window": 10,
-        "stop_multiplier": 2.0,
-        "rr_ratio": 2.5,
+        "stop_mode": "fixed_pips",
+        "risk_pips": 31.6,
+        "pip_size": 0.01,
+        "rr_ratio": 3.0,
         "session_filter": "all",
     },
     "EURGBPm": {
@@ -102,6 +107,10 @@ def create_signal_generator(symbol: str):
             window=cfg["donchian_window"],
             exit_window=cfg["exit_window"],
             session_filter=cfg.get("session_filter", "all"),
+            stop_mode=cfg.get("stop_mode", "atr"),
+            risk_pips=cfg.get("risk_pips"),
+            pip_size=cfg.get("pip_size"),
+            stop_multiplier=cfg.get("stop_multiplier", 2.0),
         )
     elif strategy == "donchian":
         return DonchianBreakoutSignal(

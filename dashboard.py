@@ -12,8 +12,10 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import os
 import tempfile
+import sys
 from datetime import datetime, timedelta
 from pathlib import Path
+import numpy as np
 
 # Page config
 st.set_page_config(
@@ -42,16 +44,35 @@ st.markdown("""
 
 
 # ============================================================
+# Session Definitions (matching hyp_b_session_vol.py)
+# ============================================================
+
+SESSION_DEFS_UTC = {
+    "asia": (0, 8),
+    "london": (8, 13),      # London morning only (non-overlap)
+    "overlap": (13, 17),    # London/NY overlap
+    "ny": (17, 22),         # NY afternoon
+}
+
+SESSION_COLORS = {
+    "asia": "rgba(255, 193, 7, 0.15)",      # amber
+    "london": "rgba(33, 150, 243, 0.15)",   # blue
+    "overlap": "rgba(156, 39, 176, 0.15)",  # purple
+    "ny": "rgba(76, 175, 80, 0.15)",        # green
+}
+
+
+# ============================================================
 # Data Access Layer (Read-Only)
 # ============================================================
 
-@st.cache_data(ttl=30)
+@st.cache_resource
 def get_db_connection():
     """Get read-only connection to audit database."""
     db_path = os.path.join(tempfile.gettempdir(), 'mt5_audit_real.db')
     if not os.path.exists(db_path):
         return None
-    conn = sqlite3.connect(f'file:{db_path}?mode=ro', uri=True)
+    conn = sqlite3.connect(f'file:{db_path}?mode=ro', uri=True, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -70,7 +91,8 @@ def load_table(table_name: str, limit: int = 1000) -> pd.DataFrame:
         st.error(f"Error loading {table_name}: {e}")
         return pd.DataFrame()
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
 
 @st.cache_data(ttl=30)
@@ -99,6 +121,113 @@ def load_backup_status():
             with open(fpath, 'r') as f:
                 status[fname] = json.load(f)
     return status
+
+
+# ============================================================
+# Data Loading Helpers (reuse existing backtest code)
+# ============================================================
+
+@st.cache_data(ttl=30)
+def load_ohlcv_data(symbol: str, hours: int = 24) -> pd.DataFrame:
+    """
+    Load OHLCV data for a symbol from the same parquet source as backtest.
+    Uses the SYMBOL_CONFIGS from run_multi_pair_backtest.py.
+    Returns the most recent N hours of available data.
+    """
+    try:
+        # Import the config and loader from the backtest module
+        sys.path.insert(0, str(Path(__file__).parent))
+        from run_multi_pair_backtest import SYMBOL_CONFIGS, load_symbol_data
+        from mars.apps.trading.system.pair_config import get_config_key
+        
+        config_key = get_config_key(symbol)
+        if config_key not in SYMBOL_CONFIGS:
+            return pd.DataFrame()
+        
+        # Get ALL available data first (don't filter by start date)
+        df = load_symbol_data(config_key, start="2020-01-01")
+        
+        if df.empty:
+            return pd.DataFrame()
+        
+        # Use the latest available timestamp as the "now" reference
+        latest_available = df.index.max()
+        cutoff = latest_available - timedelta(hours=hours + 48)  # Extra buffer for indicators
+        
+        # Filter to the requested hours from the latest available data
+        df = df[df.index >= cutoff]
+        
+        return df
+    except Exception as e:
+        st.error(f"Error loading OHLCV for {symbol}: {e}")
+        return pd.DataFrame()
+
+
+@st.cache_data(ttl=30)
+def compute_donchian_bands(df: pd.DataFrame, window: int = 20) -> pd.DataFrame:
+    """Compute Donchian upper/lower bands."""
+    if df.empty or len(df) < window:
+        return pd.DataFrame()
+    
+    high_max = df["high"].rolling(window).max()
+    low_min = df["low"].rolling(window).min()
+    
+    # Shift by 1 to avoid lookahead (bands based on completed bars)
+    upper = high_max.shift(1)
+    lower = low_min.shift(1)
+    
+    return pd.DataFrame({"donchian_upper": upper, "donchian_lower": lower}, index=df.index)
+
+
+@st.cache_data(ttl=30)
+def compute_atr(df: pd.DataFrame, window: int = 14) -> pd.Series:
+    """Compute ATR (Average True Range)."""
+    if df.empty or len(df) < window:
+        return pd.Series(index=df.index, dtype=float)
+    
+    high_low = df["high"] - df["low"]
+    high_close = np.abs(df["high"] - df["close"].shift(1))
+    low_close = np.abs(df["low"] - df["close"].shift(1))
+    
+    true_range = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
+    atr = true_range.rolling(window).mean()
+    
+    return atr
+
+
+@st.cache_data(ttl=30)
+def add_session_shading(fig: go.Figure, df: pd.DataFrame):
+    """Add session shading rectangles to the chart."""
+    if df.empty:
+        return
+    
+    # Get the date range of the data (ensure UTC timezone)
+    if df.index.tz is None:
+        df.index = df.index.tz_localize('UTC')
+    
+    start_date = df.index[0].date()
+    end_date = df.index[-1].date()
+    
+    current_date = start_date
+    while current_date <= end_date:
+        for session_name, (hour_start, hour_end) in SESSION_DEFS_UTC.items():
+            session_start = pd.Timestamp(current_date, tz='UTC') + pd.Timedelta(hours=hour_start)
+            session_end = pd.Timestamp(current_date, tz='UTC') + pd.Timedelta(hours=hour_end)
+            
+            # Only add if session overlaps with data range
+            if session_end > df.index[0] and session_start < df.index[-1]:
+                fig.add_vrect(
+                    x0=session_start,
+                    x1=session_end,
+                    fillcolor=SESSION_COLORS[session_name],
+                    layer="below",
+                    line_width=0,
+                    annotation_text=session_name.upper()[:3],
+                    annotation_position="top left",
+                    annotation_font_size=8,
+                    annotation_font_color="gray",
+                )
+        current_date += timedelta(days=1)
 
 
 # ============================================================
@@ -132,6 +261,7 @@ chart_symbol = st.sidebar.selectbox(
     "Select Symbol for Price Chart",
     options=[s for s in ENABLED_SYMBOLS],
     index=0,
+    key="sidebar_chart_symbol_select",
 )
 
 # Time range for chart
@@ -141,6 +271,15 @@ chart_hours = st.sidebar.slider(
     max_value=168,
     value=24,
 )
+
+st.sidebar.divider()
+
+# Chart options
+st.sidebar.subheader("Overlay Options")
+show_donchian = st.sidebar.checkbox("Donchian Bands", value=True)
+show_atr_stops = st.sidebar.checkbox("ATR Stops/Targets", value=True)
+show_sessions = st.sidebar.checkbox("Session Shading", value=True)
+show_trades = st.sidebar.checkbox("Trade Markers", value=True)
 
 st.sidebar.divider()
 
@@ -174,7 +313,6 @@ st.header("1️⃣ Account Overview")
 # Get current equity from kill_switch (most reliable) or compute from fills
 current_equity = kill_switch.get('current_equity', 0.0)
 if current_equity == 0.0 and not fills_df.empty and 'profit' in fills_df.columns:
-    # Approximate equity from cumulative P&L + starting balance
     current_equity = 10000.0 + fills_df['profit'].sum()
 
 # Daily P&L - approximate from fills today
@@ -185,7 +323,7 @@ if not fills_df.empty and 'timestamp' in fills_df.columns and 'profit' in fills_
     today_fills = fills_df[fills_df['ts'].dt.date == today]
     daily_pnl = today_fills['profit'].sum()
 
-# Drawdown - from kill_switch or approximate
+# Drawdown
 max_dd = kill_switch.get('max_drawdown_pct', 0.0)
 if max_dd == 0.0 and current_equity > 0:
     peak = kill_switch.get('peak_equity', current_equity)
@@ -254,7 +392,7 @@ for idx, (symbol, config) in enumerate(PAIR_CONFIG.items()):
             reason = config.get('disabled_reason', 'No reason provided')
             st.caption(f"Reason: {reason}")
         
-        # MTF Gate status (from latest signals)
+        # MTF Gate status
         symbol_signals = signals_df[signals_df['symbol'] == symbol] if not signals_df.empty else pd.DataFrame()
         if not symbol_signals.empty:
             latest = symbol_signals.iloc[0]
@@ -278,53 +416,229 @@ for idx, (symbol, config) in enumerate(PAIR_CONFIG.items()):
 
 
 # ============================================================
-# Panel 3: Price Chart / Signal Timeline
+# Panel 3: Price Chart with Overlays (FULL IMPLEMENTATION)
 # ============================================================
 
 st.header(f"3️⃣ Price Chart: {chart_symbol}")
 
-# We don't have live price data in the audit DB, so show a placeholder
-# In a real deployment, this would connect to MT5 or data feed
-st.info("📈 **Price Chart Placeholder** - In live deployment, this panel connects to MT5/data feed to show real-time price with Donchian bands, ATR stops, and session shading.")
+# Get pair config for this symbol
+pair_cfg = PAIR_CONFIG.get(chart_symbol, {})
+donchian_window = pair_cfg.get("donchian_window", 20)
+stop_multiplier = pair_cfg.get("stop_multiplier", 2.0)
 
-# Show signal history as a timeline instead
-if not signals_df.empty:
-    symbol_signals = signals_df[signals_df['symbol'] == chart_symbol].copy()
-    if not symbol_signals.empty:
-        symbol_signals['timestamp'] = pd.to_datetime(symbol_signals['timestamp'], errors='coerce')
-        symbol_signals = symbol_signals.dropna(subset=['timestamp'])
-        symbol_signals = symbol_signals.sort_values('timestamp')
+# Load OHLCV data
+with st.spinner(f"Loading {chart_symbol} price data..."):
+    ohlcv_df = load_ohlcv_data(chart_symbol, hours=chart_hours)
+
+if ohlcv_df.empty:
+    st.warning(f"No price data available for {chart_symbol}. Check data path in SYMBOL_CONFIGS.")
+else:
+    # Compute indicators
+    donchian_df = compute_donchian_bands(ohlcv_df, window=donchian_window)
+    atr_series = compute_atr(ohlcv_df, window=14)
+    
+    # Get fills for this symbol (trade markers)
+    symbol_fills = pd.DataFrame()
+    if not fills_df.empty:
+        symbol_fills = fills_df[fills_df['symbol'] == chart_symbol].copy()
+        if not symbol_fills.empty:
+            symbol_fills['timestamp'] = pd.to_datetime(symbol_fills['timestamp'], errors='coerce')
+            symbol_fills = symbol_fills.dropna(subset=['timestamp'])
+            # Filter to chart time range (using latest available data time as reference)
+            if not ohlcv_df.empty:
+                latest_time = ohlcv_df.index.max()
+                cutoff = latest_time - timedelta(hours=chart_hours)
+                symbol_fills = symbol_fills[symbol_fills['timestamp'] >= cutoff]
+    
+    # Build the candlestick chart
+    fig = go.Figure()
+    
+    # Add session shading first (background layer)
+    if show_sessions:
+        add_session_shading(fig, ohlcv_df)
+    
+    # Candlesticks
+    fig.add_trace(go.Candlestick(
+        x=ohlcv_df.index,
+        open=ohlcv_df['open'],
+        high=ohlcv_df['high'],
+        low=ohlcv_df['low'],
+        close=ohlcv_df['close'],
+        name=f"{chart_symbol} OHLC",
+        increasing_line_color='#26a69a',
+        decreasing_line_color='#ef5350',
+    ))
+    
+    # Donchian bands
+    if show_donchian and not donchian_df.empty:
+        fig.add_trace(go.Scatter(
+            x=donchian_df.index,
+            y=donchian_df['donchian_upper'],
+            mode='lines',
+            line=dict(color='rgba(33, 150, 243, 0.7)', width=1.5, dash='dash'),
+            name=f'Donchian Upper ({donchian_window})',
+            showlegend=True,
+        ))
+        fig.add_trace(go.Scatter(
+            x=donchian_df.index,
+            y=donchian_df['donchian_lower'],
+            mode='lines',
+            line=dict(color='rgba(33, 150, 243, 0.7)', width=1.5, dash='dash'),
+            name=f'Donchian Lower ({donchian_window})',
+            showlegend=True,
+            fill='tonexty',
+            fillcolor='rgba(33, 150, 243, 0.05)',
+        ))
+    
+    # ATR-based stops/targets for open positions
+    if show_atr_stops and not atr_series.empty and not symbol_fills.empty:
+        # Get the most recent fill (open position)
+        latest_fill = symbol_fills.iloc[-1]
+        direction = latest_fill.get('direction', '')
+        fill_price = latest_fill.get('filled_price', 0)
+        fill_time = latest_fill.get('timestamp')
         
-        # Filter by time range
-        cutoff = datetime.now() - timedelta(hours=chart_hours)
-        symbol_signals = symbol_signals[symbol_signals['timestamp'] >= cutoff]
-        
-        if not symbol_signals.empty:
-            fig = go.Figure()
+        if direction in ['BUY', 'SELL'] and fill_price > 0:
+            # Get ATR at fill time (or current)
+            if fill_time in atr_series.index:
+                atr_at_fill = atr_series.loc[fill_time]
+            else:
+                # Find nearest ATR value
+                atr_at_fill = atr_series.iloc[-1]
             
-            # Signal markers
-            for _, row in symbol_signals.iterrows():
-                sig = row.get('signal', 0)
-                if sig != 0:
-                    color = 'green' if sig == 1 else 'red'
-                    symbol_shape = 'triangle-up' if sig == 1 else 'triangle-down'
-                    fig.add_trace(go.Scatter(
-                        x=[row['timestamp']],
-                        y=[0],  # Y position placeholder
-                        mode='markers',
-                        marker=dict(symbol=symbol_shape, size=12, color=color),
-                        name=f"{'Long' if sig == 1 else 'Short'} Signal",
-                        showlegend=False,
-                    ))
+            if not np.isnan(atr_at_fill) and atr_at_fill > 0:
+                stop_dist = stop_multiplier * atr_at_fill
+                target_dist = stop_multiplier * 2.5 * atr_at_fill  # 2.5 R:R
+                
+                if direction == 'BUY':
+                    stop_price = fill_price - stop_dist
+                    target_price = fill_price + target_dist
+                    stop_color = 'red'
+                    target_color = 'green'
+                else:  # SELL
+                    stop_price = fill_price + stop_dist
+                    target_price = fill_price - target_dist
+                    stop_color = 'red'
+                    target_color = 'green'
+                
+                # Draw horizontal lines from fill time to end of chart
+                x_start = fill_time
+                x_end = ohlcv_df.index[-1]
+                
+                # Stop loss line
+                fig.add_trace(go.Scatter(
+                    x=[x_start, x_end],
+                    y=[stop_price, stop_price],
+                    mode='lines',
+                    line=dict(color=stop_color, width=2, dash='dot'),
+                    name=f'Stop Loss ({stop_price:.5f})',
+                    showlegend=True,
+                ))
+                
+                # Take profit line
+                fig.add_trace(go.Scatter(
+                    x=[x_start, x_end],
+                    y=[target_price, target_price],
+                    mode='lines',
+                    line=dict(color=target_color, width=2, dash='dot'),
+                    name=f'Take Profit ({target_price:.5f})',
+                    showlegend=True,
+                ))
+                
+                # Fill price line
+                fig.add_trace(go.Scatter(
+                    x=[x_start, x_end],
+                    y=[fill_price, fill_price],
+                    mode='lines',
+                    line=dict(color='blue', width=1.5, dash='solid'),
+                    name=f'Entry ({fill_price:.5f})',
+                    showlegend=True,
+                ))
+    
+    # Trade markers (entries/exits from fills)
+    if show_trades and not symbol_fills.empty:
+        for _, fill in symbol_fills.iterrows():
+            fill_time = fill['timestamp']
+            direction = fill.get('direction', '')
+            fill_price = fill.get('filled_price', 0)
+            profit = fill.get('profit', 0)
             
-            fig.update_layout(
-                title=f"Signal Timeline - {chart_symbol} (Last {chart_hours}h)",
-                xaxis_title="Time",
-                yaxis_title="Signal",
-                height=400,
+            if direction == 'BUY':
+                color = 'green'
+                symbol_shape = 'triangle-up'
+                label = f"BUY @ {fill_price:.5f}"
+            elif direction == 'SELL':
+                color = 'red'
+                symbol_shape = 'triangle-down'
+                label = f"SELL @ {fill_price:.5f}"
+            else:
+                continue
+            
+            fig.add_trace(go.Scatter(
+                x=[fill_time],
+                y=[fill_price],
+                mode='markers+text',
+                marker=dict(symbol=symbol_shape, size=14, color=color, line=dict(width=2, color='white')),
+                text=[label],
+                textposition='top center' if direction == 'BUY' else 'bottom center',
+                textfont=dict(size=9, color=color),
+                name=f"{direction} Fill",
                 showlegend=False,
-            )
-            st.plotly_chart(fig, use_container_width=True)
+            ))
+            
+            # Add P&L annotation if closed
+            if profit != 0:
+                pnl_color = 'green' if profit > 0 else 'red'
+                fig.add_annotation(
+                    x=fill_time,
+                    y=fill_price,
+                    text=f"${profit:+.2f}",
+                    showarrow=True,
+                    arrowhead=2,
+                    arrowcolor=pnl_color,
+                    font=dict(size=8, color=pnl_color),
+                    yshift=20 if direction == 'BUY' else -20,
+                )
+    
+    # Layout
+    fig.update_layout(
+        title=f"{chart_symbol} - M5 Candlesticks (Last {chart_hours}h)",
+        xaxis_title="Time (UTC)",
+        yaxis_title="Price",
+        xaxis_rangeslider_visible=False,
+        height=600,
+        template="plotly_white",
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1,
+        ),
+        margin=dict(l=50, r=50, t=80, b=50),
+    )
+    
+    # Y-axis formatting for different symbols
+    if 'JPY' in chart_symbol:
+        fig.update_yaxes(tickformat='.3f')
+    elif 'XAU' in chart_symbol:
+        fig.update_yaxes(tickformat='.2f')
+    else:
+        fig.update_yaxes(tickformat='.5f')
+    
+    st.plotly_chart(fig, use_container_width=True)
+    
+    # Chart info
+    if not ohlcv_df.empty:
+        latest_time = ohlcv_df.index.max()
+        earliest_time = ohlcv_df.index.min()
+        st.caption(f"""
+        **Data:** {len(ohlcv_df)} M5 bars from {earliest_time.strftime('%Y-%m-%d %H:%M')} to {latest_time.strftime('%Y-%m-%d %H:%M')} UTC  
+        **Donchian Window:** {donchian_window} bars | **ATR Window:** 14 bars | **Stop Multiplier:** {stop_multiplier}x  
+        **Session Definitions (UTC):** Asia 00-08 | London 08-13 | Overlap 13-17 | NY 17-22
+        """)
+    else:
+        st.caption("No data available for selected time range.")
 
 
 # ============================================================
@@ -333,7 +647,6 @@ if not signals_df.empty:
 
 st.header("4️⃣ Signal & Trade Log")
 
-# Merge signals, risk_decisions, fills
 log_cols = st.columns([3, 1])
 
 with log_cols[1]:
@@ -341,6 +654,7 @@ with log_cols[1]:
         "Filter by Symbol",
         options=["All"] + list(PAIR_CONFIG.keys()),
         index=0,
+        key="panel4_signal_log_symbol_filter",
     )
 
 # Build combined log
@@ -404,9 +718,8 @@ if combined_rows:
     log_df['timestamp'] = pd.to_datetime(log_df['timestamp'], errors='coerce')
     log_df = log_df.dropna(subset=['timestamp'])
     log_df = log_df.sort_values('timestamp', ascending=False)
-    log_df = log_df.head(200)  # Limit display
+    log_df = log_df.head(200)
     
-    # Format for display
     display_df = log_df.copy()
     display_df['timestamp'] = display_df['timestamp'].dt.strftime('%Y-%m-%d %H:%M:%S')
     
@@ -436,7 +749,6 @@ else:
 
 st.header("5️⃣ Open Positions Across All Symbols")
 
-# Get current open positions from fills (heuristic: latest fill per symbol)
 if not fills_df.empty:
     open_positions = []
     for symbol in PAIR_CONFIG.keys():
@@ -475,11 +787,13 @@ with col2:
         "Filter by Event Type",
         options=["All", "MIN_LOT_OVERRIDE", "MTF_ALIGNMENT_REJECTED", "CONSECUTIVE_LOSS_HALT", "KILL_SWITCH", "OTHER"],
         index=0,
+        key="panel6_risk_event_type_filter",
     )
     symbol_filter = st.selectbox(
         "Filter by Symbol",
         options=["All"] + list(PAIR_CONFIG.keys()),
         index=0,
+        key="panel6_risk_event_symbol_filter",
     )
 
 if not risk_events_df.empty:
@@ -488,7 +802,6 @@ if not risk_events_df.empty:
     events = events.dropna(subset=['timestamp'])
     events = events.sort_values('timestamp', ascending=False)
     
-    # Extract symbol from details if available (risk_events table doesn't have symbol column)
     if 'details' in events.columns:
         def extract_symbol(details):
             for sym in PAIR_CONFIG.keys():

@@ -92,15 +92,19 @@ class TestMT5DemoIntegration:
         mock_mt5.symbol_info.return_value = mock_symbol
         mock_mt5.symbol_info_tick.return_value = Mock(bid=4414.36, ask=4414.62)
         mock_mt5.order_send.return_value = Mock(
-            retcode=10009,
-            deal=123456789,
-            order=987654321,
-            volume=0.5,
-            price=4414.62,
-            sl=4400.0,
-            tp=4450.0,
-            comment="MARS_1_100000"
-        )
+                    retcode=10009,
+                    deal=123456789,
+                    order=987654321,
+                    volume=0.5,
+                    price=4414.62,
+                    sl=4400.0,
+                    tp=4450.0,
+                    comment="MARS_1_100000",
+                    commission=-1.25,
+                    swap=-0.5,
+                    profit=0.0,
+                    retcode_external=0,
+                )
         mock_mt5.order_check.return_value = Mock(
             retcode=0,
             balance=100000.0,
@@ -213,7 +217,7 @@ class TestMT5DemoIntegration:
         cursor.execute("SELECT * FROM signals WHERE signal = 1")
         signals = cursor.fetchall()
         assert len(signals) == 1
-        assert signals[0][11] == 1  # risk_check_passed = True (index 11, not 10)
+        assert signals[0][10] == 1  # risk_check_passed = True
 
         cursor.execute("SELECT * FROM fills")
         fills = cursor.fetchall()

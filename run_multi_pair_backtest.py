@@ -201,7 +201,8 @@ def run_backtest_for_symbol(
     
     results = run_simulation(
         df, signals_df, positions_df, equity, sim_config,
-        atr_window=atr_window, stop_mult=stop_mult, reward_mult=reward_mult
+        atr_window=atr_window, stop_mult=stop_mult, reward_mult=reward_mult,
+        pair_cfg=pair_cfg
     )
     
     return results
@@ -216,6 +217,7 @@ def run_simulation(
     atr_window: int = 14,
     stop_mult: float = 2.0,
     reward_mult: float = 2.5,
+    pair_cfg: Optional[Dict] = None,
 ) -> Dict[str, Any]:
     """Run the trading simulation."""
     from mars.libs.features.volatility.range import ATRFeature
@@ -297,15 +299,17 @@ def run_simulation(
         # Enter new position
         prev_signal = signals['signal'].iloc[i-1] if i > 0 else 0
         if signal != 0 and signal != prev_signal and config['symbol'] not in open_positions and position_size > 0:
-            atr = row.get('ATRr_14', 0.5)
-            stop_distance = atr * 2.0
-            
+            # Use stops from signal generator (supports both ATR and fixed_pips modes)
             if signal == 1:
-                stop_price = price - stop_distance
-                take_profit = price + stop_distance * 2.5
+                stop_price = signals['long_stop'].loc[timestamp]
+                take_profit = price + (price - stop_price) * pair_cfg.get("rr_ratio", 2.5)
             else:
-                stop_price = price + stop_distance
-                take_profit = price - stop_distance * 2.5
+                stop_price = signals['short_stop'].loc[timestamp]
+                take_profit = price - (stop_price - price) * pair_cfg.get("rr_ratio", 2.5)
+            
+            # Skip if stop_price is NaN (not enough data for ATR calculation)
+            if pd.isna(stop_price):
+                continue
             
             from mars.apps.trading.system.vol_scaled_system import TradeConfig
             trade_config = TradeConfig(

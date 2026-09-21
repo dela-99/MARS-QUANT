@@ -1,53 +1,66 @@
+# -*- coding: utf-8 -*-
 """
-MT5 Live Execution Layer for M.A.R.S. Trading System.
+MT5 Live Execution Module
+=========================
+Production-grade MT5 executor for live demo trading.
+Replaces backtest TradeExecutor with real MT5 integration.
 
-Implements the same interface as TradeExecutor for live order placement on MT5 demo account.
+Key features:
+- Idempotent order placement (prevents duplicate orders per bar/signal)
+- Live MT5 position checking for concurrent risk
+- Every order_send() call is logged (success or failure)
+- SQLite audit trail with WAL mode and auto-backup
+- Manual SL/TP modification detection and reconciliation
 """
+
 from __future__ import annotations
 
-from datetime import datetime
-from typing import Optional, Dict, Any, List
-from dataclasses import dataclass, field
-from pathlib import Path
 import json
+import sqlite3
 import os
-from threading import Lock
+import threading
 import time
-from unittest.mock import Mock
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
+from threading import Lock
 
-import pandas as pd
+try:
+    import MetaTrader5 as mt5
+except ImportError:
+    mt5 = None  # type: ignore
 
 from mars.apps.trading.system.vol_scaled_system import (
-    RiskManager, TradeExecutor, TradeConfig, VolScaledSizer, SizingConfig
+    RiskManager,
+    VolScaledSizer,
+    TradeConfig,
 )
-from mars.core.config import MT5Config, DEFAULT_CONFIG
 
 
-# Step 0: Demo Account Safety Gate
 class DemoAccountGate:
     """
     Mandatory safety gate - hard-fails if connected account is not DEMO.
     This gate CANNOT be bypassed by config/env/flag - requires code change to disable.
     """
-    
+
     @staticmethod
     def verify_demo_account(mt5_module) -> dict:
         """
         Verify connected account is DEMO. Hard-fails if not.
-        
+
         Returns account info dict if verification passes.
         Raises RuntimeError if account is not DEMO.
         """
         account_info = mt5_module.account_info()
         if account_info is None:
             raise RuntimeError(f"Failed to get account info: {mt5_module.last_error()}")
-        
+
         trade_mode = account_info.trade_mode
         account_number = account_info.login
-        
+
         # Log account info on every startup
         print(f"MT5 ACCOUNT CONNECTED: #{account_number} | Trade Mode: {trade_mode}")
-        
+
         # MT5 trade_mode constants:
         # TRADE_MODE_DEMO = 0, TRADE_MODE_CONTEST = 1, TRADE_MODE_REAL = 2
         if trade_mode != 0:  # TRADE_MODE_DEMO = 0
@@ -57,7 +70,7 @@ class DemoAccountGate:
                 f"Refusing to trade on non-demo account. "
                 f"To disable this gate, modify DemoAccountGate.verify_demo_account() in mt5_executor.py"
             )
-        
+
         return {
             "account_number": account_number,
             "trade_mode": trade_mode,
@@ -66,6 +79,9 @@ class DemoAccountGate:
             "currency": account_info.currency,
             "leverage": account_info.leverage,
         }
+
+
+from dataclasses import dataclass
 
 
 @dataclass
@@ -99,93 +115,46 @@ class MT5SymbolInfo:
     time: datetime
     # Filling modes supported by broker (bitmask)
     filling_mode: int = 0
-    # Order modes supported
+    # Order modes supported by broker (bitmask)
     order_mode: int = 0
-    # Trade mode
-    trade_mode: int = 0
 
 
-class MT5SymbolResolver:
-    """Resolves XAUUSD symbol specification at runtime from MT5."""
-    
-    def __init__(self, mt5_module):
-        self.mt5 = mt5_module
-        self._symbol_cache: Dict[str, MT5SymbolInfo] = {}
-        self._cache_lock = Lock()
-    
-    def get_symbol_info(self, symbol: str = "XAUUSD") -> MT5SymbolInfo:
-        """Get symbol specification, cached with thread safety."""
-        with self._cache_lock:
-            if symbol in self._symbol_cache:
-                return self._symbol_cache[symbol]
-            
-            info = self.mt5.symbol_info(symbol)
-            if info is None:
-                raise RuntimeError(f"Symbol {symbol} not found: {self.mt5.last_error()}")
-            
-            if not info.visible:
-                if not self.mt5.symbol_select(symbol, True):
-                    raise RuntimeError(f"Failed to select symbol {symbol}: {self.mt5.last_error()}")
-            
-            # Refresh info after selection
-            info = self.mt5.symbol_info(symbol)
-            if info is None:
-                raise RuntimeError(f"Symbol {symbol} info unavailable after selection")
-            
-            spec = MT5SymbolInfo(
-                symbol=info.name,
-                contract_size=info.trade_contract_size,
-                min_lot=info.volume_min,
-                max_lot=info.volume_max,
-                lot_step=info.volume_step,
-                digits=info.digits,
-                point=info.point,
-                spread=info.spread,
-                spread_float=info.spread / 10.0 if info.spread > 0 else 0.0,
-                tick_size=info.trade_tick_size,
-                tick_value=info.trade_tick_value,
-                swap_long=info.swap_long,
-                swap_short=info.swap_short,
-                margin_initial=info.margin_initial,
-                margin_maintenance=info.margin_maintenance,
-                session_deals=info.session_deals,
-                session_buy_orders=info.session_buy_orders,
-                session_sell_orders=info.session_sell_orders,
-                volume_min=info.volume_min,
-                volume_max=info.volume_max,
-                volume_step=info.volume_step,
-                bid=info.bid,
-                ask=info.ask,
-                last=info.last,
-                volume_real=info.volume_real,
-                time=datetime.fromtimestamp(info.time),
-                filling_mode=info.filling_mode,
-                order_mode=info.order_mode,
-                trade_mode=info.trade_mode,
-            )
-            self._symbol_cache[symbol] = spec
-            return spec
-    
-    def normalize_lot_size(self, symbol: str, raw_lots: float) -> float:
-        """Normalize lot size to broker's step/min/max."""
-        spec = self.get_symbol_info(symbol)
-        # Round to nearest step
-        stepped = round(raw_lots / spec.lot_step) * spec.lot_step
-        # Clamp to min/max
-        return max(spec.min_lot, min(spec.max_lot, stepped))
-    
-    def lots_to_volume(self, symbol: str, lots: float) -> float:
-        """Convert lots to volume (contracts * contract_size)."""
-        spec = self.get_symbol_info(symbol)
-        return lots * spec.contract_size
-    
-    def volume_to_lots(self, symbol: str, volume: float) -> float:
-        """Convert volume to lots."""
-        spec = self.get_symbol_info(symbol)
-        return volume / spec.contract_size
+# ============================================================================
+# MT5 Connection & Order Routing
+# ============================================================================
+
+class MT5Config:
+    """MT5 connection configuration."""
+    def __init__(
+        self,
+        login: int = 0,
+        password: str = "",
+        server: str = "",
+        path: str = "",
+        timeout: int = 60000,
+        portable: bool = False,
+    ):
+        self.login = login
+        self.password = password
+        self.server = server
+        self.path = path
+        self.timeout = timeout
+        self.portable = portable
+
+    def is_configured(self) -> bool:
+        return bool(self.login and self.password and self.server)
 
 
-@dataclass
+DEFAULT_MT5_CONFIG = MT5Config(
+    login=int(os.getenv("DEMO_ACCOUNT_NUMBER", "476944496")),
+    password=os.getenv("PASSWORD", ""),
+    server=os.getenv("SERVER", ""),
+    path="C:\\Program Files\\MetaTrader 5\\terminal64.exe",
+    timeout=60000,
+    portable=False,
+)
+
+
 class OrderRequest:
     """MT5 order request structure."""
     action: int
@@ -222,395 +191,418 @@ class FillResult:
     timestamp: datetime
     slippage: float = 0.0  # filled_price - signal_price (price slippage)
     size_slippage: float = 0.0  # filled_volume - requested_volume (size slippage)
+    commission: float = 0.0
+    swap: float = 0.0
+    profit: float = 0.0
 
 
 class MT5ConnectionManager:
-    """Manages MT5 connection with retry logic and health checks."""
+    """Manages MT5 connection lifecycle with auto-reconnect."""
     
     def __init__(self, config: MT5Config):
         self.config = config
         self.mt5 = None
         self._connected = False
-        self._lock = Lock()
-        self._last_health_check = 0
-        self._health_check_interval = 30  # seconds
+        self._last_connect_time = 0
+        self._reconnect_cooldown = 30  # seconds
     
     def connect(self) -> bool:
-        """Initialize MT5 connection with retry logic."""
-        with self._lock:
-            if self._connected and self._is_healthy():
-                return True
-            
-            try:
-                import MetaTrader5 as mt5
-            except ImportError as exc:
-                raise ImportError(
-                    "MetaTrader5 package required. Install: pip install MetaTrader5"
-                ) from exc
-            
-            self.mt5 = mt5
-            
-            if not self.config.is_configured():
-                raise RuntimeError(
-                    "MT5 credentials not configured. Set DEMO_ACCOUNT_NUMBER, "
-                    "PASSWORD, SERVER in .env"
-                )
-            
-            login = int(self.config.account_number)
-            
-            # Retry connection up to 3 times
-            for attempt in range(3):
-                if mt5.initialize(
-                    login=login,
-                    password=self.config.password,
-                    server=self.config.server,
-                ):
-                    self._connected = True
-                    # Verify demo account on every connection
-                    DemoAccountGate.verify_demo_account(mt5)
-                    return True
-                
-                error = mt5.last_error()
-                if attempt < 2:
-                    time.sleep(2 ** attempt)  # Exponential backoff
-            
-            raise RuntimeError(f"MT5 initialize failed after 3 attempts: {mt5.last_error()}")
-    
-    def _is_healthy(self) -> bool:
-        """Check connection health."""
-        if not self._connected or self.mt5 is None:
-            return False
+        """Establish MT5 connection."""
+        if mt5 is None:
+            raise RuntimeError("MetaTrader5 package not installed. Run: pip install MetaTrader5")
         
-        now = time.time()
-        if now - self._last_health_check < self._health_check_interval:
+        if self._connected and self.mt5 is not None:
             return True
         
-        try:
-            account = self.mt5.account_info()
-            if account is not None:
-                self._last_health_check = time.time()
-                return True
-        except Exception:
-            pass
+        # Check cooldown
+        now = time.time()
+        if now - self._last_connect_time < self._reconnect_cooldown:
+            return self._connected
         
-        return False
+        self._last_connect_time = now
+        
+        try:
+            if self.config.path:
+                result = mt5.initialize(
+                    path=self.config.path,
+                    login=self.config.login,
+                    password=self.config.password,
+                    server=self.config.server,
+                    timeout=self.config.timeout,
+                    portable=self.config.portable,
+                )
+            else:
+                result = mt5.initialize(
+                    login=self.config.login,
+                    password=self.config.password,
+                    server=self.config.server,
+                    timeout=self.config.timeout,
+                    portable=self.config.portable,
+                )
+            
+            if result:
+                self.mt5 = mt5
+                self._connected = True
+                print(f"✅ MT5 connected: account #{self.config.login}")
+                return True
+            else:
+                error = mt5.last_error()
+                print(f"❌ MT5 connection failed: {error}")
+                self._connected = False
+                return False
+        except Exception as e:
+            print(f"❌ MT5 connection error: {e}")
+            self._connected = False
+            return False
     
     def ensure_connected(self) -> bool:
         """Ensure connection is alive, reconnect if needed."""
-        if not self._is_healthy():
-            self.mt5.shutdown()
-            self._connected = False
-            return self.connect()
-        return True
-    
-    def shutdown(self):
-        """Clean shutdown."""
-        with self._lock:
-            if self.mt5 and self._connected:
-                self.mt5.shutdown()
+        if self._connected and self.mt5 is not None:
+            # Quick health check
+            try:
+                _ = self.mt5.account_info()
+                return True
+            except Exception:
                 self._connected = False
+        
+        return self.connect()
+    
+    def disconnect(self):
+        """Clean disconnect."""
+        if self.mt5:
+            self.mt5.shutdown()
+        self._connected = False
+        self.mt5 = None
+
+
+class MT5SymbolResolver:
+    """Resolves symbol names and provides trading specifications."""
+    
+    def __init__(self, mt5_module):
+        self.mt5 = mt5_module
+        self._symbol_cache: Dict[str, Any] = {}
+    
+    def get_symbol_info(self, symbol: str):
+        """Get MT5 symbol info with caching."""
+        if symbol not in self._symbol_cache:
+            info = self.mt5.symbol_info(symbol)
+            if info is None:
+                raise ValueError(f"Symbol {symbol} not found in MT5")
+            if not info.visible:
+                self.mt5.symbol_select(symbol, True)
+                info = self.mt5.symbol_info(symbol)
+            self._symbol_cache[symbol] = info
+        return self._symbol_cache[symbol]
+    
+    def get_pip_value(self, symbol: str) -> float:
+        """Get pip value for 1 lot."""
+        info = self.get_symbol_info(symbol)
+        return info.trade_tick_value  # Usually $1 per pip per lot for XAUUSD
 
 
 class MT5OrderRouter:
-    """Routes orders to MT5 with proper symbol/lot handling."""
-
+    """Routes orders to MT5 with proper fill handling."""
+    
     def __init__(self, mt5_module, symbol_resolver: MT5SymbolResolver):
         self.mt5 = mt5_module
         self.symbol_resolver = symbol_resolver
-        # Determine best filling mode for this broker
-        self._supported_filling_modes = [mt5_module.ORDER_FILLING_FOK, mt5_module.ORDER_FILLING_IOC, mt5_module.ORDER_FILLING_RETURN]
-
-    def _get_best_filling_mode(self, spec: MT5SymbolInfo) -> int:
-        """Select best filling mode supported by broker."""
-        broker_modes = spec.filling_mode
-        # Prefer FOK > IOC > RETURN
-        for mode in [self.mt5.ORDER_FILLING_FOK, self.mt5.ORDER_FILLING_IOC, self.mt5.ORDER_FILLING_RETURN]:
-            if broker_modes & mode:
-                return mode
-        # Fallback to FOK if detection fails
-        return self.mt5.ORDER_FILLING_FOK
-
-    def send_order(self, config: TradeConfig, spec: MT5SymbolInfo) -> FillResult:
-        """
-        Send order to MT5 with proper lot normalization and price handling.
-        Includes pre-flight margin check via order_check().
-        """
-        # Normalize lot size
-        raw_lots = config.position_size
-        normalized_lots = self.symbol_resolver.normalize_lot_size(config.symbol, raw_lots)
-
-        if normalized_lots <= 0:
-            return FillResult(
-                success=False,
-                ticket=0, order_id=0, volume=0, price=0,
-                bid=0, ask=0, sl=0, tp=0, comment="Invalid lot size",
-                request=None, result_code=-1, retcode_external=-1,
-                timestamp=datetime.now()
-            )
-
+    
+    def send_order(self, config: TradeConfig, spec) -> "OrderFill":
+        """Send order to MT5 and return fill result."""
+        from dataclasses import dataclass
+        
+        @dataclass
+        class OrderFill:
+            success: bool
+            ticket: int
+            order_id: int
+            price: float
+            volume: float
+            sl: float
+            tp: float
+            slippage: float
+            size_slippage: float
+            bid: float
+            ask: float
+            spread: float
+            commission: float
+            swap: float
+            profit: float
+            result_code: int
+            retcode_external: int
+            comment: str
+        
+        # Determine order type
+        order_type = self.mt5.ORDER_TYPE_BUY if config.signal > 0 else self.mt5.ORDER_TYPE_SELL
+        
         # Get current prices
         tick = self.mt5.symbol_info_tick(config.symbol)
         if tick is None:
-            return FillResult(
-                success=False, ticket=0, order_id=0, volume=0,
-                price=0, bid=0, ask=0, sl=0, tp=0,
-                comment=f"No tick data: {self.mt5.last_error()}",
-                request=None, result_code=-1, retcode_external=-1,
-                timestamp=datetime.now()
+            return OrderFill(
+                success=False, ticket=0, order_id=0, price=0, volume=0,
+                sl=config.stop_price, tp=config.take_profit,
+                slippage=0, size_slippage=0, bid=0, ask=0, spread=0,
+                commission=0, swap=0, profit=0, result_code=-1, retcode_external=-1,
+                comment="No tick data"
             )
-
-        # Determine order type and price
-        if config.signal == 1:  # Long
-            order_type = self.mt5.ORDER_TYPE_BUY
-            price = tick.ask
-            sl = config.stop_price
-            tp = config.take_profit
-        else:  # Short
-            order_type = self.mt5.ORDER_TYPE_SELL
-            price = tick.bid
-            sl = config.stop_price
-            tp = config.take_profit
-
-        # Determine best filling mode for this broker
-        filling_mode = self._get_best_filling_mode(spec)
-
+        
+        price = tick.ask if config.signal > 0 else tick.bid
+        sl = config.stop_price
+        tp = config.take_profit
+        
+        # Normalize to symbol precision
+        info = self.symbol_resolver.get_symbol_info(config.symbol)
+        digits = info.digits
+        price = round(price, digits)
+        sl = round(sl, digits)
+        tp = round(tp, digits)
+        volume = round(config.position_size, 2)
+        
         # Build request
-        request = OrderRequest(
-            action=self.mt5.TRADE_ACTION_DEAL,
-            symbol=config.symbol,
-            volume=config.position_size,
-            type=order_type,
-            price=price,
-            sl=sl,
-            tp=tp,
-            deviation=20,  # 20 points max slippage
-            magic=123456,  # Magic number for identification
-            comment=f"MARS_{config.signal}_{config.entry_time.strftime('%H%M%S')}",
-            type_time=self.mt5.ORDER_TIME_GTC,
-            type_filling=filling_mode,
-            signal=config.signal,
-        )
-
-        # PRE-FLIGHT CHECK: Validate margin/fund sufficiency via order_check()
-        mt5_request = {
-            "action": request.action,
-            "symbol": request.symbol,
-            "volume": request.volume,
-            "type": request.type,
-            "price": request.price,
-            "sl": request.sl,
-            "tp": request.tp,
-            "deviation": request.deviation,
-            "magic": request.magic,
-            "comment": request.comment,
-            "type_time": request.type_time,
-            "type_filling": request.type_filling,
+        request = {
+            "action": self.mt5.TRADE_ACTION_DEAL,
+            "symbol": config.symbol,
+            "volume": volume,
+            "type": order_type,
+            "price": price,
+            "sl": sl,
+            "tp": tp,
+            "deviation": 20,
+            "magic": 123456,
+            "comment": f"MARS_{config.signal}_{config.entry_time.strftime('%H%M')}",
+            "type_time": self.mt5.ORDER_TIME_GTC,
+            "type_filling": self.mt5.ORDER_FILLING_IOC,
         }
-
-        check_result = self.mt5.order_check(mt5_request)
-        if check_result is None or check_result.retcode != 0:
-            error_msg = f"Pre-flight order_check failed: {check_result.comment if check_result else self.mt5.last_error()}"
-            return FillResult(
-                success=False, ticket=0, order_id=0, volume=0,
-                price=0, bid=tick.bid, ask=tick.ask, sl=0, tp=0,
-                comment=error_msg,
-                request=request, result_code=-1, retcode_external=-1,
-                timestamp=datetime.now()
-            )
-
+        
         # Send order
-        result = self.mt5.order_send(mt5_request)
-
+        result = self.mt5.order_send(request)
+        
         if result is None:
-            return FillResult(
-                success=False, ticket=0, order_id=0, volume=0,
-                price=0, bid=tick.bid, ask=tick.ask, sl=0, tp=0,
-                comment=f"order_send returned None: {self.mt5.last_error()}",
-                request=request, result_code=-1, retcode_external=-1,
-                timestamp=datetime.now()
+            error = self.mt5.last_error()
+            return OrderFill(
+                success=False, ticket=0, order_id=0, price=price, volume=volume,
+                sl=sl, tp=tp, slippage=0, size_slippage=0, bid=tick.bid, ask=tick.ask,
+                spread=tick.ask - tick.bid, commission=0, swap=0, profit=0,
+                result_code=-1, retcode_external=-1, comment=f"order_send returned None: {error}"
+            )
+        
+        # Calculate slippage
+        expected_price = price
+        actual_price = result.price
+        slippage = abs(actual_price - expected_price) * 10000  # in pips
+        
+        if result.retcode == self.mt5.TRADE_RETCODE_DONE:
+            return OrderFill(
+                success=True,
+                ticket=result.order,
+                order_id=result.order,
+                price=actual_price,
+                volume=result.volume,
+                sl=sl,
+                tp=tp,
+                slippage=slippage,
+                size_slippage=0.0,
+                bid=tick.bid,
+                ask=tick.ask,
+                spread=tick.ask - tick.bid,
+                commission=result.commission if hasattr(result, 'commission') else 0,
+                swap=result.swap if hasattr(result, 'swap') else 0,
+                profit=result.profit if hasattr(result, 'profit') else 0,
+                result_code=result.retcode,
+                retcode_external=result.retcode_external if hasattr(result, 'retcode_external') else -1,
+                comment=result.comment if hasattr(result, 'comment') else "",
+            )
+        else:
+            return OrderFill(
+                success=False, ticket=result.order if hasattr(result, 'order') else 0,
+                order_id=result.order if hasattr(result, 'order') else 0,
+                price=price, volume=volume, sl=sl, tp=tp,
+                slippage=slippage, size_slippage=0.0,
+                bid=tick.bid, ask=tick.ask, spread=tick.ask - tick.bid,
+                commission=0, swap=0, profit=0,
+                result_code=result.retcode,
+                retcode_external=result.retcode_external if hasattr(result, 'retcode_external') else -1,
+                comment=f"Order failed: {result.comment} (retcode={result.retcode})"
             )
 
-        # Calculate slippage
-        signal_price = config.entry_price
-        filled_price = result.price
-        slippage = filled_price - signal_price if config.signal == 1 else signal_price - filled_price
-        
-        # Calculate size slippage (filled - requested volume)
-        size_slippage = result.volume - normalized_lots
-        
-        return FillResult(
-            success=result.retcode == self.mt5.TRADE_RETCODE_DONE,
-            ticket=result.deal,  # MT5 uses 'deal' for position ticket
-            order_id=result.order,
-            volume=result.volume,
-            price=result.price,
-            bid=tick.bid,
-            ask=tick.ask,
-            sl=config.stop_price,  # Use config stop_price since result doesn't have it
-            tp=config.take_profit,  # Use config take_profit since result doesn't have it
-            comment=result.comment,
-            request=request,
-            result_code=result.retcode,
-            retcode_external=result.retcode_external,
-            timestamp=datetime.now(),
-            slippage=slippage,
-            size_slippage=size_slippage
-        )
 
+# ============================================================================
+# Audit Logger
+# ============================================================================
 
 class MT5AuditLogger:
     """Persists all trading activity to SQLite for audit trail with WAL mode and auto-backup."""
     
     def __init__(self, db_path: str = "mt5_audit.db"):
         self.db_path = Path(db_path)
-        # Backup locations: primary (project root) + secondary (outside git)
         self.backup_paths = [
-            Path("audit_backups") / self.db_path.name,  # Primary: ./audit_backups/
-            Path(os.environ.get("MARS_AUDIT_BACKUP_DIR", str(Path.home() / "MARS_AUDIT_BACKUPS"))) / self.db_path.name  # Secondary: env or ~/MARS_AUDIT_BACKUPS
+            Path.home() / "MARS_AUDIT_BACKUP" / f"mt5_audit_{datetime.now().strftime('%Y%m%d')}.db",
+            Path("mt5_audit_backup.db"),
         ]
-        # Ensure backup directories exist
         for bp in self.backup_paths:
             bp.parent.mkdir(parents=True, exist_ok=True)
         self._init_db()
-        self._lock = Lock()
-
-    def _init_db(self):
-        """Initialize SQLite database with audit tables and WAL mode."""
-        import sqlite3
-        conn = sqlite3.connect(self.db_path)
-        # Enable WAL mode for durability and concurrent access
-        conn.execute("PRAGMA journal_mode=WAL;")
-        conn.execute("PRAGMA synchronous=NORMAL;")
-        conn.execute("PRAGMA wal_autocheckpoint=1000;")
-        cursor = conn.cursor()
-        
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS signals (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                timestamp TEXT NOT NULL,
-                symbol TEXT NOT NULL,
-                signal INTEGER NOT NULL,
-                entry_price REAL,
-                stop_price REAL,
-                take_profit REAL,
-                position_size REAL,
-                signal_price REAL,
-                risk_at_stop REAL,
-                risk_pct REAL,
-                risk_check_passed BOOLEAN,
-                risk_rejection_reason TEXT
-            )
-        """)
-        
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS risk_decisions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                timestamp TEXT NOT NULL,
-                symbol TEXT NOT NULL,
-                decision TEXT NOT NULL,
-                reason TEXT,
-                position_value REAL,
-                equity REAL,
-                per_trade_risk_pct REAL,
-                concurrent_cap_pct REAL,
-                drawdown_pct REAL
-            )
-        """)
-        
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS fills (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                timestamp TEXT NOT NULL,
-                ticket INTEGER NOT NULL,
-                order_id INTEGER,
-                symbol TEXT NOT NULL,
-                direction TEXT NOT NULL,
-                requested_lots REAL,
-                filled_lots REAL,
-                signal_price REAL,
-                filled_price REAL,
-                requested_sl REAL,
-                filled_sl REAL,
-                requested_tp REAL,
-                filled_tp REAL,
-                slippage_points REAL,
-                slippage_pct REAL,
-                size_slippage REAL,
-                spread_at_fill REAL,
-                commission REAL,
-                swap REAL,
-                profit REAL,
-                mt5_ticket INTEGER,
-                mt5_order_id INTEGER,
-                retcode INTEGER,
-                retcode_external INTEGER,
-                comment TEXT
-            )
-        """)
-        
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS risk_events (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                timestamp TEXT NOT NULL,
-                event_type TEXT NOT NULL,
-                details TEXT,
-                equity REAL,
-                drawdown_pct REAL,
-                daily_pnl REAL,
-                kill_switch_active BOOLEAN
-            )
-        """)
-        
-        conn.commit()
-        conn.close()
     
-    def log_signal(self, config: TradeConfig, signal_price: float,
-                   risk_check_passed: bool, rejection_reason: str = None,
-                   risk_at_stop: float = 0, risk_pct: float = 0):
-        """Log signal generation with risk check result."""
+    def _init_db(self):
+        """Initialize database schema with WAL mode."""
+        import sqlite3
+        with sqlite3.connect(self.db_path) as conn:
+            # Enable WAL mode for better concurrency
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA synchronous=NORMAL")
+            conn.execute("PRAGMA cache_size=10000")
+            conn.execute("PRAGMA temp_store=MEMORY")
+            
+            cursor = conn.cursor()
+            
+            # Signals table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS signals (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp TEXT NOT NULL,
+                    symbol TEXT NOT NULL,
+                    signal INTEGER NOT NULL,
+                    entry_price REAL NOT NULL,
+                    stop_price REAL NOT NULL,
+                    take_profit REAL NOT NULL,
+                    position_size REAL NOT NULL,
+                    risk_at_stop REAL NOT NULL,
+                    risk_pct REAL NOT NULL,
+                    risk_check_passed INTEGER NOT NULL,
+                    rejection_reason TEXT,
+                    bar_key TEXT,
+                    max_hold_hours REAL
+                )
+            """)
+            
+            # Fills table (every order_send result)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS fills (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp TEXT NOT NULL,
+                    ticket INTEGER NOT NULL,
+                    order_id INTEGER,
+                    symbol TEXT NOT NULL,
+                    direction TEXT NOT NULL,
+                    requested_lots REAL,
+                    filled_lots REAL,
+                    signal_price REAL,
+                    filled_price REAL,
+                    requested_sl REAL,
+                    filled_sl REAL,
+                    requested_tp REAL,
+                    filled_tp REAL,
+                    slippage_points REAL,
+                    slippage_pct REAL,
+                    size_slippage REAL,
+                    spread_at_fill REAL,
+                    commission REAL,
+                    swap REAL,
+                    profit REAL,
+                    mt5_ticket INTEGER,
+                    mt5_order_id INTEGER,
+                    retcode INTEGER,
+                    retcode_external INTEGER,
+                    comment TEXT
+                )
+            """)
+            
+            # Risk decisions table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS risk_decisions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp TEXT NOT NULL,
+                    symbol TEXT NOT NULL,
+                    signal INTEGER NOT NULL,
+                    decision TEXT NOT NULL,
+                    reason TEXT,
+                    position_value REAL NOT NULL,
+                    equity REAL NOT NULL,
+                    risk_pct REAL NOT NULL,
+                    tier_risk_cap_pct REAL NOT NULL,
+                    aggregate_risk_pct REAL NOT NULL
+                )
+            """)
+            
+            # Risk events table (daily loss, kill-switch, manual modifications)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS risk_events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp TEXT NOT NULL,
+                    event_type TEXT NOT NULL,
+                    details TEXT NOT NULL,
+                    equity REAL NOT NULL,
+                    drawdown_pct REAL NOT NULL,
+                    daily_pnl REAL NOT NULL,
+                    kill_switch_active INTEGER NOT NULL
+                )
+            """)
+            
+            # Manual modifications table (NEW)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS manual_modifications (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp TEXT NOT NULL,
+                    ticket INTEGER NOT NULL,
+                    symbol TEXT NOT NULL,
+                    old_sl REAL NOT NULL,
+                    new_sl REAL NOT NULL,
+                    old_tp REAL NOT NULL,
+                    new_tp REAL NOT NULL,
+                    old_risk_usd REAL NOT NULL,
+                    new_risk_usd REAL NOT NULL,
+                    old_risk_pct REAL NOT NULL,
+                    new_risk_pct REAL NOT NULL,
+                    tier_risk_cap_pct REAL NOT NULL,
+                    aggregate_cap_pct REAL NOT NULL,
+                    total_open_risk_before REAL NOT NULL,
+                    total_open_risk_after REAL NOT NULL,
+                    exceeds_per_trade_cap INTEGER NOT NULL,
+                    exceeds_aggregate_cap INTEGER NOT NULL,
+                    action_taken TEXT NOT NULL,
+                    equity REAL NOT NULL,
+                    kill_switch_active INTEGER NOT NULL
+                )
+            """)
+            
+            # Create indexes for common queries
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_signals_timestamp ON signals(timestamp)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_signals_symbol ON signals(symbol)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_fills_timestamp ON fills(timestamp)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_fills_symbol ON fills(symbol)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_risk_events_timestamp ON risk_events(timestamp)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_risk_events_type ON risk_events(event_type)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_manual_mods_timestamp ON manual_modifications(timestamp)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_manual_mods_ticket ON manual_modifications(ticket)")
+            
+            conn.commit()
+    
+    def log_signal(self, config: TradeConfig, fill_price: float,
+                   risk_check_passed: bool, rejection_reason: Optional[str],
+                   risk_at_stop: float, risk_pct: float):
+        """Log signal with risk check result."""
         import sqlite3
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute("""
                 INSERT INTO signals (
-                    timestamp, symbol, signal, entry_price, stop_price,
-                    take_profit, position_size, signal_price,
+                    timestamp, symbol, signal, entry_price,
+                    stop_price, take_profit, position_size,
                     risk_at_stop, risk_pct, risk_check_passed,
-                    risk_rejection_reason
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    rejection_reason, bar_key, max_hold_hours
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 datetime.now().isoformat(),
-                config.symbol, config.signal,
-                config.entry_price, config.stop_price, config.take_profit,
-                config.position_size, signal_price,
-                risk_at_stop, risk_pct,
-                risk_check_passed, rejection_reason
+                config.symbol, config.signal, fill_price,
+                config.stop_price, config.take_profit, config.position_size,
+                risk_at_stop, risk_pct, 1 if risk_check_passed else 0,
+                rejection_reason,
+                "",  # bar_key not available here
+                config.max_hold_hours if config.max_hold_hours else 0,
             ))
             conn.commit()
     
-    def log_risk_decision(self, config: TradeConfig, decision: str,
-                          reason: str, position_value: float, equity: float,
-                          per_trade_risk_pct: float, concurrent_cap_pct: float,
-                          drawdown_pct: float):
-        """Log risk manager decision."""
-        import sqlite3
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.cursor()
-            cursor.execute("""
-                INSERT INTO risk_decisions (
-                    timestamp, symbol, decision, reason,
-                    position_value, equity, per_trade_risk_pct,
-                    concurrent_cap_pct, drawdown_pct
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                datetime.now().isoformat(),
-                config.symbol, decision, reason,
-                position_value, equity, per_trade_risk_pct,
-                concurrent_cap_pct, drawdown_pct
-            ))
-            conn.commit()
-    
-    def log_fill(self, fill: FillResult, config: TradeConfig, signal_price: float):
+    def log_fill(self, fill, config: TradeConfig, expected_price: float):
         """Log order fill with slippage calculation."""
         import sqlite3
         with sqlite3.connect(self.db_path) as conn:
@@ -624,7 +616,7 @@ class MT5AuditLogger:
             swap = 0.0
             profit = 0.0
             try:
-                if fill.mt5_ticket:
+                if hasattr(fill, 'mt5_ticket') and fill.mt5_ticket:
                     deals = self.mt5.history_deals_get(ticket=fill.mt5_ticket)
                     if deals and len(deals) > 0:
                         deal = deals[0]
@@ -645,22 +637,48 @@ class MT5AuditLogger:
                                 retcode, retcode_external, comment
                             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """, (
-                            fill.timestamp.isoformat(),
-                            fill.ticket, fill.order_id, fill.request.symbol,
-                            "BUY" if fill.request.signal == 1 else "SELL",
-                            fill.request.volume, fill.volume,
-                            config.entry_price, fill.price,
+                            fill.timestamp.isoformat() if hasattr(fill, 'timestamp') else datetime.now().isoformat(),
+                            fill.ticket, fill.order_id, 
+                            fill.request.symbol if hasattr(fill, 'request') else config.symbol,
+                            "BUY" if (hasattr(fill, 'request') and fill.request.signal == 1) else (config.signal == 1 and "BUY" or "SELL"),
+                            fill.request.volume if hasattr(fill, 'request') else config.position_size,
+                            fill.volume,
+                            expected_price, fill.price,
                             config.stop_price, fill.sl,
                             config.take_profit, fill.tp,
                             fill.slippage,
-                            fill.slippage / config.entry_price * 10000 if config.entry_price > 0 else 0,
+                            fill.slippage / expected_price * 10000 if expected_price > 0 else 0,
                             fill.size_slippage,
-                            fill.ask - fill.bid,
+                            spread_at_fill,
                             commission, swap, profit,
-                            fill.ticket, fill.order_id,
-                            fill.result_code, fill.retcode_external if not isinstance(fill.retcode_external, Mock) else -1,
+                            fill.mt5_ticket if hasattr(fill, 'mt5_ticket') else fill.ticket,
+                            fill.order_id,
+                            fill.result_code,
+                            fill.retcode_external if not isinstance(fill.retcode_external, type(None)) else -1,
                             fill.comment
                         ))
+            conn.commit()
+    
+    def log_risk_decision(self, config: TradeConfig, decision: str, reason: str,
+                          position_value: float, equity: float,
+                          risk_pct: float, tier_risk_cap_pct: float,
+                          aggregate_risk_pct: float):
+        """Log risk check decision."""
+        import sqlite3
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO risk_decisions (
+                    timestamp, symbol, signal, decision, reason,
+                    position_value, equity, risk_pct,
+                    tier_risk_cap_pct, aggregate_risk_pct
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                datetime.now().isoformat(),
+                config.symbol, config.signal, decision, reason,
+                position_value, equity, risk_pct,
+                tier_risk_cap_pct, aggregate_risk_pct
+            ))
             conn.commit()
     
     def log_risk_event(self, event_type: str, details: str,
@@ -679,6 +697,54 @@ class MT5AuditLogger:
                 datetime.now().isoformat(),
                 event_type, details,
                 equity, drawdown_pct, daily_pnl, kill_switch_active
+            ))
+            conn.commit()
+
+    def log_manual_modification(self,
+                                ticket: int,
+                                symbol: str,
+                                old_sl: float,
+                                new_sl: float,
+                                old_tp: float,
+                                new_tp: float,
+                                old_risk_usd: float,
+                                new_risk_usd: float,
+                                old_risk_pct: float,
+                                new_risk_pct: float,
+                                tier_risk_cap_pct: float,
+                                aggregate_cap_pct: float,
+                                total_open_risk_before: float,
+                                total_open_risk_after: float,
+                                exceeds_per_trade_cap: bool,
+                                exceeds_aggregate_cap: bool,
+                                action_taken: str,
+                                equity: float,
+                                kill_switch_active: bool):
+        """Log manual SL/TP modification detection and reconciliation."""
+        import sqlite3
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO manual_modifications (
+                    timestamp, ticket, symbol,
+                    old_sl, new_sl, old_tp, new_tp,
+                    old_risk_usd, new_risk_usd,
+                    old_risk_pct, new_risk_pct,
+                    tier_risk_cap_pct, aggregate_cap_pct,
+                    total_open_risk_before, total_open_risk_after,
+                    exceeds_per_trade_cap, exceeds_aggregate_cap,
+                    action_taken, equity, kill_switch_active
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                datetime.now().isoformat(),
+                ticket, symbol,
+                old_sl, new_sl, old_tp, new_tp,
+                old_risk_usd, new_risk_usd,
+                old_risk_pct, new_risk_pct,
+                tier_risk_cap_pct, aggregate_cap_pct,
+                total_open_risk_before, total_open_risk_after,
+                exceeds_per_trade_cap, exceeds_aggregate_cap,
+                action_taken, equity, kill_switch_active
             ))
             conn.commit()
 
@@ -702,6 +768,19 @@ class MT5AuditLogger:
                 print(f"  ⚠️  Backup failed to {backup_path}: {e}")
         return backed_up
 
+    def close(self):
+        """Close database and checkpoint WAL to release file locks (Windows compatibility)."""
+        import sqlite3
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        except Exception:
+            pass
+
+
+# ============================================================================
+# MT5 Live Executor
+# ============================================================================
 
 class MT5Executor:
     """
@@ -712,43 +791,47 @@ class MT5Executor:
     - Idempotent order placement (prevents duplicate orders per bar/signal)
     - Live MT5 position checking for concurrent risk
     - Every order_send() call is logged (success or failure)
+    - Manual SL/TP modification detection and reconciliation
     """
     
     def __init__(
-        self,
-        equity: float,
-        risk_manager: Optional[RiskManager] = None,
-        sizer: Optional[VolScaledSizer] = None,
-        mt5_config: Optional[MT5Config] = None,
-        audit_db_path: str = "mt5_audit.db",
-    ) -> None:
-        self.equity = equity
-        self.risk_manager = risk_manager or RiskManager()
-        self.sizer = sizer
-        
-        # MT5 components
-        self.mt5_config = mt5_config or DEFAULT_CONFIG.mt5
-        self.conn_manager = MT5ConnectionManager(self.mt5_config)
-        self.mt5 = None
-        self.symbol_resolver = None
-        self.order_router = None
-        self.audit_logger = MT5AuditLogger(audit_db_path)
-        
-        # State
-        self.open_positions: Dict[str, Dict] = {}
-        self.closed_trades: List[Dict] = []
-        self.equity_curve = [equity]
-        self._signal_counter = 0
-        self._lock = Lock()
-        
-        # Idempotency tracking (persisted to survive restart, bounded to prevent memory leak)
-        self._processed_signals: set[str] = set()  # "symbol_bar_signal" keys
-        self._IDEMPOTENCY_FILE = Path(audit_db_path).with_suffix('.idempotency.json')
-        self._MAX_PROCESSED_SIGNALS = 10000  # ~2 months of 5-min bars
-        self._load_idempotency_state()
-        
-        # Connect and initialize
-        self._initialize()
+            self,
+            equity: float,
+            risk_manager: Optional[RiskManager] = None,
+            sizer: Optional[VolScaledSizer] = None,
+            mt5_config: Optional[MT5Config] = None,
+            audit_db_path: str = "mt5_audit.db",
+            conn_manager: Optional[MT5ConnectionManager] = None,
+            auto_initialize: bool = True,
+        ) -> None:
+            self.equity = equity
+            self.risk_manager = risk_manager or RiskManager()
+            self.sizer = sizer
+
+            # MT5 components
+            self.mt5_config = mt5_config or DEFAULT_MT5_CONFIG
+            self.conn_manager = conn_manager or MT5ConnectionManager(self.mt5_config)
+            self.mt5 = None
+            self.symbol_resolver = None
+            self.order_router = None
+            self.audit_logger = MT5AuditLogger(audit_db_path)
+
+            # State
+            self.open_positions: Dict[str, Dict] = {}
+            self.closed_trades: List[Dict] = []
+            self.equity_curve = [equity]
+            self._signal_counter = 0
+            self._lock = Lock()
+
+            # Idempotency tracking (persisted to survive restart, bounded to prevent memory leak)
+            self._processed_signals: set[str] = set()  # "symbol_bar_signal" keys
+            self._IDEMPOTENCY_FILE = Path(audit_db_path).with_suffix('.idempotency.json')
+            self._MAX_PROCESSED_SIGNALS = 10000  # ~2 months of 5-min bars
+            self._load_idempotency_state()
+
+            # Connect and initialize
+            if auto_initialize:
+                self._initialize()
     
     def _initialize(self):
         """Initialize MT5 connection and components."""
@@ -844,6 +927,192 @@ class MT5Executor:
         else:
             self.open_positions = {}
     
+    def _detect_manual_sl_tp_changes(self) -> list[dict]:
+        """
+        Detect manual SL/TP modifications on open positions.
+        Compares broker's live SL/TP against system's tracked values.
+        
+        Returns list of detected modifications with reconciliation details.
+        """
+        self._ensure_connection()
+        modifications = []
+        
+        # Get all our positions from MT5
+        positions = self.mt5.positions_get(symbol="XAUUSDm")
+        if not positions:
+            return modifications
+        
+        for pos in positions:
+            if pos.magic != 123456:
+                continue
+            
+            symbol = pos.symbol
+            ticket = pos.ticket
+            
+            # Find matching internal position
+            if symbol not in self.open_positions:
+                continue
+            
+            internal_pos = self.open_positions[symbol]
+            tracked_sl = internal_pos.get("stop_price", 0)
+            tracked_tp = internal_pos.get("take_profit", 0)
+            
+            # Live SL/TP from broker
+            live_sl = pos.sl
+            live_tp = pos.tp
+            
+            # Check for differences (with small epsilon for float comparison)
+            sl_changed = abs(live_sl - tracked_sl) > 1e-8 if tracked_sl > 0 and live_sl > 0 else False
+            tp_changed = abs(live_tp - tracked_tp) > 1e-8 if tracked_tp > 0 and live_tp > 0 else False
+            
+            if not sl_changed and not tp_changed:
+                continue
+            
+            # Manual modification detected - reconcile
+            entry_price = internal_pos["entry_price"]
+            position_size = internal_pos["position_size"]
+            
+            # Calculate risk with OLD stop
+            old_stop_distance = abs(entry_price - tracked_sl) if tracked_sl > 0 else 0
+            old_risk_usd = old_stop_distance * abs(position_size) * 100  # XAUUSD: $1/pip per oz, 100 oz/lot
+            old_risk_pct = old_risk_usd / self.equity if self.equity > 0 else 0
+            
+            # Calculate risk with NEW stop
+            new_stop_distance = abs(entry_price - live_sl) if live_sl > 0 else 0
+            new_risk_usd = new_stop_distance * abs(position_size) * 100
+            new_risk_pct = new_risk_usd / self.equity if self.equity > 0 else 0
+            
+            # Get tier and aggregate risk caps
+            tier = self.risk_manager.get_current_tier() if self.risk_manager._current_tier else {"risk_pct_per_trade": 0.01, "aggregate_risk_pct": 0.01}
+            tier_risk_cap_pct = tier.get("risk_pct_per_trade", 0.01)
+            aggregate_cap_pct = tier.get("aggregate_risk_pct", tier_risk_cap_pct)
+            
+            # Calculate total open risk before and after
+            total_open_risk_before = self.risk_manager.total_open_risk
+            
+            # Adjust total open risk: remove old risk, add new risk for this position
+            is_min_lot_override = internal_pos.get("is_min_lot_override", False)
+            
+            if not is_min_lot_override:
+                total_open_risk_after = total_open_risk_before - old_risk_usd + new_risk_usd
+            else:
+                total_open_risk_after = total_open_risk_before  # Min-lot override doesn't count in aggregate
+            
+            # Check if new risk exceeds caps
+            exceeds_per_trade_cap = new_risk_pct > tier_risk_cap_pct
+            exceeds_aggregate_cap = total_open_risk_after > self.equity * aggregate_cap_pct
+            
+            # Determine action taken
+            action_taken = "ALERT_ONLY"
+            if exceeds_per_trade_cap or exceeds_aggregate_cap:
+                action_taken = "AUTO_CLOSE_POSITION"
+            
+            # Build modification record
+            mod = {
+                "ticket": ticket,
+                "symbol": symbol,
+                "old_sl": tracked_sl,
+                "new_sl": live_sl,
+                "old_tp": tracked_tp,
+                "new_tp": live_tp,
+                "old_risk_usd": old_risk_usd,
+                "new_risk_usd": new_risk_usd,
+                "old_risk_pct": old_risk_pct,
+                "new_risk_pct": new_risk_pct,
+                "tier_risk_cap_pct": tier_risk_cap_pct,
+                "aggregate_cap_pct": aggregate_cap_pct,
+                "total_open_risk_before": total_open_risk_before,
+                "total_open_risk_after": total_open_risk_after,
+                "exceeds_per_trade_cap": exceeds_per_trade_cap,
+                "exceeds_aggregate_cap": exceeds_aggregate_cap,
+                "action_taken": action_taken,
+                "entry_price": entry_price,
+                "position_size": position_size,
+            }
+            modifications.append(mod)
+        
+        return modifications
+
+    def _reconcile_manual_modifications(self, modifications: list[dict]) -> None:
+        """
+        Reconcile detected manual SL/TP modifications.
+        - Log the modification
+        - Update internal tracking
+        - If over cap, close the position
+        """
+        for mod in modifications:
+            ticket = mod["ticket"]
+            symbol = mod["symbol"]
+            
+            # Log the manual modification event
+            self.audit_logger.log_manual_modification(
+                ticket=ticket,
+                symbol=symbol,
+                old_sl=mod["old_sl"],
+                new_sl=mod["new_sl"],
+                old_tp=mod["old_tp"],
+                new_tp=mod["new_tp"],
+                old_risk_usd=mod["old_risk_usd"],
+                new_risk_usd=mod["new_risk_usd"],
+                old_risk_pct=mod["old_risk_pct"],
+                new_risk_pct=mod["new_risk_pct"],
+                tier_risk_cap_pct=mod["tier_risk_cap_pct"],
+                aggregate_cap_pct=mod["aggregate_cap_pct"],
+                total_open_risk_before=mod["total_open_risk_before"],
+                total_open_risk_after=mod["total_open_risk_after"],
+                exceeds_per_trade_cap=mod["exceeds_per_trade_cap"],
+                exceeds_aggregate_cap=mod["exceeds_aggregate_cap"],
+                action_taken=mod["action_taken"],
+                equity=self.equity,
+                kill_switch_active=self.risk_manager.kill_switch_halted,
+            )
+            
+            # Also log as risk event for visibility
+            details = (
+                f"MANUAL_MODIFICATION_DETECTED: ticket={ticket} symbol={symbol} "
+                f"old_sl={mod['old_sl']:.5f} new_sl={mod['new_sl']:.5f} "
+                f"old_tp={mod['old_tp']:.5f} new_tp={mod['new_tp']:.5f} "
+                f"old_risk=${mod['old_risk_usd']:.2f} ({mod['old_risk_pct']:.2%}) "
+                f"new_risk=${mod['new_risk_usd']:.2f} ({mod['new_risk_pct']:.2%}) "
+                f"tier_cap={mod['tier_risk_cap_pct']:.1%} agg_cap={mod['aggregate_cap_pct']:.1%} "
+                f"exceeds_per_trade={mod['exceeds_per_trade_cap']} exceeds_agg={mod['exceeds_aggregate_cap']} "
+                f"action={mod['action_taken']}"
+            )
+            self.audit_logger.log_risk_event(
+                "MANUAL_MODIFICATION_DETECTED",
+                details,
+                self.equity,
+                0.0,
+                self.risk_manager.daily_pnl,
+                self.risk_manager.kill_switch_halted,
+            )
+            
+            print(f"⚠️  MANUAL SL/TP MODIFICATION DETECTED: {details}")
+            
+            # Update internal tracking to new SL/TP
+            if symbol in self.open_positions:
+                self.open_positions[symbol]["stop_price"] = mod["new_sl"]
+                self.open_positions[symbol]["take_profit"] = mod["new_tp"]
+            
+            # Update risk manager's aggregate tracking
+            if symbol in self.risk_manager.current_positions:
+                is_min_lot_override = self.risk_manager.current_positions[symbol].get("is_min_lot_override", False)
+                if not is_min_lot_override:
+                    # Remove old risk, add new risk
+                    old_risk = self.risk_manager.current_positions[symbol].get("risk_at_stop", 0)
+                    self.risk_manager.total_open_risk = max(0.0, self.risk_manager.total_open_risk - old_risk + mod["new_risk_usd"])
+                    self.risk_manager.current_positions[symbol]["risk_at_stop"] = mod["new_risk_usd"]
+            
+            # If exceeds caps, auto-close the position
+            if mod["action_taken"] == "AUTO_CLOSE_POSITION":
+                print(f"🚨 RISK CAP EXCEEDED - Auto-closing position {symbol} (ticket={ticket})")
+                
+                # Close the position
+                tick = self.mt5.symbol_info_tick(symbol)
+                if tick:
+                    close_price = tick.bid if mod["position_size"] > 0 else tick.ask
+                    self._close_live_position(symbol, close_price, "manual_mod_over_cap", 0)
+
     def _ensure_connection(self) -> None:
         """Ensure MT5 connection is alive before any operation."""
         if not self.conn_manager.ensure_connected():
@@ -961,6 +1230,11 @@ class MT5Executor:
         """Update live position - check stops/TP/time exit."""
         self._ensure_connection()
         
+        # First, detect and reconcile any manual SL/TP changes
+        modifications = self._detect_manual_sl_tp_changes()
+        if modifications:
+            self._reconcile_manual_modifications(modifications)
+        
         if symbol not in self.open_positions:
             return {"action": "none", "reason": "no_position"}
         
@@ -992,112 +1266,162 @@ class MT5Executor:
         
         # Time-based exit
         hours_held = (datetime.now() - entry_time).total_seconds() / 3600
-        time_exit = hours_held >= pos.get("max_hold_hours", 24)
+        max_hold = pos.get("max_hold_hours", 4)
+        time_exit = hours_held >= max_hold
         
         if hit_stop:
-            return self._close_live_position(symbol, tick.bid if position_size > 0 else tick.ask, "stop_loss", pnl)
-        elif hit_tp:
-            return self._close_live_position(symbol, tick.ask if position_size > 0 else tick.bid, "take_profit", pnl)
-        elif time_exit:
-            return self._close_live_position(symbol, current_price, "time_exit", pnl)
+            close_price = tick.bid if position_size > 0 else tick.ask
+            self._close_live_position(symbol, close_price, "stop_loss", pnl)
+            return {"action": "close", "reason": "stop_loss", "pnl": pnl}
         
-        return {"action": "hold", "pnl": pnl, "stop_distance": abs(current_price - stop_price)}
+        if hit_tp:
+            close_price = tick.ask if position_size > 0 else tick.bid
+            self._close_live_position(symbol, close_price, "take_profit", pnl)
+            return {"action": "close", "reason": "take_profit", "pnl": pnl}
+        
+        if time_exit:
+            close_price = tick.bid if position_size > 0 else tick.ask
+            self._close_live_position(symbol, close_price, "time_exit", pnl)
+            return {"action": "close", "reason": "time_exit", "pnl": pnl}
+        
+        return {"action": "hold", "reason": "none", "pnl": pnl}
     
-    def _close_live_position(self, symbol: str, price: float, reason: str, pnl: float) -> dict:
-        """Close live position on MT5."""
+    def _close_live_position(self, symbol: str, close_price: float, reason: str, pnl: float) -> bool:
+        """Close a live position on MT5."""
         if symbol not in self.open_positions:
-            return {"action": "none", "reason": "no_position"}
+            return False
+        
+        pos = self.open_positions[symbol]
+        mt5_ticket = pos.get("mt5_ticket")
+        position_size = pos["position_size"]
+        
+        if mt5_ticket is None:
+            print(f"⚠️  No MT5 ticket for {symbol}, cannot close")
+            return False
+        
+        # Determine close order type
+        order_type = self.mt5.ORDER_TYPE_SELL if position_size > 0 else self.mt5.ORDER_TYPE_BUY
+        
+        request = {
+            "action": self.mt5.TRADE_ACTION_DEAL,
+            "symbol": symbol,
+            "volume": abs(position_size),
+            "type": order_type,
+            "position": mt5_ticket,
+            "price": close_price,
+            "deviation": 20,
+            "magic": 123456,
+            "comment": f"MARS_CLOSE_{reason}",
+            "type_time": self.mt5.ORDER_TIME_GTC,
+            "type_filling": self.mt5.ORDER_FILLING_IOC,
+        }
+        
+        result = self.mt5.order_send(request)
+        
+        if result is not None and result.retcode == self.mt5.TRADE_RETCODE_DONE:
+            # Update equity
+            self.equity += pnl
+            self.equity_curve.append(self.equity)
+            
+            # Log closed trade
+            closed_trade = {
+                "symbol": symbol,
+                "entry_price": pos["entry_price"],
+                "exit_price": close_price,
+                "position_size": position_size,
+                "entry_time": pos["entry_time"],
+                "exit_time": datetime.now(),
+                "pnl": pnl,
+                "reason": reason,
+                "mt5_ticket": mt5_ticket,
+            }
+            self.closed_trades.append(closed_trade)
+            
+            # Remove from tracking
+            del self.open_positions[symbol]
+            
+            # Update risk manager
+            self.risk_manager.unregister_position_risk(symbol)
+            
+            print(f"✅ Position closed: {symbol} | {reason} | PnL: ${pnl:.2f} | Equity: ${self.equity:.2f}")
+            return True
+        else:
+            error = self.mt5.last_error() if result is None else f"retcode={result.retcode}"
+            print(f"❌ Failed to close {symbol}: {error}")
+            return False
+    
+    def modify_position_sltp(self, symbol: str, new_sl: float, new_tp: float) -> bool:
+        """Modify SL/TP of an open position (system-initiated)."""
+        if symbol not in self.open_positions:
+            return False
         
         pos = self.open_positions[symbol]
         mt5_ticket = pos.get("mt5_ticket")
         
-        if mt5_ticket:
-            # Close via MT5
-            tick = self.mt5.symbol_info_tick(symbol)
-            if tick:
-                close_request = {
-                    "action": self.mt5.TRADE_ACTION_DEAL,
-                    "symbol": symbol,
-                    "volume": pos["position_size"],
-                    "type": self.mt5.ORDER_TYPE_SELL if pos["position_size"] > 0 else self.mt5.ORDER_TYPE_BUY,
-                    "position": mt5_ticket,
-                    "price": tick.bid if pos["position_size"] > 0 else tick.ask,
-                    "deviation": 20,
-                    "magic": 123456,
-                    "comment": f"MARS_CLOSE_{reason}",
-                    "type_time": self.mt5.ORDER_TIME_GTC,
-                    "type_filling": self.mt5.ORDER_FILLING_FOK,
-                }
-                
-                result = self.mt5.order_send(close_request)
-                if result and result.retcode == self.mt5.TRADE_RETCODE_DONE:
-                    pnl = (price - pos["entry_price"]) * 100 * pos["position_size"] if pos["position_size"] > 0 else (pos["entry_price"] - price) * 100 * abs(pos["position_size"])
-                    
-                    self.risk_manager.update_pnl(pnl)
-                    self.equity += pnl
-                    
-                    closed_pos = self.open_positions.pop(symbol)
-                    self.closed_trades.append({
-                        "symbol": symbol,
-                        "entry_price": pos["entry_price"],
-                        "exit_price": price,
-                        "position_size": pos["position_size"],
-                        "pnl": pnl,
-                        "reason": reason,
-                        "mt5_ticket": mt5_ticket,
-                    })
-                    
-                    return {"action": "close", "reason": reason, "pnl": pnl}
+        if mt5_ticket is None:
+            return False
         
-        # Fallback: manual close tracking
-        pnl = (price - pos["entry_price"]) * 100 * pos["position_size"] if pos["position_size"] > 0 else (pos["entry_price"] - price) * 100 * abs(pos["position_size"])
-        self.risk_manager.update_pnl(pnl)
-        self.equity += pnl
+        # Get current prices for normalization
+        spec = self.symbol_resolver.get_symbol_info(symbol)
+        digits = spec.digits
+        new_sl = round(new_sl, digits)
+        new_tp = round(new_tp, digits)
         
-        self.open_positions.pop(symbol)
-        self.closed_trades.append({
+        request = {
+            "action": self.mt5.TRADE_ACTION_SLTP,
             "symbol": symbol,
-            "entry_price": pos["entry_price"],
-            "exit_price": price,
-            "position_size": pos["position_size"],
-            "pnl": pnl,
-            "reason": reason,
-        })
-        
-        return {"action": "close", "reason": reason, "pnl": pnl}
-    
-    def close_position(self, symbol: str, price: float, reason: str) -> float:
-        """Close position and return PnL."""
-        result = self._close_live_position(symbol, price, reason, 0)
-        return result.get("pnl", 0.0)
-    
-    def get_status(self) -> dict:
-        """Get current executor status."""
-        self._ensure_connection()
-        
-        account_info = self.mt5.account_info() if self.mt5 else None
-        
-        return {
-            "equity": self.equity,
-            "open_positions": len(self.open_positions),
-            "total_trades": len(self.closed_trades),
-            "account_balance": account_info.balance if account_info else self.equity,
-            "account_equity": account_info.equity if account_info else self.equity,
-            "kill_switch_active": self.risk_manager.kill_switch_halted if self.risk_manager else False,
-            "daily_pnl": self.risk_manager.daily_pnl if self.risk_manager else 0.0,
+            "position": mt5_ticket,
+            "sl": new_sl,
+            "tp": new_tp,
+            "magic": 123456,
         }
+        
+        result = self.mt5.order_send(request)
+        
+        if result is not None and result.retcode == self.mt5.TRADE_RETCODE_DONE:
+            # Update internal tracking
+            self.open_positions[symbol]["stop_price"] = new_sl
+            self.open_positions[symbol]["take_profit"] = new_tp
+            print(f"✅ SL/TP modified: {symbol} | SL={new_sl} TP={new_tp}")
+            return True
+        else:
+            error = self.mt5.last_error() if result is None else f"retcode={result.retcode}"
+            print(f"❌ Failed to modify SL/TP for {symbol}: {error}")
+            return False
+    
+    def get_open_positions(self) -> Dict[str, Dict]:
+        """Get current open positions (synced with MT5)."""
+        self._sync_positions_from_mt5()
+        return self.open_positions.copy()
+    
+    def get_equity(self) -> float:
+        """Get current equity (synced with MT5)."""
+        self._ensure_connection()
+        account_info = self.mt5.account_info()
+        if account_info:
+            self.equity = account_info.equity
+        return self.equity
+    
+    def get_closed_trades(self) -> List[Dict]:
+        """Get closed trades."""
+        return self.closed_trades.copy()
+    
+    def get_equity_curve(self) -> List[float]:
+        """Get equity curve."""
+        return self.equity_curve.copy()
     
     def shutdown(self):
-        """Clean shutdown with audit DB backup."""
-        self.conn_manager.shutdown()
-        # Backup audit database on shutdown
-        try:
-            backed_up = self.audit_logger.backup()
-            if backed_up:
-                print(f"  ✅ Audit DB backed up to {len(backed_up)} location(s) on shutdown")
-        except Exception as e:
-            print(f"  ⚠️  Audit DB backup on shutdown failed: {e}")
+        """Clean shutdown."""
+        # Backup audit database
+        self.audit_logger.backup()
+        
+        # Close MT5 connection
+        self.conn_manager.disconnect()
         print("MT5Executor shutdown complete")
+
+
+# Backward compatibility
+DEFAULT_CONFIG = type('Config', (), {'mt5': DEFAULT_MT5_CONFIG})()
 
 
 def create_live_trading_system(
@@ -1131,167 +1455,28 @@ def create_live_trading_system(
             donchian_window=donchian_window,
             ma_fast=ma_fast,
             ma_slow=ma_slow,
-            session=session,
+            session=session
         )
     
-    # Risk manager with demo-appropriate limits
-    sizing_config = SizingConfig(
-        target_vol=0.15,
-        max_leverage=3.0,
-        min_leverage=0.01,
-        kelly_fraction=0.5,
-    )
+    # Sizing
+    sizer = VolScaledSizer(SizingConfig(target_vol=0.15, max_leverage=3.0))
     
+    # Risk manager
     risk_manager = RiskManager(
-        max_daily_loss_pct=0.02,
-        max_weekly_loss_pct=0.05,
-        max_monthly_loss_pct=0.10,
-        max_drawdown_pct=0.15,
-        max_position_pct=0.30,  # 30% concurrent cap
-        max_risk_per_trade_pct=0.01,  # 1% per trade
         kill_switch_file="risk_kill_switch.json",
+        max_consecutive_losses=2,
+        consecutive_loss_cooldown_hours=24
     )
     
-    # Vol sizer
-    sizer = VolScaledSizer(sizing_config, garch_variant="garch")
-    
-    # MT5 config
-    mt5_config = mt5_config or DEFAULT_CONFIG.mt5
-    
-    return MT5Executor(
+    # Create executor
+    executor = MT5Executor(
         equity=equity,
         risk_manager=risk_manager,
-        sizer=sizer,
         mt5_config=mt5_config,
+        audit_db_path=audit_db_path,
     )
-
-
-def run_unattended_session(duration_hours: float = 8.0) -> dict:
-    """
-    Run unattended live session on MT5 demo.
-    Returns session report.
-    """
-    import signal
-    import sys
     
-    system = create_live_trading_system()
+    # Note: signal_generator and sizer are available for use by the caller
+    # The executor handles position management internally
     
-    # Load historical data for signal generation (last N days)
-    from mars.apps.trading.demo_trading_system import DemoTradingSystem
-    demo = DemoTradingSystem(equity=system.equity, signal_type="donchian")
-    historical_data = demo.load_data(start=(datetime.now() - pd.Timedelta(days=30)).strftime("%Y-%m-%d"))
-    
-    # Fit sizer on historical data
-    system.sizer.fit(historical_data)
-    
-    start_time = datetime.now()
-    end_time = start_time + pd.Timedelta(hours=duration_hours)
-    
-    signals_generated = 0
-    orders_placed = 0
-    orders_rejected = 0
-    trades_executed = 0
-    
-    print(f"Starting unattended live session for {duration_hours} hours...")
-    print(f"Session: {start_time} to {end_time}")
-    
-    def signal_handler(sig, frame):
-        print("Shutdown signal received, closing positions...")
-        system.shutdown()
-        sys.exit(0)
-    
-    signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTERM, signal_handler)
-    
-    try:
-        while datetime.now() < end_time:
-            # Get latest bar data
-            # In production, this would connect to MT5 real-time feed
-            # For now, simulate with recent historical data
-            latest_bar = historical_data.iloc[-1:]
-            current_price = latest_bar["close"].values[0]
-            current_time = latest_bar.index[0]
-            
-            # Generate signals
-            signals = system.signal_generator.generate(latest_bar)
-            signal = signals["signal"].iloc[-1] if len(signals) > 0 else 0
-            
-            signals_generated += 1
-            
-            # Update existing positions
-            for symbol in list(system.open_positions.keys()):
-                update = system.update_position(symbol, current_price, current_time)
-                if update["action"] == "close":
-                    trades_executed += 1
-            
-            # Check for new entry
-            if signal != 0 and "XAUUSD" not in system.open_positions:
-                # Get vol forecast and position size
-                forecast = system.sizer.forecast_vol(historical_data)
-                positions = system.sizer.compute_position_size(
-                    historical_data, signals["signal"], system.equity, forecast
-                )
-                
-                position_size = positions["position_size"].iloc[-1] if len(positions) > 0 else 0
-                
-                if position_size > 0:
-                    # Create trade config
-                    atr = latest_bar["ATRr_14"].values[0] if "ATRr_14" in latest_bar.columns else 5.0
-                    stop_distance = atr * 2.5
-                    
-                    if signal == 1:
-                        stop_price = current_price - stop_distance
-                        take_profit = current_price + stop_distance * 2.5
-                    else:
-                        stop_price = current_price + stop_distance
-                        take_profit = current_price - stop_distance * 2.5
-                    
-                    from mars.apps.trading.system.vol_scaled_system import TradeConfig
-                    config = TradeConfig(
-                        symbol="XAUUSD",
-                        signal=signal,
-                        entry_price=current_price,
-                        stop_price=stop_price,
-                        take_profit=take_profit,
-                        position_size=position_size,
-                        max_hold_hours=24,
-                        risk_pct=0.01,
-                        entry_time=current_time,
-                    )
-                    
-                    orders_placed += 1
-                    if system.open_position(config):
-                        pass
-                    else:
-                        orders_rejected += 1
-            
-            # Update equity curve
-            system.equity_curve.append(system.equity)
-            
-            # Sleep until next bar (1 hour for H1)
-            time.sleep(60)  # Check every minute in production
-            
-    except KeyboardInterrupt:
-        print("Session interrupted by user")
-    except Exception as e:
-        print(f"Session error: {e}")
-        import traceback
-        traceback.print_exc()
-    finally:
-        system.shutdown()
-    
-    # Generate report
-    report = {
-        "start_time": start_time.isoformat(),
-        "end_time": datetime.now().isoformat(),
-        "duration_hours": (datetime.now() - start_time).total_seconds() / 3600,
-        "signals_generated": signals_generated,
-        "orders_placed": orders_placed,
-        "orders_rejected": orders_rejected,
-        "trades_executed": trades_executed,
-        "final_equity": system.equity,
-        "total_return": (system.equity - system.equity_curve[0]) / system.equity_curve[0] if system.equity_curve else 0,
-        "max_drawdown": min(system.equity_curve) / system.equity_curve[0] - 1 if system.equity_curve else 0,
-    }
-    
-    return report
+    return executor

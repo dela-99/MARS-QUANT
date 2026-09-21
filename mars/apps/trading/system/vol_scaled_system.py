@@ -258,14 +258,15 @@ class RiskManager:
     # Default persistence file for kill-switch state
     DEFAULT_KILL_SWITCH_FILE = "risk_kill_switch.json"
 
-    # Risk tiers: (min_equity, max_equity, max_concurrent_trades, risk_pct_per_trade, reward_risk_ratio)
+    # Risk tiers: (min_equity, max_equity, max_concurrent_trades, risk_pct_per_trade, aggregate_risk_pct, reward_risk_ratio)
     # Tier is selected at session start based on equity and locked for the session
-    # risk_pct_per_trade is now the MAXIMUM TOTAL RISK across ALL concurrent positions
+    # risk_pct_per_trade = max risk per single trade
+    # aggregate_risk_pct = max total risk across ALL concurrent positions (shared cap = per-trade cap for $100-1000)
     RISK_TIERS = [
-        (0,      100,    1, 0.07, 3.0),      # $0-100: 7% risk, 1 trade max
-        (100,    1000,   2, 0.03, 2.5),      # $100-1k: 3% risk, 2 trades max
-        (1000,   10000,  4, 0.015, 2.0),     # $1k-10k: 1.5% risk, 4 trades max
-        (10000,  float('inf'), 6, 0.01, 2.0), # $10k+: 1% risk, 6 trades max
+        (0,      100,    1, 0.07,  0.07,  3.0),      # $0-100: 7% per-trade, 7% aggregate, 1 trade max
+        (100,    1000,   2, 0.03,  0.03,  3.0),      # $100-1k: 3% per-trade, 3% aggregate (shared), 2 trades max
+        (1000,   10000,  4, 0.015, 0.06,  2.0),      # $1k-10k: 1.5% per-trade, 6% aggregate, 4 trades max
+        (10000,  float('inf'), 6, 0.01,  0.06,  2.0), # $10k+: 1% per-trade, 6% aggregate, 6 trades max
     ]
 
     # Fixed thresholds (do not vary by tier)
@@ -340,20 +341,21 @@ class RiskManager:
         if self._tier_locked:
             return self._current_tier
 
-        for min_eq, max_eq, max_trades, risk_pct, rr_ratio in self.RISK_TIERS:
-            if min_eq <= equity < max_eq:
-                tier = {
-                    "min_equity": min_eq,
-                    "max_equity": max_eq,
-                    "max_concurrent_trades": max_trades,
-                    "risk_pct_per_trade": risk_pct,
-                    "reward_risk_ratio": rr_ratio,
-                }
-                self._current_tier = tier
-                self._tier_locked = True
-                self._tier_locked_at_equity = equity
-                self._tier_locked_at = datetime.now()
-                return tier
+        for min_eq, max_eq, max_trades, risk_pct, agg_risk_pct, rr_ratio in self.RISK_TIERS:
+                    if min_eq <= equity < max_eq:
+                        tier = {
+                            "min_equity": min_eq,
+                            "max_equity": max_eq,
+                            "max_concurrent_trades": max_trades,
+                            "risk_pct_per_trade": risk_pct,
+                            "aggregate_risk_pct": agg_risk_pct,
+                            "reward_risk_ratio": rr_ratio,
+                        }
+                        self._current_tier = tier
+                        self._tier_locked = True
+                        self._tier_locked_at_equity = equity
+                        self._tier_locked_at = datetime.now()
+                        return tier
 
         # Should never reach here if tiers cover all ranges
         raise ValueError(f"No tier found for equity ${equity:.2f}")

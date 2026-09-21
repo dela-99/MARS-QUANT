@@ -33,10 +33,18 @@ class DonchianBreakoutSignal:
         window: int = 20,
         exit_window: int = 10,
         session_filter: Optional[Literal["london", "ny", "overlap", "all"]] = "all",
+        stop_mode: str = "atr",  # "atr" or "fixed_pips"
+        risk_pips: Optional[float] = None,
+        pip_size: Optional[float] = None,
+        stop_multiplier: float = 2.0,
     ) -> None:
         self.window = window
         self.exit_window = exit_window
         self.session_filter = session_filter
+        self.stop_mode = stop_mode
+        self.risk_pips = risk_pips
+        self.pip_size = pip_size
+        self.stop_multiplier = stop_multiplier
 
     def _session_mask(self, index: pd.DatetimeIndex) -> pd.Series:
         """Filter signals by trading session (UTC)."""
@@ -103,10 +111,14 @@ class DonchianBreakoutSignal:
         entry_price = price["open"].shift(-1)
         exit_price = price["open"].shift(-1)
         
-        # Stop prices (ATR-based trailing)
-        from mars.libs.features.volatility.range import ATRFeature
-        atr = ATRFeature(window=14).compute(price).data["atr"]
-        stop_distance = 2.0 * atr  # 2 ATR trailing stop
+        # Stop prices
+        if self.stop_mode == "fixed_pips" and self.risk_pips is not None and self.pip_size is not None:
+            stop_distance = self.risk_pips * self.pip_size
+        else:
+            # ATR-based trailing stop
+            from mars.libs.features.volatility.range import ATRFeature
+            atr = ATRFeature(window=14).compute(price).data["atr"]
+            stop_distance = self.stop_multiplier * atr
         
         long_stop = price["close"] - stop_distance
         short_stop = price["close"] + stop_distance
@@ -142,11 +154,19 @@ class MACrossoverSignal:
         slow_window: int = 200,
         ma_type: Literal["SMA", "EMA"] = "EMA",
         session_filter: Optional[Literal["london", "ny", "overlap", "all"]] = "all",
+        stop_mode: str = "atr",
+        risk_pips: Optional[float] = None,
+        pip_size: Optional[float] = None,
+        stop_multiplier: float = 2.0,
     ) -> None:
         self.fast_window = fast_window
         self.slow_window = slow_window
         self.ma_type = ma_type
         self.session_filter = session_filter
+        self.stop_mode = stop_mode
+        self.risk_pips = risk_pips
+        self.pip_size = pip_size
+        self.stop_multiplier = stop_multiplier
 
     def _session_mask(self, index: pd.DatetimeIndex) -> pd.Series:
         hour = index.hour
@@ -203,9 +223,12 @@ class MACrossoverSignal:
         exit_price = price["open"].shift(-1)
         
         # ATR trailing stop
-        from mars.libs.features.volatility.range import ATRFeature
-        atr = ATRFeature(window=14).compute(price).data["atr"]
-        stop_distance = 2.0 * atr
+        if self.stop_mode == "fixed_pips" and self.risk_pips is not None and self.pip_size is not None:
+            stop_distance = self.risk_pips * self.pip_size
+        else:
+            from mars.libs.features.volatility.range import ATRFeature
+            atr = ATRFeature(window=14).compute(price).data["atr"]
+            stop_distance = self.stop_multiplier * atr
         
         long_stop = (price["close"] - stop_distance).where(signal == 1).ffill()
         short_stop = (price["close"] + stop_distance).where(signal == -1).ffill()
