@@ -39,7 +39,7 @@ from mars.apps.trading.mt5_executor import (
     MT5OrderRouter,
 )
 from mars.apps.trading.system.vol_scaled_system import RiskManager, SizingConfig
-from mars.apps.trading.system.pair_config import get_pair_config, get_enabled_symbols
+from mars.apps.trading.system.pair_config import get_pair_config, get_enabled_symbols, PAIR_CONFIG
 from mars.apps.trading.signals.trend_breakout import DonchianBreakoutSignal
 
 
@@ -258,10 +258,8 @@ class MultiSymbolSession:
             except Exception as e:
                 print(f"  {symbol}: WARNING - could not fit sizer: {e}")
 
-    def poll_cycle(self, mt5):
+    def poll_cycle(self):
         """Single polling cycle: check signals, place orders, manage positions."""
-        from mars.apps.trading.mt5_executor import get_positions_dict
-
         cycle_results = {
             'signals_generated': {},
             'orders_placed': {},
@@ -269,35 +267,22 @@ class MultiSymbolSession:
             'positions_managed': {},
         }
 
-        positions = get_positions_dict(mt5)
+        # Get positions from executor (already synced with MT5)
+        positions = self.executor.get_open_positions()
 
         for symbol in self.symbols:
             try:
                 pair_cfg = get_pair_config(symbol)
                 signal_gen = self.signal_generators[symbol]
 
-                # Get current rates
-                tick = mt5.symbol_info_tick(symbol)
-                if tick is None:
-                    cycle_results['signals_generated'][symbol] = 0
-                    continue
-
-                bid, ask = tick.bid, tick.ask
-                current_price = (bid + ask) / 2
-
-                # Generate signal
-                signal = signal_gen.compute(
-                    current_price=current_price,
-                    bid=bid,
-                    ask=ask,
-                    equity=self.equity,
-                )
+                # Generate live signal
+                signal = signal_gen.compute_live(self.executor.mt5, symbol, self.equity)
 
                 if signal['signal'] != 0:
                     cycle_results['signals_generated'][symbol] = signal['signal']
                     # In dry-run, we don't place orders
                     if not self.dry_run:
-                        result = self.executor.execute_signal(symbol, signal, bid, ask)
+                        result = self.executor.execute_signal(symbol, signal, signal['entry_price'], signal['entry_price'])
                         if result.success:
                             cycle_results['orders_placed'][symbol] = 1
                         else:
@@ -308,7 +293,7 @@ class MultiSymbolSession:
                 # Manage existing positions (trailing stops, etc.)
                 if symbol in positions:
                     pos = positions[symbol]
-                    cycle_results['positions_managed'][symbol] = pos.ticket
+                    cycle_results['positions_managed'][symbol] = pos.get('ticket', 'unknown')
 
             except Exception as e:
                 print(f"[{datetime.now()}] Error in {symbol} cycle: {e}")
@@ -327,7 +312,7 @@ class MultiSymbolSession:
         try:
             while datetime.now() < end_time:
                 # Run polling cycle
-                cycle_results = self.poll_cycle(self.executor.mt5)
+                cycle_results = self.poll_cycle()
 
                 # Check kill-switch
                 if self.risk_manager.kill_switch_halted:
@@ -361,7 +346,11 @@ def main():
     parser.add_argument("--dry-run", action="store_true", help="Validate setup without placing orders")
     parser.add_argument("--mock-mt5", action="store_true", help="Use mocked MT5 for dry-run testing (no real terminal needed)")
     parser.add_argument("--duration", type=int, default=5, help="Session duration in minutes (default: 5)")
-    parser.add_argument("--symbols", nargs="+", help="Override symbols to trade (default: all enabled from PAIR_CONFIG)")
+    parser.add_argument(
+        "--symbols",
+        type=str,
+        help="Comma-separated list of symbols to trade this session (e.g., XAUUSDm,EURUSDm). REQUIRED - no default. Each symbol must be enabled in PAIR_CONFIG."
+    )
     args = parser.parse_args()
 
     # Clean up any stale kill-switch file from previous runs
@@ -431,12 +420,25 @@ def main():
     risk_manager.daily_pnl = 0.0
 
     # --- Determine symbols to trade ---
-    if args.symbols:
-        symbols = args.symbols
-        print(f"Using override symbols: {symbols}")
-    else:
-        symbols = get_enabled_symbols()
-        print(f"Using enabled symbols from PAIR_CONFIG: {symbols}")
+    if not args.symbols:
+        print("ERROR: No symbols specified. Pass --symbols XAUUSDm,EURUSDm (comma-separated, no spaces)")
+        sys.exit(1)
+
+    # Parse comma-separated symbols
+    symbols = [s.strip() for s in args.symbols.split(",") if s.strip()]
+
+    # Validate each symbol is in PAIR_CONFIG and enabled
+    for symbol in symbols:
+        if symbol not in PAIR_CONFIG:
+            print(f"ERROR: Symbol '{symbol}' not found in PAIR_CONFIG")
+            sys.exit(1)
+        if not PAIR_CONFIG[symbol].get("enabled", False):
+            reason = PAIR_CONFIG[symbol].get("disabled_reason", "No reason provided")
+            print(f"ERROR: Symbol '{symbol}' is disabled in PAIR_CONFIG and cannot be force-enabled.")
+            print(f"       Reason: {reason}")
+            sys.exit(1)
+
+    print(f"Session symbols (validated): {symbols}")
 
     # --- Create and run multi-symbol session ---
     session = MultiSymbolSession(

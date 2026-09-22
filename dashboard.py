@@ -243,12 +243,33 @@ def get_pair_config():
 
 PAIR_CONFIG, ENABLED_SYMBOLS = get_pair_config()
 
+# Session symbol selection (defaults to all enabled, user can narrow down)
+if "session_symbols" not in st.session_state:
+    st.session_state.session_symbols = ENABLED_SYMBOLS.copy()
+
 
 # ============================================================
 # Sidebar
 # ============================================================
 
 st.sidebar.title("📊 M.A.R.S. Dashboard")
+
+# Session Symbol Selection (top of sidebar - scopes all panels)
+st.sidebar.subheader("🎯 Session Symbols")
+st.sidebar.caption("Select which enabled symbols are active for THIS session")
+session_symbols = st.sidebar.multiselect(
+    "Active Session Symbols",
+    options=ENABLED_SYMBOLS,
+    default=st.session_state.session_symbols,
+    key="sidebar_session_symbols_multiselect",
+    help="Only these symbols will be shown in panels below. Must be enabled in PAIR_CONFIG."
+)
+st.session_state.session_symbols = session_symbols
+
+if not session_symbols:
+    st.sidebar.warning("⚠️ No session symbols selected — panels will be empty")
+
+st.sidebar.divider()
 
 # Refresh button
 if st.sidebar.button("🔄 Refresh Data", use_container_width=True):
@@ -259,7 +280,7 @@ if st.sidebar.button("🔄 Refresh Data", use_container_width=True):
 st.sidebar.subheader("Chart Settings")
 chart_symbol = st.sidebar.selectbox(
     "Select Symbol for Price Chart",
-    options=[s for s in ENABLED_SYMBOLS],
+    options=session_symbols if session_symbols else ENABLED_SYMBOLS,
     index=0,
     key="sidebar_chart_symbol_select",
 )
@@ -373,46 +394,52 @@ if tier_info:
 
 st.header("2️⃣ Per-Pair Status")
 
-pair_cols = st.columns(len(PAIR_CONFIG))
+# Filter PAIR_CONFIG to only session symbols
+session_pair_config = {s: PAIR_CONFIG[s] for s in session_symbols if s in PAIR_CONFIG}
 
-for idx, (symbol, config) in enumerate(PAIR_CONFIG.items()):
-    with pair_cols[idx]:
-        enabled = config.get('enabled', False)
-        badge_class = "enabled-badge" if enabled else "disabled-badge"
-        badge_text = "✅ ENABLED" if enabled else "❌ DISABLED"
-        
-        st.markdown(f"""
-        <div class="metric-card">
-            <h4>{symbol}</h4>
-            <span class="{badge_class}">{badge_text}</span>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        if not enabled:
-            reason = config.get('disabled_reason', 'No reason provided')
-            st.caption(f"Reason: {reason}")
-        
-        # MTF Gate status
-        symbol_signals = signals_df[signals_df['symbol'] == symbol] if not signals_df.empty else pd.DataFrame()
-        if not symbol_signals.empty:
-            latest = symbol_signals.iloc[0]
-            gate_cols = [c for c in symbol_signals.columns if c.startswith('gate_') or c in ['h1_trend', 'm30_trend', 'm15_trend', 'm5_trend']]
-            if gate_cols:
-                st.write("**MTF Gate:**")
-                for gc in gate_cols:
-                    val = latest.get(gc, 'N/A')
-                    color = "🟢" if val == 1 else "🔴" if val == -1 else "⚪"
-                    st.caption(f"  {gc}: {color} {val}")
-        
-        # Last signal
-        if not symbol_signals.empty:
-            latest = symbol_signals.iloc[0]
-            signal_val = latest.get('signal', 0)
-            signal_text = "🟢 LONG" if signal_val == 1 else "🔴 SHORT" if signal_val == -1 else "⚪ FLAT"
-            st.caption(f"Last Signal: {signal_text}")
-            st.caption(f"Time: {latest.get('timestamp', 'N/A')}")
-        else:
-            st.caption("No signals yet")
+if not session_pair_config:
+    st.info("No session symbols selected. Use the sidebar to choose active symbols.")
+else:
+    pair_cols = st.columns(len(session_pair_config))
+
+    for idx, (symbol, config) in enumerate(session_pair_config.items()):
+            with pair_cols[idx]:
+                enabled = config.get('enabled', False)
+                badge_class = "enabled-badge" if enabled else "disabled-badge"
+                badge_text = "✅ ENABLED" if enabled else "❌ DISABLED"
+
+                st.markdown(f"""
+            <div class="metric-card">
+                <h4>{symbol}</h4>
+                <span class="{badge_class}">{badge_text}</span>
+            </div>
+            """, unsafe_allow_html=True)
+
+                if not enabled:
+                    reason = config.get('disabled_reason', 'No reason provided')
+                    st.caption(f"Reason: {reason}")
+
+                # MTF Gate status
+                symbol_signals = signals_df[signals_df['symbol'] == symbol] if not signals_df.empty else pd.DataFrame()
+                if not symbol_signals.empty:
+                    latest = symbol_signals.iloc[0]
+                    gate_cols = [c for c in symbol_signals.columns if c.startswith('gate_') or c in ['h1_trend', 'm30_trend', 'm15_trend', 'm5_trend']]
+                    if gate_cols:
+                        st.write("**MTF Gate:**")
+                        for gc in gate_cols:
+                            val = latest.get(gc, 'N/A')
+                            color = "🟢" if val == 1 else "🔴" if val == -1 else "⚪"
+                            st.caption(f"  {gc}: {color} {val}")
+
+                # Last signal
+                if not symbol_signals.empty:
+                    latest = symbol_signals.iloc[0]
+                    signal_val = latest.get('signal', 0)
+                    signal_text = "🟢 LONG" if signal_val == 1 else "🔴 SHORT" if signal_val == -1 else "⚪ FLAT"
+                    st.caption(f"Last Signal: {signal_text}")
+                    st.caption(f"Time: {latest.get('timestamp', 'N/A')}")
+                else:
+                    st.caption("No signals yet")
 
 
 # ============================================================
@@ -652,7 +679,7 @@ log_cols = st.columns([3, 1])
 with log_cols[1]:
     filter_symbol = st.selectbox(
         "Filter by Symbol",
-        options=["All"] + list(PAIR_CONFIG.keys()),
+        options=["All"] + session_symbols,
         index=0,
         key="panel4_signal_log_symbol_filter",
     )
@@ -751,7 +778,7 @@ st.header("5️⃣ Open Positions Across All Symbols")
 
 if not fills_df.empty:
     open_positions = []
-    for symbol in PAIR_CONFIG.keys():
+    for symbol in session_symbols:
         symbol_fills = fills_df[fills_df['symbol'] == symbol].copy()
         if not symbol_fills.empty:
             latest = symbol_fills.iloc[0]
@@ -764,7 +791,7 @@ if not fills_df.empty:
                     'entry_price': f"{latest.get('filled_price', 0):.5f}",
                     'entry_time': latest.get('timestamp', 'N/A'),
                 })
-    
+
     if open_positions:
         pos_df = pd.DataFrame(open_positions)
         st.dataframe(pos_df, use_container_width=True, hide_index=True)
@@ -791,7 +818,7 @@ with col2:
     )
     symbol_filter = st.selectbox(
         "Filter by Symbol",
-        options=["All"] + list(PAIR_CONFIG.keys()),
+        options=["All"] + session_symbols,
         index=0,
         key="panel6_risk_event_symbol_filter",
     )
@@ -801,10 +828,10 @@ if not risk_events_df.empty:
     events['timestamp'] = pd.to_datetime(events['timestamp'], errors='coerce')
     events = events.dropna(subset=['timestamp'])
     events = events.sort_values('timestamp', ascending=False)
-    
+
     if 'details' in events.columns:
         def extract_symbol(details):
-            for sym in PAIR_CONFIG.keys():
+            for sym in session_symbols:
                 if sym in str(details):
                     return sym
             return 'N/A'

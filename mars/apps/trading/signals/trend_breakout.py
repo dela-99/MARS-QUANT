@@ -139,6 +139,61 @@ class DonchianBreakoutSignal:
             "short_exit": short_exit,
         }, index=price.index)
 
+    def compute_live(self, mt5, symbol: str, equity: float) -> dict:
+        """
+        Compute live signal for a symbol using recent MT5 data.
+        
+        Parameters
+        ----------
+        mt5: MT5 module/connection
+        symbol: Trading symbol
+        equity: Current account equity (for position sizing)
+        
+        Returns
+        -------
+        dict with: signal (1=long, -1=short, 0=flat), entry_price, stop_price, take_profit
+        """
+        import pandas as pd
+        from datetime import datetime, timezone
+        
+        # Fetch recent bars (need window + exit_window + some buffer)
+        n_bars = max(self.window, self.exit_window) + 50
+        rates = mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_M5, 0, n_bars)
+        if rates is None or len(rates) < self.window:
+            return {'signal': 0, 'entry_price': 0, 'stop_price': 0, 'take_profit': 0}
+        
+        # Convert to DataFrame
+        df = pd.DataFrame(rates)
+        df['time'] = pd.to_datetime(df['time'], unit='s', utc=True)
+        df = df.set_index('time')
+        df = df.rename(columns={'open': 'open', 'high': 'high', 'low': 'low', 'close': 'close', 'tick_volume': 'volume'})
+        df = df[['open', 'high', 'low', 'close', 'volume']]
+        
+        # Generate signals
+        signals = self.generate(df)
+        
+        # Get latest signal
+        latest_signal = signals['signal'].iloc[-1]
+        latest_long_stop = signals['long_stop'].iloc[-1]
+        latest_short_stop = signals['short_stop'].iloc[-1]
+        
+        if latest_signal == 1:
+            return {
+                'signal': 1,
+                'entry_price': signals['entry_price'].iloc[-1],
+                'stop_price': latest_long_stop,
+                'take_profit': signals['entry_price'].iloc[-1] + (signals['entry_price'].iloc[-1] - latest_long_stop) * 3  # 3:1 R:R
+            }
+        elif latest_signal == -1:
+            return {
+                'signal': -1,
+                'entry_price': signals['entry_price'].iloc[-1],
+                'stop_price': latest_short_stop,
+                'take_profit': signals['entry_price'].iloc[-1] - (latest_short_stop - signals['entry_price'].iloc[-1]) * 3  # 3:1 R:R
+            }
+        else:
+            return {'signal': 0, 'entry_price': 0, 'stop_price': 0, 'take_profit': 0}
+
 
 class MACrossoverSignal:
     """
