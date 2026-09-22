@@ -38,7 +38,7 @@ from mars.apps.trading.mt5_executor import (
     MT5SymbolResolver,
     MT5OrderRouter,
 )
-from mars.apps.trading.system.vol_scaled_system import RiskManager, SizingConfig
+from mars.apps.trading.system.vol_scaled_system import RiskManager, SizingConfig, TradeConfig
 from mars.apps.trading.system.pair_config import get_pair_config, get_enabled_symbols, PAIR_CONFIG
 from mars.apps.trading.signals.trend_breakout import DonchianBreakoutSignal
 
@@ -64,7 +64,37 @@ class MockMT5ConnectionManager:
         mock_mt5.ORDER_FILLING_FOK = 0
         mock_mt5.ORDER_FILLING_IOC = 1
         mock_mt5.ORDER_FILLING_RETURN = 2
-        
+
+        # Timeframe constants
+        mock_mt5.TIMEFRAME_M5 = 5
+        mock_mt5.TIMEFRAME_M1 = 1
+        mock_mt5.TIMEFRAME_H1 = 16385
+
+        # Mock copy_rates_from_pos to return synthetic data
+        def mock_copy_rates_from_pos(symbol, timeframe, start_pos, count):
+            import numpy as np
+            import pandas as pd
+            # Generate synthetic OHLCV data
+            np.random.seed(42)
+            base_price = 2000.0 if 'XAU' in symbol else (150.0 if 'JPY' in symbol else 1.1)
+            times = pd.date_range(end=pd.Timestamp.now(tz='UTC'), periods=count, freq='5min')
+            data = []
+            price = base_price
+            for i in range(count):
+                change = np.random.normal(0, 0.0005)
+                price *= (1 + change)
+                o = price
+                h = price * (1 + abs(np.random.normal(0, 0.0002)))
+                l = price * (1 - abs(np.random.normal(0, 0.0002)))
+                c = price * (1 + np.random.normal(0, 0.0001))
+                v = 1000
+                data.append((int(times[i].timestamp()), o, h, l, c, v, 0, 0))
+            # Create a structured array that mimics MT5 rates
+            dt = np.dtype([('time', 'i8'), ('open', 'f8'), ('high', 'f8'), ('low', 'f8'), ('close', 'f8'), ('tick_volume', 'i8'), ('spread', 'i4'), ('real_volume', 'i8')])
+            return np.array(data, dtype=dt)
+
+        mock_mt5.copy_rates_from_pos.side_effect = mock_copy_rates_from_pos
+
         # Mock account info (DEMO account with $500 equity - triggers $100-1000 tier)
         mock_account = Mock()
         mock_account.login = 476944496
@@ -122,19 +152,57 @@ class MockMT5ConnectionManager:
             return make_tick(symbol)
         
         # Mock order_send to return success
+        from dataclasses import dataclass
+        
+        @dataclass
+        class MockOrderFill:
+            retcode: int  # Main return code (TRADE_RETCODE_DONE = 10009)
+            order: int    # Order ticket
+            price: float  # Fill price
+            volume: float # Fill volume
+            commission: float = 0.0
+            swap: float = 0.0
+            profit: float = 0.0
+            retcode_external: int = 10009
+            comment: str = ""
+            deal: int = 123456789
+            request_id: int = 1
+            external_id: str = ""
+            
+            # Additional fields needed by audit logger
+            slippage: float = 0.0
+            size_slippage: float = 0.0
+            bid: float = 0.0
+            ask: float = 0.0
+            spread: float = 0.0
+            sl: float = 0.0
+            tp: float = 0.0
+            ticket: int = None  # alias for order
+            order_id: int = None  # alias for order
+            
+            def __post_init__(self):
+                from datetime import datetime
+                if self.ticket is None:
+                    self.ticket = self.order
+                if self.order_id is None:
+                    self.order_id = self.order
+                if self.bid == 0.0:
+                    self.bid = self.price - 0.15
+                if self.ask == 0.0:
+                    self.ask = self.price + 0.15
+                if self.spread == 0.0:
+                    self.spread = self.ask - self.bid
+
         def mock_order_send(request):
-            result = Mock()
-            result.retcode = 10009  # TRADE_RETCODE_DONE
-            result.deal = 123456789
-            result.order = 987654321
-            result.volume = request.volume
-            result.price = request.price
-            result.sl = request.sl
-            result.tp = request.tp
-            result.comment = request.comment
-            result.request_id = 1
-            result.external_id = ""
-            return result
+            return MockOrderFill(
+                retcode=10009,  # TRADE_RETCODE_DONE
+                order=987654321,
+                price=request.get('price', 2000.0),
+                volume=request.get('volume', 0.01),
+                sl=request.get('sl', 1990.0),
+                tp=request.get('tp', 2030.0),
+                comment=request.get('comment', '')
+            )
         
         mock_mt5.symbol_info.side_effect = mock_symbol_info
         mock_mt5.symbol_info_tick.side_effect = mock_symbol_info_tick
@@ -142,10 +210,10 @@ class MockMT5ConnectionManager:
         mock_mt5.last_error.return_value = (0, "No error")
         mock_mt5.initialize.return_value = True
         mock_mt5.shutdown.return_value = None
-        mock_mt5.positions_get.return_value = ()
-        mock_mt5.orders_get.return_value = ()
-        mock_mt5.history_deals_get.return_value = ()
-        mock_mt5.history_orders_get.return_value = ()
+        mock_mt5.positions_get.return_value = []
+        mock_mt5.orders_get.return_value = []
+        mock_mt5.history_deals_get.return_value = []
+        mock_mt5.history_orders_get.return_value = []
         
         return mock_mt5
     
@@ -164,6 +232,12 @@ class MockMT5ConnectionManager:
     @property
     def mt5(self):
         return self.mock_mt5
+
+    def ensure_connected(self):
+        """Mock ensure_connected - always returns True."""
+        if not self.connected:
+            self.connect()
+        return True
 
 
 class MultiSymbolSession:
@@ -260,6 +334,7 @@ class MultiSymbolSession:
 
     def poll_cycle(self):
         """Single polling cycle: check signals, place orders, manage positions."""
+        import pandas as pd
         cycle_results = {
             'signals_generated': {},
             'orders_placed': {},
@@ -282,18 +357,70 @@ class MultiSymbolSession:
                     cycle_results['signals_generated'][symbol] = signal['signal']
                     # In dry-run, we don't place orders
                     if not self.dry_run:
-                        result = self.executor.execute_signal(symbol, signal, signal['entry_price'], signal['entry_price'])
-                        if result.success:
+                        # Calculate position size using fitted sizer or fallback
+                        sizer = self.executor.sizers.get(symbol)
+                        if sizer is not None:
+                            # Use the fitted VolScaledSizer to get vol forecast and compute position size
+                            import pandas as pd
+                            data_path = f"data/processed/{symbol.lower()}/m5/v1.0.0/data.parquet"
+                            if os.path.exists(data_path):
+                                df = pd.read_parquet(data_path).sort_index()
+                                recent = df.tail(2000)
+                                # Get vol forecast
+                                forecast_vol = sizer.forecast_vol(recent)
+                                if len(forecast_vol) > 0:
+                                    latest_vol = forecast_vol.iloc[-1]  # annualized % vol
+                                    # Compute position size: target_vol / forecast_vol * equity / (price * contract_multiplier)
+                                    target_vol = sizer.config.target_vol  # e.g., 0.15
+                                    kelly_fraction = sizer.config.kelly_fraction  # e.g., 0.5
+                                    leverage = (target_vol / (latest_vol / 100)) * kelly_fraction
+                                    leverage = max(sizer.config.min_leverage, min(sizer.config.max_leverage, leverage))
+                                    position_value = self.equity * leverage
+                                    contract_multiplier = 100.0  # XAUUSD: 100 oz per lot
+                                    position_size = position_value / (signal['entry_price'] * contract_multiplier)
+                                    # Cap by max position %
+                                    max_position_value = self.equity * sizer.config.max_position_pct
+                                    max_contracts = max_position_value / (signal['entry_price'] * contract_multiplier)
+                                    position_size = min(position_size, max_contracts)
+                                    position_size = max(0.01, round(position_size, 2))
+                                else:
+                                    position_size = 0.01
+                            else:
+                                position_size = 0.01  # fallback
+                        else:
+                            # Fallback: fixed fractional sizing
+                            stop_distance = abs(signal['entry_price'] - signal['stop_price'])
+                            risk_per_lot = stop_distance * 100  # XAUUSD: $1/pip per oz, 100 oz/lot
+                            target_risk = self.equity * 0.01  # 1% risk
+                            position_size = max(0.01, round(target_risk / risk_per_lot, 2))
+                        
+                        # Create TradeConfig
+                        trade_config = TradeConfig(
+                            symbol=symbol,
+                            signal=signal['signal'],
+                            entry_price=signal['entry_price'],
+                            stop_price=signal['stop_price'],
+                            take_profit=signal['take_profit'],
+                            position_size=position_size,
+                            max_hold_hours=24,
+                            entry_time=pd.Timestamp.now(tz='UTC')
+                        )
+                        
+                        success = self.executor.open_position(trade_config)
+                        print(f"[{datetime.now()}] {symbol} signal={signal['signal']} entry={signal['entry_price']:.2f} stop={signal['stop_price']:.2f} tp={signal['take_profit']:.2f} size={position_size} -> {'PLACED' if success else 'REJECTED'}")
+                        if success:
                             cycle_results['orders_placed'][symbol] = 1
                         else:
                             cycle_results['orders_failed'][symbol] = 1
+                            # Debug: check risk manager state
+                            print(f"  RiskMgr: tier={self.risk_manager._current_tier}, open_positions={len(self.risk_manager.current_positions)}, total_open_risk={self.risk_manager.total_open_risk:.2f}")
                 else:
                     cycle_results['signals_generated'][symbol] = 0
 
                 # Manage existing positions (trailing stops, etc.)
                 if symbol in positions:
                     pos = positions[symbol]
-                    cycle_results['positions_managed'][symbol] = pos.get('ticket', 'unknown')
+                    cycle_results['positions_managed'][symbol] = pos.get('mt5_ticket', 'unknown')
 
             except Exception as e:
                 print(f"[{datetime.now()}] Error in {symbol} cycle: {e}")

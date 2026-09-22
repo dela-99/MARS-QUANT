@@ -1139,6 +1139,7 @@ class MT5Executor:
         
         # Check idempotency - skip if same signal for same bar already processed
         if self._is_duplicate_signal(config.symbol, bar_key, config.signal):
+            print(f"  [DEBUG open_position] DUPLICATE: symbol={config.symbol} bar_key={bar_key} signal={config.signal}")
             self.audit_logger.log_signal(
                 config, config.entry_price,
                 risk_check_passed=False,
@@ -1146,6 +1147,8 @@ class MT5Executor:
                 risk_at_stop=risk_at_stop, risk_pct=risk_pct
             )
             return False
+        else:
+            print(f"  [DEBUG open_position] NOT DUPLICATE: symbol={config.symbol} bar_key={bar_key} signal={config.signal}")
         
         # 1. Concurrent exposure cap - check LIVE MT5 positions
         live_position_value = self._get_live_open_positions_value(config.symbol)
@@ -1154,13 +1157,14 @@ class MT5Executor:
             live_position_value + config.position_size * config.entry_price,
             self.equity
         )
-        
+        print(f"  [DEBUG open_position] Concurrent check: can_open={can_open}, reason={reason}, live_position_value={live_position_value}")
+
         self.audit_logger.log_risk_decision(
             config, "REJECTED" if not can_open else "APPROVED", reason,
             config.position_size * config.entry_price, self.equity,
             risk_pct, 50.0, 0.0
         )
-        
+
         if not can_open:
             self.audit_logger.log_signal(
                 config, config.entry_price,
@@ -1168,9 +1172,10 @@ class MT5Executor:
                 risk_at_stop=risk_at_stop, risk_pct=risk_pct
             )
             return False
-        
+
         # 2. Per-trade risk limit
         can_open, reason = self.risk_manager.check_per_trade_risk(config, self.equity)
+        print(f"  [DEBUG open_position] Per-trade risk check: can_open={can_open}, reason={reason}")
         if not can_open:
             self.audit_logger.log_risk_decision(
                 config, "REJECTED", reason,
@@ -1200,7 +1205,7 @@ class MT5Executor:
         # Route order to MT5
         spec = self.symbol_resolver.get_symbol_info(config.symbol)
         fill = self.order_router.send_order(config, spec)
-        
+
         # ALWAYS log the order_send() result (success or failure)
         if fill.success:
             # Open position tracking
@@ -1215,7 +1220,12 @@ class MT5Executor:
                 "mt5_ticket": fill.ticket,
                 "mt5_order_id": fill.order_id,
             }
-            
+
+            # Register position risk with risk manager for aggregate tracking
+            risk_at_stop = abs(fill.price - config.stop_price) * fill.volume * 100
+            is_min_lot_override = (fill.volume <= 0.01)
+            self.risk_manager.register_position_risk(config.symbol, risk_at_stop, is_min_lot_override)
+
             # Log fill with slippage
             self.audit_logger.log_fill(fill, config, config.entry_price)
             return True

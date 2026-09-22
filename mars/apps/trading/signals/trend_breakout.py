@@ -176,20 +176,26 @@ class DonchianBreakoutSignal:
         latest_signal = signals['signal'].iloc[-1]
         latest_long_stop = signals['long_stop'].iloc[-1]
         latest_short_stop = signals['short_stop'].iloc[-1]
+        latest_entry_price = signals['entry_price'].iloc[-1]
+        
+        # If entry_price is NaN (last bar has no next open), use current close
+        import math
+        if math.isnan(latest_entry_price) if isinstance(latest_entry_price, float) else False:
+            latest_entry_price = df['close'].iloc[-1]
         
         if latest_signal == 1:
             return {
                 'signal': 1,
-                'entry_price': signals['entry_price'].iloc[-1],
+                'entry_price': latest_entry_price,
                 'stop_price': latest_long_stop,
-                'take_profit': signals['entry_price'].iloc[-1] + (signals['entry_price'].iloc[-1] - latest_long_stop) * 3  # 3:1 R:R
+                'take_profit': latest_entry_price + (latest_entry_price - latest_long_stop) * 3  # 3:1 R:R
             }
         elif latest_signal == -1:
             return {
                 'signal': -1,
-                'entry_price': signals['entry_price'].iloc[-1],
+                'entry_price': latest_entry_price,
                 'stop_price': latest_short_stop,
-                'take_profit': signals['entry_price'].iloc[-1] - (latest_short_stop - signals['entry_price'].iloc[-1]) * 3  # 3:1 R:R
+                'take_profit': latest_entry_price - (latest_short_stop - latest_entry_price) * 3  # 3:1 R:R
             }
         else:
             return {'signal': 0, 'entry_price': 0, 'stop_price': 0, 'take_profit': 0}
