@@ -1462,11 +1462,16 @@ class TestMultiSymbolDryRun(unittest.TestCase):
             config = PAIR_CONFIG[symbol]
             self.assertTrue(config["enabled"])
             self.assertIn("donchian_window", config)
-            self.assertIn("stop_multiplier", config)
             self.assertIn("rr_ratio", config)
             self.assertEqual(config["donchian_window"], 20)
-            self.assertEqual(config["stop_multiplier"], 2.0)
-            self.assertEqual(config["rr_ratio"], 2.5)
+            self.assertEqual(config["rr_ratio"], 3.0)
+            # XAUUSDm uses ATR stop with stop_multiplier; EURUSDm/USDJPYm use fixed_pips with risk_pips
+            if config.get("stop_mode") == "fixed_pips":
+                self.assertIn("risk_pips", config)
+                self.assertIn("pip_size", config)
+            else:
+                self.assertIn("stop_multiplier", config)
+                self.assertEqual(config["stop_multiplier"], 2.0)
 
         # EURGBPm has disabled_reason
         eurgbp = PAIR_CONFIG["EURGBPm"]

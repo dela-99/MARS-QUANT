@@ -822,6 +822,7 @@ class MT5Executor:
             self.equity_curve = [equity]
             self._signal_counter = 0
             self._lock = Lock()
+            self.sizers: Dict[str, VolScaledSizer] = {}  # per-symbol fitted sizers
 
             # Idempotency tracking (persisted to survive restart, bounded to prevent memory leak)
             self._processed_signals: set[str] = set()  # "symbol_bar_signal" keys

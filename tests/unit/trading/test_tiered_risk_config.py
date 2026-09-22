@@ -26,8 +26,8 @@ class TestTieredRiskConfigAcceptance:
         test_cases = [
             # (equity, expected_tier_index, expected_risk_pct, expected_concurrent, expected_rr)
             (30, 0, 0.07, 1, 3.0),    # Tier 0: $0-100
-            (124, 1, 0.03, 2, 2.5),   # Tier 1: $100-1000
-            (500, 1, 0.03, 2, 2.5),   # Tier 1: $100-1000
+            (124, 1, 0.03, 2, 3.0),   # Tier 1: $100-1000
+            (500, 1, 0.03, 2, 3.0),   # Tier 1: $100-1000
             (5000, 2, 0.015, 4, 2.0), # Tier 2: $1000-10000
             (50000, 3, 0.01, 6, 2.0), # Tier 3: $10000+
         ]

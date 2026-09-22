@@ -226,15 +226,13 @@ class MultiSymbolSession:
             )
 
     def fit_sizers(self):
-        """Fit volatility sizers for all symbols using recent data."""
-        try:
-            from mars.libs.features.volatility.ranker import VolatilityRanker
-        except ImportError:
-            print("  WARNING: VolatilityRanker not available, skipping sizer fitting")
-            return
+        """Fit volatility sizers for all symbols using recent data.
+        Uses VolScaledSizer (GARCH/CARR) which is the actual production sizer.
+        """
         import pandas as pd
+        from mars.apps.trading.system.vol_scaled_system import VolScaledSizer, SizingConfig
 
-        print("Fitting volatility sizers...")
+        print("Fitting volatility sizers (VolScaledSizer GARCH)...")
         for symbol in self.symbols:
             try:
                 # Load recent data for sizer fitting
@@ -243,14 +241,13 @@ class MultiSymbolSession:
                 df = df.sort_index()
                 # Use last 2000 bars for fitting
                 recent = df.tail(2000)
-                closes = recent['close'].values
-                highs = recent['high'].values
-                lows = recent['low'].values
 
-                ranker = VolatilityRanker(lookback=100)
-                ranker.fit(closes, highs, lows)
-                self.executor.sizers[symbol] = ranker
-                print(f"  {symbol}: fitted (regime={ranker.regime})")
+                # Create and fit VolScaledSizer per symbol
+                sizer_config = SizingConfig(target_vol=0.15, max_leverage=3.0, min_leverage=0.01, kelly_fraction=0.5)
+                sizer = VolScaledSizer(sizer_config, garch_variant='garch')
+                sizer.fit(recent)
+                self.executor.sizers[symbol] = sizer
+                print(f"  {symbol}: fitted (GARCH vol forecast ready)")
             except Exception as e:
                 print(f"  {symbol}: WARNING - could not fit sizer: {e}")
 
