@@ -22,6 +22,13 @@ import time
 from datetime import datetime, timedelta
 from unittest.mock import Mock
 
+# Load .env file for MT5 credentials
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 from mars.apps.trading.mt5_executor import (
     MT5Executor,
     MT5ConnectionManager,
@@ -451,7 +458,7 @@ def main():
         print("   Multi-symbol signal generation validated.")
         print("   Ready for live session.")
         session.executor.shutdown()
-        conn_manager.shutdown()
+        conn_manager.disconnect()
         return 0
 
     # Live session
