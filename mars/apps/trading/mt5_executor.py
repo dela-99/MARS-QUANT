@@ -565,6 +565,37 @@ class MT5AuditLogger:
                 )
             """)
             
+            # Evaluations table (NEW) - MTF gate decisions
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS evaluations (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp TEXT NOT NULL,
+                    symbol TEXT NOT NULL,
+                    gate_result TEXT NOT NULL,
+                    rejection_reason TEXT,
+                    trend_1h TEXT NOT NULL,
+                    bias_30m TEXT NOT NULL,
+                    context_15m TEXT NOT NULL,
+                    context_15m_reason TEXT,
+                    breakout_signal INTEGER NOT NULL,
+                    breakout_price REAL NOT NULL,
+                    breakout_stop REAL NOT NULL,
+                    h1_trend TEXT,
+                    h1_strength REAL,
+                    h1_adx REAL,
+                    m30_trend TEXT,
+                    m30_strength REAL,
+                    m30_adx REAL,
+                    m15_trend TEXT,
+                    m15_strength REAL,
+                    m15_adx REAL
+                )
+            """)
+            # Evaluations indexes
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_evaluations_timestamp ON evaluations(timestamp)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_evaluations_symbol ON evaluations(symbol)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_evaluations_gate_result ON evaluations(gate_result)")
+            
             # Create indexes for common queries
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_signals_timestamp ON signals(timestamp)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_signals_symbol ON signals(symbol)")
@@ -601,7 +632,40 @@ class MT5AuditLogger:
                 config.max_hold_hours if config.max_hold_hours else 0,
             ))
             conn.commit()
-    
+
+    def log_evaluation(self, symbol: str, mtf_context) -> None:
+        """Log MTF gate evaluation result for dashboard visibility."""
+        import sqlite3
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO evaluations (
+                    timestamp, symbol, gate_result, rejection_reason,
+                    trend_1h, bias_30m, context_15m, context_15m_reason,
+                    breakout_signal, breakout_price, breakout_stop,
+                    h1_trend, h1_strength, h1_adx,
+                    m30_trend, m30_strength, m30_adx,
+                    m15_trend, m15_strength, m15_adx
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                datetime.now().isoformat(),
+                symbol,
+                mtf_context.gate_result.name if hasattr(mtf_context.gate_result, 'name') else str(mtf_context.gate_result),
+                mtf_context.rejection_reason or "",
+                mtf_context.trend_1h.name if hasattr(mtf_context.trend_1h, 'name') else str(mtf_context.trend_1h),
+                mtf_context.bias_30m.name if hasattr(mtf_context.bias_30m, 'name') else str(mtf_context.bias_30m),
+                mtf_context.context_15m.name if hasattr(mtf_context.context_15m, 'name') else str(mtf_context.context_15m),
+                mtf_context.context_15m_reason or "",
+                mtf_context.breakout_signal,
+                mtf_context.breakout_price,
+                mtf_context.breakout_stop,
+                # Additional fields - use defaults if not available
+                "NEUTRAL", 0.0, 0.0,  # h1
+                "NEUTRAL", 0.0, 0.0,  # m30
+                "NEUTRAL", 0.0, 0.0,  # m15
+            ))
+            conn.commit()
+   
     def log_fill(self, fill, config: TradeConfig, expected_price: float):
         """Log order fill with slippage calculation."""
         import sqlite3

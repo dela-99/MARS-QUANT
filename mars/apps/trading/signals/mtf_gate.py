@@ -101,6 +101,7 @@ class MTFGate:
     # Fallback mapping: if primary timeframe fails, resample from this source
     FALLBACK_RESAMPLE = {
         '30M': '15M',  # Resample 15M -> 30M if 30M not available
+        '1H': '30M',   # Resample 30M -> 1H if 1H not available
     }
     
     def __init__(

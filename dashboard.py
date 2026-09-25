@@ -123,6 +123,23 @@ def load_backup_status():
     return status
 
 
+@st.cache_data(ttl=30)
+def load_evaluations(limit: int = 200) -> pd.DataFrame:
+    """Load MTF gate evaluations from audit DB."""
+    conn = get_db_connection()
+    if conn is None:
+        return pd.DataFrame()
+    try:
+        query = f"SELECT * FROM evaluations ORDER BY rowid DESC LIMIT {limit}"
+        df = pd.read_sql_query(query, conn)
+        return df
+    except Exception as e:
+        return pd.DataFrame()
+    finally:
+        if conn:
+            conn.close()
+
+
 # ============================================================
 # Data Loading Helpers (reuse existing backtest code)
 # ============================================================
@@ -322,14 +339,32 @@ signals_df = load_table('signals', 500)
 risk_decisions_df = load_table('risk_decisions', 500)
 fills_df = load_table('fills', 500)
 risk_events_df = load_table('risk_events', 500)
+evaluations_df = load_evaluations(200)
 kill_switch = load_kill_switch_status()
 backup_status = load_backup_status()
 
 # ============================================================
-# Panel 1: Account Overview
+# Panel 1: Account Overview + System Heartbeat
 # ============================================================
 
 st.header("1️⃣ Account Overview")
+
+# System Heartbeat - show last evaluation timestamp
+if not evaluations_df.empty:
+    last_eval = evaluations_df.iloc[0]
+    last_eval_time = pd.to_datetime(last_eval.get('timestamp'), errors='coerce')
+    if pd.notna(last_eval_time):
+        time_since = datetime.now() - last_eval_time.to_pydatetime().replace(tzinfo=None)
+        if time_since.total_seconds() < 60:
+            heartbeat_status = f"🟢 Last evaluated: {int(time_since.total_seconds())} seconds ago"
+        elif time_since.total_seconds() < 300:
+            heartbeat_status = f"🟡 Last evaluated: {int(time_since.total_seconds() / 60)} minutes ago"
+        else:
+            heartbeat_status = f"🔴 Last evaluated: {int(time_since.total_seconds() / 60)} minutes ago (STALE)"
+    else:
+        heartbeat_status = "⚪ No evaluation timestamp"
+else:
+    heartbeat_status = "⚪ No evaluations recorded yet"
 
 # Get current equity from kill_switch (most reliable) or compute from fills
 current_equity = kill_switch.get('current_equity', 0.0)
@@ -378,6 +413,9 @@ with col4:
 with col5:
     cl_status = f"🔴 HALTED ({cl_count})" if cl_halted else f"🟢 OK ({cl_count})"
     st.metric("Consec. Losses", cl_status)
+
+# System Heartbeat - prominently displayed
+st.markdown(f"**💓 System Heartbeat:** {heartbeat_status}")
 
 # Risk tier info
 tier_info = kill_switch.get('current_tier', {})
@@ -443,10 +481,93 @@ else:
 
 
 # ============================================================
-# Panel 3: Price Chart with Overlays (FULL IMPLEMENTATION)
+# Panel 3: Last Evaluation (MTF Gate Decisions)
 # ============================================================
 
-st.header(f"3️⃣ Price Chart: {chart_symbol}")
+st.header("3️⃣ Last MTF Gate Evaluation")
+
+if not evaluations_df.empty:
+    eval_cols = st.columns(len(session_symbols))
+    
+    for idx, symbol in enumerate(session_symbols):
+        with eval_cols[idx]:
+            symbol_evals = evaluations_df[evaluations_df['symbol'] == symbol]
+            if not symbol_evals.empty:
+                latest = symbol_evals.iloc[0]
+                
+                st.markdown(f"### {symbol}")
+                
+                # Gate result with color
+                gate_result = latest.get('gate_result', 'UNKNOWN')
+                if gate_result == 'ALLOWED':
+                    gate_display = "🟢 ALLOWED"
+                elif gate_result == 'REJECTED':
+                    gate_display = "🔴 REJECTED"
+                else:
+                    gate_display = f"⚪ {gate_result}"
+                st.markdown(f"**Gate:** {gate_display}")
+                
+                # Rejection reason if rejected
+                rejection_reason = latest.get('rejection_reason')
+                if rejection_reason:
+                    st.caption(f"Reason: {rejection_reason}")
+                
+                # Timeframe trends
+                h1_trend = latest.get('h1_trend')
+                m30_trend = latest.get('m30_trend')
+                m15_context = latest.get('m15_context')
+                
+                trend_cols = st.columns(3)
+                with trend_cols[0]:
+                    trend_val = h1_trend
+                    if trend_val == 'BULLISH':
+                        trend_display = "🟢 BULLISH"
+                    elif trend_val == 'BEARISH':
+                        trend_display = "🔴 BEARISH"
+                    else:
+                        trend_display = f"⚪ {trend_val}" if trend_val else "⚪ N/A"
+                    st.caption(f"1H: {trend_display}")
+                
+                with trend_cols[1]:
+                    trend_val = m30_trend
+                    if trend_val == 'BULLISH':
+                        trend_display = "🟢 BULLISH"
+                    elif trend_val == 'BEARISH':
+                        trend_display = "🔴 BEARISH"
+                    else:
+                        trend_display = f"⚪ {trend_val}" if trend_val else "⚪ N/A"
+                    st.caption(f"30M: {trend_display}")
+                
+                with trend_cols[2]:
+                    trend_val = m15_context
+                    if trend_val == 'BREAKOUT_LONG':
+                        trend_display = "🟢 BREAKOUT_LONG"
+                    elif trend_val == 'BREAKOUT_SHORT':
+                        trend_display = "🔴 BREAKOUT_SHORT"
+                    else:
+                        trend_display = f"⚪ {trend_val}" if trend_val else "⚪ N/A"
+                    st.caption(f"15M: {trend_display}")
+                
+                # 5M Signal
+                breakout_signal = latest.get('breakout_signal', 0)
+                signal_text = "🟢 LONG" if breakout_signal == 1 else "🔴 SHORT" if breakout_signal == -1 else "⚪ FLAT"
+                st.caption(f"5M Signal: {signal_text}")
+                
+                # Timestamp
+                ts = latest.get('timestamp')
+                if ts:
+                    st.caption(f"⏰ {ts}")
+            else:
+                st.markdown(f"### {symbol}")
+                st.caption("No evaluations yet")
+else:
+    st.info("No MTF gate evaluations recorded yet. Start a live session to see evaluations.")
+
+# ============================================================
+# Panel 4: Price Chart with Overlays (FULL IMPLEMENTATION)
+# ============================================================
+
+st.header(f"4️⃣ Price Chart: {chart_symbol}")
 
 # Get pair config for this symbol
 pair_cfg = PAIR_CONFIG.get(chart_symbol, {})
@@ -672,7 +793,7 @@ else:
 # Panel 4: Signal/Trade Log Table
 # ============================================================
 
-st.header("4️⃣ Signal & Trade Log")
+st.header("5️⃣ Signal & Trade Log")
 
 log_cols = st.columns([3, 1])
 
@@ -774,7 +895,7 @@ else:
 # Panel 5: Open Positions
 # ============================================================
 
-st.header("5️⃣ Open Positions Across All Symbols")
+st.header("6️⃣ Open Positions Across All Symbols")
 
 if not fills_df.empty:
     open_positions = []
@@ -805,7 +926,7 @@ else:
 # Panel 6: Risk Events Feed
 # ============================================================
 
-st.header("6️⃣ Risk Events Feed")
+st.header("7️⃣ Risk Events Feed")
 
 col1, col2 = st.columns([3, 1])
 
@@ -871,7 +992,7 @@ else:
 # Panel 7: Ops Status
 # ============================================================
 
-st.header("7️⃣ Ops Status")
+st.header("8️⃣ Ops Status")
 
 col1, col2 = st.columns(2)
 

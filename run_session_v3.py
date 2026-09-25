@@ -41,6 +41,7 @@ from mars.apps.trading.mt5_executor import (
 from mars.apps.trading.system.vol_scaled_system import RiskManager, SizingConfig, TradeConfig
 from mars.apps.trading.system.pair_config import get_pair_config, get_enabled_symbols, PAIR_CONFIG
 from mars.apps.trading.signals.trend_breakout import DonchianBreakoutSignal
+from mars.apps.trading.signals.mtf_gate import MTFGate, create_mtf_gate
 
 
 class MockMT5ConnectionManager:
@@ -74,19 +75,33 @@ class MockMT5ConnectionManager:
         def mock_copy_rates_from_pos(symbol, timeframe, start_pos, count):
             import numpy as np
             import pandas as pd
-            # Generate synthetic OHLCV data
+            # Generate synthetic OHLCV data appropriate for the timeframe
             np.random.seed(42)
             base_price = 2000.0 if 'XAU' in symbol else (150.0 if 'JPY' in symbol else 1.1)
-            times = pd.date_range(end=pd.Timestamp.now(tz='UTC'), periods=count, freq='5min')
+            
+            # Map MT5 timeframe constants to pandas freq
+            tf_map = {
+                16385: 'h',     # TIMEFRAME_H1
+                16384: '30min', # TIMEFRAME_M30
+                16383: '15min', # TIMEFRAME_M15
+                5: '5min',      # TIMEFRAME_M5
+                1: '1min',      # TIMEFRAME_M1
+            }
+            freq = tf_map.get(timeframe, '5min')
+            
+            # Use end time as now, generate count bars going backwards
+            times = pd.date_range(end=pd.Timestamp.now(tz='UTC'), periods=count, freq=freq)
             data = []
             price = base_price
             for i in range(count):
-                change = np.random.normal(0, 0.0005)
+                # Volatility scales with timeframe
+                vol_scale = {'h': 0.002, '30min': 0.001, '15min': 0.0007, '5min': 0.0005, '1min': 0.0002}.get(freq, 0.0005)
+                change = np.random.normal(0, vol_scale)
                 price *= (1 + change)
                 o = price
-                h = price * (1 + abs(np.random.normal(0, 0.0002)))
-                l = price * (1 - abs(np.random.normal(0, 0.0002)))
-                c = price * (1 + np.random.normal(0, 0.0001))
+                h = price * (1 + abs(np.random.normal(0, vol_scale * 0.4)))
+                l = price * (1 - abs(np.random.normal(0, vol_scale * 0.4)))
+                c = price * (1 + np.random.normal(0, vol_scale * 0.2))
                 v = 1000
                 data.append((int(times[i].timestamp()), o, h, l, c, v, 0, 0))
             # Create a structured array that mimics MT5 rates
@@ -260,7 +275,7 @@ class MultiSymbolSession:
         self.use_mock = use_mock
 
         # Initialize MT5 executor with live trading system
-        audit_db_path = os.path.join(tempfile.gettempdir(), 'mt5_audit.db')
+        audit_db_path = os.path.join(tempfile.gettempdir(), 'mt5_audit_real.db')
         sizer = VolScaledSizer(SizingConfig(target_vol=0.15, max_leverage=3.0, min_leverage=0.01, kelly_fraction=0.5))
 
         if use_mock:
@@ -291,20 +306,20 @@ class MultiSymbolSession:
                 audit_db_path=audit_db_path,
             )
         self.signal_generators = {}
+        self.mtf_gates = {}
         for symbol in symbols:
             pair_cfg = get_pair_config(symbol)
             self.signal_generators[symbol] = DonchianBreakoutSignal(
-                
                 window=pair_cfg["donchian_window"],
-                
                 stop_multiplier=pair_cfg.get("stop_multiplier", 2.0),
                 session_filter=pair_cfg.get("session_filter", "all"),
                 stop_mode=pair_cfg.get("stop_mode", "atr"),
                 risk_pips=pair_cfg.get("risk_pips", 0.0),
                 exit_window=pair_cfg.get("exit_window", 10),
-            
                 pip_size=pair_cfg.get("pip_size", 0.0001),
             )
+            # Create MTF gate for this symbol
+            self.mtf_gates[symbol] = create_mtf_gate(self.executor.mt5, symbol)
 
     def fit_sizers(self):
         """Fit volatility sizers for all symbols using recent data.
@@ -335,6 +350,7 @@ class MultiSymbolSession:
     def poll_cycle(self):
         """Single polling cycle: check signals, place orders, manage positions."""
         import pandas as pd
+        from datetime import datetime
         cycle_results = {
             'signals_generated': {},
             'orders_placed': {},
@@ -349,12 +365,28 @@ class MultiSymbolSession:
             try:
                 pair_cfg = get_pair_config(symbol)
                 signal_gen = self.signal_generators[symbol]
+                mtf_gate = self.mtf_gates.get(symbol)
 
                 # Generate live signal
                 signal = signal_gen.compute_live(self.executor.mt5, symbol, self.equity)
+                signal_val = signal['signal']
 
-                if signal['signal'] != 0:
-                    cycle_results['signals_generated'][symbol] = signal['signal']
+                # Evaluate MTF gate for EVERY cycle (including FLAT signals)
+                mtf_context = None
+                if mtf_gate:
+                    mtf_context = mtf_gate.evaluate_gate(
+                        breakout_signal=signal_val,
+                        breakout_price=signal.get('entry_price', 0),
+                        breakout_stop=signal.get('stop_price', 0)
+                    )
+                    # Log MTF gate evaluation for dashboard visibility
+                    self.executor.audit_logger.log_evaluation(symbol, mtf_context)
+                    print(f"[{datetime.now()}] {symbol} 5M_signal={signal_val} MTF_gate={mtf_context.gate_result.name} reason={mtf_context.rejection_reason or 'OK'} 1H={mtf_context.trend_1h.name} 30M={mtf_context.bias_30m.name} 15M={mtf_context.context_15m.name}")
+
+                gate_allows = (mtf_context is None) or (mtf_context.gate_result.name == 'ALLOWED')
+
+                if signal_val != 0 and gate_allows:
+                    cycle_results['signals_generated'][symbol] = signal_val
                     # In dry-run, we don't place orders
                     if not self.dry_run:
                         # Calculate position size using fitted sizer or fallback
