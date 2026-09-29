@@ -366,9 +366,12 @@ class MTFGate:
         - 1H and 30M must agree with each other
         - 15M context must be TRADEABLE
         """
-        # Ensure data is fresh
-        if not self._tf_data:
-            self.fetch_all_timeframes()
+        # Always refetch every cycle. The previous `if not self._tf_data` guard
+        # only fetched on first call, leaving the gate stuck on data from initialisation
+        # (potentially days old) while the live session kept logging the same stale
+        # LONG_BIAS/SHORT_BIAS for every polling cycle. MT5 copy_rates_from_pos reads
+        # from the terminal's local buffer, so the cost is negligible.
+        self.fetch_all_timeframes()
         
         # Check all timeframes are valid
         for tf in ['1H', '30M', '15M', '5M']:
