@@ -303,67 +303,19 @@ def compute_daily_pnl() -> tuple[float, int]:
     return float(today_closed["profit"].sum()), int(len(today_closed))
 
 
-@st.cache_data(ttl=5)
-def compute_expectancy() -> dict:
+SYSTEM_EXIT_REASONS = {"sl_hit", "tp_hit"}
+
+
+def _expectancy_from_trades(closed: pd.DataFrame) -> dict:
+    """Compute expectancy metrics on a pre-filtered closed-trades DataFrame.
+
+    Assumes columns: net_pnl, stop_dist, filled_lots (already computed by
+    the caller) and exit_time/timestamp for ordering.
+    Returns dict with all numeric metrics; caller wraps in status envelope.
     """
-    Expectancy from CLOSED trades only.
-
-    Uses the broker-authoritative exit_profit (commission + swap + price-delta)
-    that was logged by MT5AuditLogger.log_close_fill() during close tracking.
-    R-multiples are computed using each trade's actual filled_sl distance, not
-    a fixed assumption.
-
-    Returns a dict with the metrics AND a `status` field:
-      - "ok"          : ≥1 closed trade, metrics are real
-      - "pending_fix" : 0 closed trades in DB, panel must display the
-                        pending-fix message per the task spec
-    """
-    fills = load_fills(1000)
-    if fills.empty:
-        return {"status": "pending_fix", "reason": "no fills table"}
-
-    # Closed trades = rows where MT5AuditLogger has written exit_profit.
-    # is_closed=1 is the authoritative flag (set when the broker's exit
-    # deal has been matched). exit_profit may be 0 in edge cases (e.g.
-    # breakeven close) but is_closed=1 still counts as closed.
-    if "is_closed" in fills.columns:
-        closed = fills[fills["is_closed"] == 1].copy()
-    else:
-        closed = fills[fills["profit"] != 0].copy()
-
     if closed.empty:
-        return {
-            "status": "pending_fix",
-            "reason": (
-                "No closed trades yet. Reconcile the audit DB with MT5 history "
-                "on session startup (`MT5AuditLogger.reconcile_from_broker()`) "
-                "to capture any closes that happened while no session was running."
-            ),
-        }
-
-    # Use broker-authoritative exit_profit (commission + swap + price-delta).
-    # Fall back to legacy `profit` column if exit_profit wasn't populated
-    # (very old rows from before the schema migration).
-    if "exit_profit" in closed.columns:
-        closed["net_pnl"] = pd.to_numeric(closed["exit_profit"], errors="coerce").fillna(0.0)
-        # Add commission and swap if present
-        if "exit_commission" in closed.columns:
-            closed["net_pnl"] = closed["net_pnl"] + pd.to_numeric(closed["exit_commission"], errors="coerce").fillna(0.0)
-        if "exit_swap" in closed.columns:
-            closed["net_pnl"] = closed["net_pnl"] + pd.to_numeric(closed["exit_swap"], errors="coerce").fillna(0.0)
-    else:
-        closed["net_pnl"] = pd.to_numeric(closed["profit"], errors="coerce").fillna(0.0)
-
-    # Risk distance = |filled_sl - filled_price| * filled_lots * 100
-    closed["stop_dist"] = (
-        pd.to_numeric(closed["filled_sl"], errors="coerce").fillna(0.0)
-        - pd.to_numeric(closed["filled_price"], errors="coerce").fillna(0.0)
-    ).abs()
-    closed["filled_lots"] = pd.to_numeric(closed["filled_lots"], errors="coerce").fillna(0.0)
-    closed = closed[(closed["stop_dist"] > 0) & (closed["filled_lots"] > 0)]
-    if closed.empty:
-        return {"status": "pending_fix", "reason": "no fills with valid stop_distance"}
-
+        return {"n_trades": 0}
+    closed = closed.copy()
     closed["R"] = closed["net_pnl"] / (closed["stop_dist"] * closed["filled_lots"] * 100)
     wins = closed[closed["R"] > 0]
     losses = closed[closed["R"] <= 0]
@@ -379,7 +331,6 @@ def compute_expectancy() -> dict:
     gross_loss = abs(float(losses["net_pnl"].sum())) if n_losses else 0.0
     profit_factor = (gross_profit / gross_loss) if gross_loss > 0 else float("inf")
 
-    # Max drawdown on cumulative P&L (sort by exit_time if available)
     sort_col = "exit_time" if "exit_time" in closed.columns else "timestamp"
     closed_sorted = closed.dropna(subset=[sort_col]).sort_values(sort_col)
     if closed_sorted.empty:
@@ -391,7 +342,6 @@ def compute_expectancy() -> dict:
         max_dd = float(drawdown.min()) if not drawdown.empty else 0.0
 
     return {
-        "status": "ok",
         "n_trades": n,
         "win_rate": win_rate,
         "avg_win_R": avg_win,
@@ -402,6 +352,136 @@ def compute_expectancy() -> dict:
         "gross_profit_usd": gross_profit,
         "gross_loss_usd": gross_loss,
     }
+
+
+@st.cache_data(ttl=5)
+def compute_expectancy_breakdown() -> dict:
+    """Expectancy with SL/TP-exited trades broken out from manual-exited trades.
+
+    System exits = SL hit or TP hit (executed by the bot's stop/target).
+    Manual exits = anything else (mobile/web/client/expert/null/unknown) —
+    closes that happened because a human closed via MT5 terminal, the
+    session was restarted, or via any path the system did not initiate.
+
+    Returns:
+      {
+        "all":    { ...metrics, breakdown: {sl_hit, tp_hit, manual, total}, is_empty },
+        "system": { ...metrics, breakdown: {sl_hit, tp_hit, total},        is_empty },
+        "manual": { ...metrics, breakdown: {mobile, web, client, expert, total}, is_empty },
+        "source": "ok" | "no_data" | "no_closed_trades"
+      }
+    """
+    fills = load_fills(1000)
+    out: dict = {"all": {}, "system": {}, "manual": {},
+                 "source": "no_data"}
+
+    if fills.empty:
+        return out
+
+    if "is_closed" in fills.columns:
+        closed = fills[fills["is_closed"] == 1].copy()
+    else:
+        closed = fills[fills["profit"] != 0].copy()
+    if closed.empty:
+        out["source"] = "no_closed_trades"
+        return out
+
+    # Build net_pnl / stop_dist / filled_lots once on the full closed set
+    if "exit_profit" in closed.columns:
+        closed["net_pnl"] = pd.to_numeric(closed["exit_profit"], errors="coerce").fillna(0.0)
+        if "exit_commission" in closed.columns:
+            closed["net_pnl"] = closed["net_pnl"] + pd.to_numeric(
+                closed["exit_commission"], errors="coerce").fillna(0.0)
+        if "exit_swap" in closed.columns:
+            closed["net_pnl"] = closed["net_pnl"] + pd.to_numeric(
+                closed["exit_swap"], errors="coerce").fillna(0.0)
+    else:
+        closed["net_pnl"] = pd.to_numeric(closed["profit"], errors="coerce").fillna(0.0)
+
+    closed["stop_dist"] = (
+        pd.to_numeric(closed["filled_sl"], errors="coerce").fillna(0.0)
+        - pd.to_numeric(closed["filled_price"], errors="coerce").fillna(0.0)
+    ).abs()
+    closed["filled_lots"] = pd.to_numeric(closed["filled_lots"], errors="coerce").fillna(0.0)
+    closed = closed[(closed["stop_dist"] > 0) & (closed["filled_lots"] > 0)]
+    if closed.empty:
+        out["source"] = "no_valid_stop_distance"
+        return out
+
+    out["source"] = "ok"
+
+    er = closed["exit_reason"].fillna("unknown") if "exit_reason" in closed.columns \
+        else pd.Series(["unknown"] * len(closed), index=closed.index)
+
+    # Counts for the all-trades breakdown
+    all_breakdown: dict = {}
+    for reason in ("sl_hit", "tp_hit"):
+        all_breakdown[reason] = int((er == reason).sum())
+    manual_reasons = ["mobile", "web", "client", "expert"]
+    for r in manual_reasons:
+        all_breakdown[r] = int((er == r).sum())
+    all_breakdown["unknown"] = int((~er.isin(list(SYSTEM_EXIT_REASONS) + manual_reasons)).sum())
+    all_breakdown["manual_total"] = sum(all_breakdown[r] for r in manual_reasons + ["unknown"])
+    all_breakdown["total"] = int(len(closed))
+
+    # Manual breakdown (mobile/web/client/expert + unknown grouped as 'manual')
+    manual_breakdown: dict = {r: all_breakdown[r] for r in manual_reasons}
+    manual_breakdown["unknown"] = all_breakdown["unknown"]
+    manual_breakdown["total"] = all_breakdown["manual_total"]
+
+    # System breakdown
+    system_breakdown: dict = {
+        "sl_hit": all_breakdown["sl_hit"],
+        "tp_hit": all_breakdown["tp_hit"],
+        "total":  all_breakdown["sl_hit"] + all_breakdown["tp_hit"],
+    }
+
+    system_mask = er.isin(SYSTEM_EXIT_REASONS)
+    manual_mask = ~system_mask
+
+    out["all"] = {
+        **_expectancy_from_trades(closed),
+        "breakdown": all_breakdown,
+        "is_empty": len(closed) == 0,
+    }
+    out["system"] = {
+        **_expectancy_from_trades(closed[system_mask]),
+        "breakdown": system_breakdown,
+        "is_empty": len(closed[system_mask]) == 0,
+    }
+    out["manual"] = {
+        **_expectancy_from_trades(closed[manual_mask]),
+        "breakdown": manual_breakdown,
+        "is_empty": len(closed[manual_mask]) == 0,
+    }
+    return out
+
+
+@st.cache_data(ttl=5)
+def compute_expectancy() -> dict:
+    """
+    Legacy single-bucket expectancy (all closed trades combined).
+
+    Kept for code that reads `compute_expectancy()["status"] == "ok"`.
+    New code should call `compute_expectancy_breakdown()` which separates
+    system exits (SL/TP) from manual exits (mobile/web/client/expert).
+
+    Returns a dict with `status` field:
+      - "ok"          : ≥1 closed trade, metrics are real
+      - "pending_fix" : 0 closed trades in DB, panel must display the
+                        pending-fix message per the task spec
+    """
+    bd = compute_expectancy_breakdown()
+    if bd["source"] != "ok":
+        return {
+            "status": "pending_fix",
+            "reason": ("No closed trades yet. Reconcile the audit DB with MT5 history "
+                       "on session startup (`MT5AuditLogger.reconcile_from_broker()`) "
+                       "to capture any closes that happened while no session was running."),
+        }
+    out = dict(bd["all"])
+    out["status"] = "ok"
+    return out
 
 
 @st.cache_data(ttl=5)
@@ -955,45 +1035,108 @@ else:
 
 
 # ===============================================================
-# PANEL 5 — Running Expectancy
+# ===============================================================
+# PANEL 5 — Running Expectancy (with system vs manual exit split)
 # ===============================================================
 st.markdown("<div class='panel-divider'></div>", unsafe_allow_html=True)
 st.header("4️⃣ Running Expectancy")
 
-if expectancy["status"] == "pending_fix":
+expectancy_breakdown = compute_expectancy_breakdown()
+
+if expectancy_breakdown["source"] != "ok":
     st.markdown(
         f"""
 <div class='pending-fix'>
-  ⚠️ <b>Expectancy calculation pending fix:</b> {expectancy['reason']}<br>
-  This panel will populate once the 6-week baseline produces realized P&amp;L
-  (a fill row with <code>profit != 0</code> counts as a closed trade).
+  ⚠️ <b>Expectancy calculation pending fix:</b>
+  {expectancy.get('reason', 'no closed trades')}
+  <br>This panel will populate once the 6-week baseline produces realized P&amp;L.
 </div>
         """,
         unsafe_allow_html=True,
     )
 else:
-    e1, e2, e3, e4, e5, e6, e7 = st.columns(7)
-    with e1:
-        st.metric("Total Trades", expectancy["n_trades"])
-    with e2:
-        st.metric("Win Rate", f"{expectancy['win_rate'] * 100:.1f}%")
-    with e3:
-        st.metric("Avg Win (R)", f"{expectancy['avg_win_R']:+.2f}")
-    with e4:
-        st.metric("Avg Loss (R)", f"{expectancy['avg_loss_R']:+.2f}")
-    with e5:
-        st.metric("Expectancy (R)", f"{expectancy['expectancy_R']:+.3f}")
-    with e6:
-        pf = expectancy["profit_factor"]
-        st.metric("Profit Factor", f"{pf:.2f}" if pf != float("inf") else "∞")
-    with e7:
-        st.metric("Max DD (USD)", f"${expectancy['max_drawdown_usd']:,.2f}")
+    all_m = expectancy_breakdown["all"]
+    sys_m = expectancy_breakdown["system"]
+    man_m = expectancy_breakdown["manual"]
+    all_bd = all_m["breakdown"]
 
-    # Start-date selector for sub-period filter
+    def _render_metrics_row(metrics, label: str, breakdown: dict | None):
+        """Render one row of metrics. If empty, show explicit 'no data'."""
+        empty = metrics.get("is_empty", metrics.get("n_trades", 0) == 0)
+        if empty:
+            st.markdown(
+                f"<div class='pending-fix'>"
+                f"<b>{label}</b>: no trades in this group yet "
+                f"(SL/TP exits and manual closes are tracked separately; "
+                f"metrics will populate as soon as the first qualifying trade lands)."
+                f"</div>",
+                unsafe_allow_html=True,
+            )
+            return
+        cols = st.columns(7)
+        with cols[0]:
+            st.metric("Trades", metrics["n_trades"])
+        with cols[1]:
+            st.metric("Win Rate", f"{metrics['win_rate']*100:.1f}%")
+        with cols[2]:
+            st.metric("Avg Win (R)", f"{metrics['avg_win_R']:+.2f}")
+        with cols[3]:
+            st.metric("Avg Loss (R)", f"{metrics['avg_loss_R']:+.2f}")
+        with cols[4]:
+            st.metric("Expectancy (R)", f"{metrics['expectancy_R']:+.3f}")
+        with cols[5]:
+            pf = metrics["profit_factor"]
+            st.metric("Profit Factor", f"{pf:.2f}" if pf != float("inf") else "∞")
+        with cols[6]:
+            st.metric("Max DD (USD)", f"${metrics['max_drawdown_usd']:,.2f}")
+        if breakdown is not None:
+            bd_parts = []
+            for k in ("sl_hit", "tp_hit", "mobile", "web", "client", "expert", "unknown"):
+                v = breakdown.get(k, 0)
+                if v > 0:
+                    bd_parts.append(f"{k}={v}")
+            if bd_parts:
+                st.caption("Counts by exit_reason: " + " · ".join(bd_parts))
+
+    # Top: All trades
+    st.subheader("All closed trades")
+    _render_metrics_row(all_m, "All", all_bd)
+
+    # Middle: System exits only (SL/TP) — this is the system's true performance
+    sys_bd = sys_m["breakdown"]
+    sys_caption = ""
+    if sys_bd:
+        sys_caption = (f"SL hit: {sys_bd.get('sl_hit', 0)}  ·  "
+                       f"TP hit: {sys_bd.get('tp_hit', 0)}  ·  total: {sys_bd.get('total', 0)}")
+    st.subheader("System exits (SL hit / TP hit only)")
+    _render_metrics_row(sys_m, "System", None)
+    if sys_caption:
+        st.caption(sys_caption)
+
+    # Bottom: Manual closes only — explicitly labelled so it's never blended
+    man_bd = man_m["breakdown"]
+    man_caption = ""
+    if man_bd:
+        parts = []
+        for k in ("mobile", "web", "client", "expert", "unknown"):
+            v = man_bd.get(k, 0)
+            if v > 0:
+                parts.append(f"{k}={v}")
+        man_caption = (f"closes not initiated by the bot: " + " · ".join(parts)
+                       + f"  ·  total: {man_bd.get('total', 0)}")
+    st.subheader("Manual closes (mobile / web / client / expert — NOT system exits)")
+    _render_metrics_row(man_m, "Manual", None)
+    if man_caption:
+        st.caption(man_caption)
+
+    # Footer explanation
     st.caption(
-        f"Computed from {expectancy['n_trades']} closed fills "
-        f"(gross profit ${expectancy['gross_profit_usd']:,.2f} / "
-        f"gross loss ${expectancy['gross_loss_usd']:,.2f})."
+        f"System-generated performance (SL/TP only) is shown separately from manual "
+        f"closes so the bot's own exit-decision quality is never silently blended with "
+        f"trades a human closed via MT5 terminal. "
+        f"All trades combined: {all_bd['total']} fills, "
+        f"gross ${all_m['gross_profit_usd']:,.2f} / "
+        f"${all_m['gross_loss_usd']:,.2f}."
     )
 
 
