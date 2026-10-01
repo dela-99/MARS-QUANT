@@ -308,35 +308,63 @@ def compute_expectancy() -> dict:
     """
     Expectancy from CLOSED trades only.
 
+    Uses the broker-authoritative exit_profit (commission + swap + price-delta)
+    that was logged by MT5AuditLogger.log_close_fill() during close tracking.
+    R-multiples are computed using each trade's actual filled_sl distance, not
+    a fixed assumption.
+
     Returns a dict with the metrics AND a `status` field:
       - "ok"          : ≥1 closed trade, metrics are real
       - "pending_fix" : 0 closed trades in DB, panel must display the
                         pending-fix message per the task spec
     """
     fills = load_fills(1000)
-    if fills.empty or "profit" not in fills.columns:
+    if fills.empty:
         return {"status": "pending_fix", "reason": "no fills table"}
 
-    # A fill row with profit != 0 represents a realized closing fill
-    closed = fills[fills["profit"] != 0].copy()
+    # Closed trades = rows where MT5AuditLogger has written exit_profit.
+    # is_closed=1 is the authoritative flag (set when the broker's exit
+    # deal has been matched). exit_profit may be 0 in edge cases (e.g.
+    # breakeven close) but is_closed=1 still counts as closed.
+    if "is_closed" in fills.columns:
+        closed = fills[fills["is_closed"] == 1].copy()
+    else:
+        closed = fills[fills["profit"] != 0].copy()
+
     if closed.empty:
         return {
             "status": "pending_fix",
             "reason": (
-                "No closed trades yet (3 fills in DB are all OPEN entries, "
-                "profit=0). Real metrics will appear once the 6-week baseline "
-                "produces realized P&L."
+                "No closed trades yet. Reconcile the audit DB with MT5 history "
+                "on session startup (`MT5AuditLogger.reconcile_from_broker()`) "
+                "to capture any closes that happened while no session was running."
             ),
         }
 
-    # Convert profit to R-multiples using stop_distance (proxy: |filled_sl - filled_price|)
-    closed["stop_dist"] = (closed["filled_sl"] - closed["filled_price"]).abs()
-    # Some fills may have stop_dist == 0 if SL wasn't recorded; guard against div-by-zero
-    closed = closed[closed["stop_dist"] > 0]
+    # Use broker-authoritative exit_profit (commission + swap + price-delta).
+    # Fall back to legacy `profit` column if exit_profit wasn't populated
+    # (very old rows from before the schema migration).
+    if "exit_profit" in closed.columns:
+        closed["net_pnl"] = pd.to_numeric(closed["exit_profit"], errors="coerce").fillna(0.0)
+        # Add commission and swap if present
+        if "exit_commission" in closed.columns:
+            closed["net_pnl"] = closed["net_pnl"] + pd.to_numeric(closed["exit_commission"], errors="coerce").fillna(0.0)
+        if "exit_swap" in closed.columns:
+            closed["net_pnl"] = closed["net_pnl"] + pd.to_numeric(closed["exit_swap"], errors="coerce").fillna(0.0)
+    else:
+        closed["net_pnl"] = pd.to_numeric(closed["profit"], errors="coerce").fillna(0.0)
+
+    # Risk distance = |filled_sl - filled_price| * filled_lots * 100
+    closed["stop_dist"] = (
+        pd.to_numeric(closed["filled_sl"], errors="coerce").fillna(0.0)
+        - pd.to_numeric(closed["filled_price"], errors="coerce").fillna(0.0)
+    ).abs()
+    closed["filled_lots"] = pd.to_numeric(closed["filled_lots"], errors="coerce").fillna(0.0)
+    closed = closed[(closed["stop_dist"] > 0) & (closed["filled_lots"] > 0)]
     if closed.empty:
         return {"status": "pending_fix", "reason": "no fills with valid stop_distance"}
 
-    closed["R"] = closed["profit"] / (closed["stop_dist"] * closed["filled_lots"] * 100)
+    closed["R"] = closed["net_pnl"] / (closed["stop_dist"] * closed["filled_lots"] * 100)
     wins = closed[closed["R"] > 0]
     losses = closed[closed["R"] <= 0]
 
@@ -346,19 +374,21 @@ def compute_expectancy() -> dict:
     win_rate = (n_wins / n) if n else 0.0
     avg_win = float(wins["R"].mean()) if n_wins else 0.0
     avg_loss = float(losses["R"].mean()) if n_losses else 0.0
-    expectancy_r = (
-        win_rate * avg_win + (1 - win_rate) * avg_loss
-    )
-    gross_profit = float(wins["profit"].sum()) if n_wins else 0.0
-    gross_loss = abs(float(losses["profit"].sum())) if n_losses else 0.0
+    expectancy_r = win_rate * avg_win + (1 - win_rate) * avg_loss
+    gross_profit = float(wins["net_pnl"].sum()) if n_wins else 0.0
+    gross_loss = abs(float(losses["net_pnl"].sum())) if n_losses else 0.0
     profit_factor = (gross_profit / gross_loss) if gross_loss > 0 else float("inf")
 
-    # Max drawdown on cumulative P&L
-    closed_sorted = closed.sort_values("timestamp")
-    cum = closed_sorted["profit"].cumsum()
-    running_max = cum.cummax()
-    drawdown = (cum - running_max)
-    max_dd = float(drawdown.min()) if not drawdown.empty else 0.0
+    # Max drawdown on cumulative P&L (sort by exit_time if available)
+    sort_col = "exit_time" if "exit_time" in closed.columns else "timestamp"
+    closed_sorted = closed.dropna(subset=[sort_col]).sort_values(sort_col)
+    if closed_sorted.empty:
+        max_dd = 0.0
+    else:
+        cum = closed_sorted["net_pnl"].cumsum()
+        running_max = cum.cummax()
+        drawdown = cum - running_max
+        max_dd = float(drawdown.min()) if not drawdown.empty else 0.0
 
     return {
         "status": "ok",
@@ -377,11 +407,12 @@ def compute_expectancy() -> dict:
 @st.cache_data(ttl=5)
 def compute_open_positions() -> pd.DataFrame:
     """
-    Approximate open positions: the most recent fill per symbol, where
-    direction is BUY/SELL and no subsequent fill closes it.
+    Approximate open positions: the most recent fill per symbol where the
+    broker's exit has NOT been logged (is_closed != 1).
 
-    Heuristic: a fill is "closing" if profit != 0. Otherwise it's open
-    (or an entry that has not been followed by a closing fill).
+    When the close-tracking pipeline is working, an entry fill row stays
+    is_closed=0 until the broker actually closes the position. Once closed,
+    the row is updated to is_closed=1 and stops appearing here.
     """
     fills = load_fills(500)
     if fills.empty:
@@ -391,17 +422,22 @@ def compute_open_positions() -> pd.DataFrame:
     df["ts"] = pd.to_datetime(df["timestamp"], errors="coerce", utc=True)
     df = df.dropna(subset=["ts"])
     df = df.sort_values("ts", ascending=False)
-    # A position is considered open if the most-recent fill for that symbol
-    # is an entry (profit == 0) AND no closing fill exists for that ticket.
+
+    # Filter to only "not yet closed" rows
+    if "is_closed" in df.columns:
+        open_df = df[(df["is_closed"] == 0) | (df["is_closed"].isna())]
+    else:
+        # Pre-migration fallback: treat profit == 0 as open
+        open_df = df[df["profit"].fillna(0) == 0]
+
     open_rows = []
     seen_symbols = set()
-    for _, row in df.iterrows():
+    for _, row in open_df.iterrows():
         sym = row.get("symbol")
         if sym in seen_symbols:
             continue
         direction = row.get("direction", "")
-        profit = float(row.get("profit", 0) or 0)
-        if direction in ("BUY", "SELL") and profit == 0:
+        if direction in ("BUY", "SELL"):
             open_rows.append(row)
             seen_symbols.add(sym)
     if not open_rows:
@@ -410,6 +446,7 @@ def compute_open_positions() -> pd.DataFrame:
     keep = [
         "timestamp", "symbol", "direction", "filled_lots", "filled_price",
         "filled_sl", "filled_tp", "spread_at_fill", "ticket",
+        "position_id", "exit_time",
     ]
     keep = [c for c in keep if c in out.columns]
     return out[keep]

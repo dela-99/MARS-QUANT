@@ -612,6 +612,24 @@ def main():
     # Fit sizers
     session.fit_sizers()
 
+    # --- RECONCILE: catch up audit DB with any closes that happened while
+    #     no session was running (manual closes, MT5 terminal hitting SL/TP,
+    #     etc.). This must run BEFORE the live polling loop starts.
+    if not args.dry_run:
+        print("\n=== RECONCILING AUDIT DB WITH BROKER (closes that happened offline) ===")
+        try:
+            recon = session.executor.audit_logger.reconcile_from_broker()
+            print(f"  Fills reconciled:  {recon['fills_reconciled']}")
+            print(f"  Fills unmatched:   {recon['fills_unmatched']}  (audit has open but broker has no exit deal)")
+            if recon['orphan_positions']:
+                print(f"  Orphan positions:  {len(recon['orphan_positions'])}  (broker has open but audit has no row)")
+                for op in recon['orphan_positions']:
+                    print(f"    - {op['symbol']} {op['direction']} ticket={op['ticket']} "
+                          f"pos_id={op['position_id']} vol={op['volume']} entry={op['price_open']}")
+        except Exception as e:
+            print(f"  [WARN] Reconciliation failed: {e}")
+        print()
+
     if args.dry_run:
         print("\n✅ DRY RUN COMPLETE - All validations passed, no orders placed.")
         print("   Tier selection and lock confirmed.")

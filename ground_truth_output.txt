@@ -1,0 +1,254 @@
+================================================================================
+MT5 GROUND TRUTH ΓÇö Account #476944496
+================================================================================
+  Account:        #476944496
+  Trade mode:     0  (0=DEMO, others=REAL/live)
+  Balance:        $204.40
+  Equity:         $204.40
+  Currency:       USD
+  Leverage:       1:2000
+  Server time:    2026-09-30T23:00:17+00:00  (from XAUUSDm tick)
+
+================================================================================
+OPEN POSITIONS ΓÇö currently held per broker
+================================================================================
+  (none ΓÇö broker reports zero open positions)
+
+================================================================================
+DEAL HISTORY (last 14 days) ΓÇö every fill the broker recorded
+================================================================================
+  Total deals: 36
+
+       deal_id       order      pos_id  symbol      type          entry    volume       price      profit  time                 reason          
+  ------------------------------------------------------------------------------------------------------------------------------------------
+    2693088382  3249547762  3249547762  USDJPYm     BUY           in      0.05     157.950       +0.00  1789726859  reason=1        
+                                                                                                        2026-09-18T10:20:59+00:00                  
+    2693105168  3249565887  3249547762  USDJPYm     SELL          out      0.05     157.980       +0.95  1789727193  reason=1        
+                                                                                                        2026-09-18T10:26:33+00:00                  
+    2693106057  3249566894  3249566894  USDJPYm     BUY           in      0.01     157.970       +0.00  1789727221  reason=1        
+                                                                                                        2026-09-18T10:27:01+00:00                  
+    2693110887  3249572022  3249566894  USDJPYm     SELL          out      0.01     157.919       -0.32  1789727321  reason=1        
+                                                                                                        2026-09-18T10:28:41+00:00                  
+    2693143750  3249606507  3249606507  EURUSDm     SELL          in      0.01       1.148       +0.00  1789727886  reason=1        
+                                                                                                        2026-09-18T10:38:06+00:00                  
+    2693160147  3249623560  3249606507  EURUSDm     BUY           out      0.01       1.147       +0.36  1789728194  reason=1        
+                                                                                                        2026-09-18T10:43:14+00:00                  
+    2693208248  3249674363  3249674363  BTCUSDm     BUY           in      0.01   78250.520       +0.00  1789728926  reason=1        
+                                                                                                        2026-09-18T10:55:26+00:00                  
+    2693282786  3249750662  3249674363  BTCUSDm     SELL          out      0.01   78015.650       -2.35  1789729627  reason=1        
+                                                                                                        2026-09-18T11:07:07+00:00                  
+    2693318666  3249787690  3249787690  BTCUSDm     SELL          in      0.01   77992.280       +0.00  1789729930  reason=1        
+                                                                                                        2026-09-18T11:12:10+00:00                  
+    2693321216  3249790406  3249787690  BTCUSDm     BUY           out      0.01   78024.670       -0.33  1789729961  reason=1        
+                                                                                                        2026-09-18T11:12:41+00:00                  
+    2710372648  3267732138  3267732138  XAUUSDm     BUY           in      0.01    4352.662       +0.00  1790103300  EXPERT          
+                                                                                                        2026-09-22T18:55:00+00:00                  
+    2710391231  3267758094  3267758094  XAUUSDm     BUY           in      0.01    4355.189       +0.00  1790103674  EXPERT          
+                                                                                                        2026-09-22T19:01:14+00:00                  
+    2710401469  3267770880  3267770880  XAUUSDm     BUY           in      0.01    4354.823       +0.00  1790103900  EXPERT          
+                                                                                                        2026-09-22T19:05:00+00:00                  
+    2710422057  3267794366  3267794366  XAUUSDm     BUY           in      0.01    4357.636       +0.00  1790104201  EXPERT          
+                                                                                                        2026-09-22T19:10:01+00:00                  
+    2710591751  3267970459  3267732138  XAUUSDm     SELL          out      0.01    4368.018      +15.36  1790106167  reason=1        
+                                                                                                        2026-09-22T19:42:47+00:00                  
+    2710591752  3267970460  3267758094  XAUUSDm     SELL          out      0.01    4368.018      +12.83  1790106167  reason=1        
+                                                                                                        2026-09-22T19:42:47+00:00                  
+    2710591753  3267970461  3267770880  XAUUSDm     SELL          out      0.01    4368.018      +13.20  1790106167  reason=1        
+                                                                                                        2026-09-22T19:42:47+00:00                  
+    2710591754  3267970462  3267794366  XAUUSDm     SELL          out      0.01    4368.018      +10.38  1790106167  reason=1        
+                                                                                                        2026-09-22T19:42:47+00:00                  
+    2712764229  3270297245  3270297245  XAUUSDm     SELL          in      0.01    4315.935       +0.00  1790158941  EXPERT          
+                                                                                                        2026-09-23T10:22:21+00:00                  
+    2712774257  3270307506  3270307506  XAUUSDm     SELL          in      0.01    4315.541       +0.00  1790159099  EXPERT          
+                                                                                                        2026-09-23T10:24:59+00:00                  
+    2713043648  3270584311  3270307506  XAUUSDm     BUY           out      0.01    4307.374       +8.17  1790162711  reason=1        
+                                                                                                        2026-09-23T11:25:11+00:00                  
+    2713043649  3270584309  3270297245  XAUUSDm     BUY           out      0.01    4307.374       +8.57  1790162711  reason=1        
+                                                                                                        2026-09-23T11:25:11+00:00                  
+    2718728920  3276724828  3276724828  XAUUSDm     BUY           in      0.01    4264.497       +0.00  1790248830  EXPERT          
+                                                                                                        2026-09-24T11:20:30+00:00                  
+    2720102138  3278195227  3276724828  XAUUSDm     SELL          out      0.01    4254.026      -10.47  1790261955  reason=1        
+                                                                                                        2026-09-24T14:59:15+00:00                  
+    2731848372  3290550217  3290550217  XAUUSDm     SELL          in      0.01    4145.161       +0.00  1790588370  EXPERT          
+                                                                                                        2026-09-28T09:39:30+00:00                  
+    2731849814  3290551867  3290551867  XAUUSDm     SELL          in      0.01    4145.062       +0.00  1790588400  EXPERT          
+                                                                                                        2026-09-28T09:40:00+00:00                  
+    2731917580           0  3290551867  XAUUSDm     BUY           out      0.01    4156.065      -11.01  1790589119  MOBILE          
+                                                                                                        2026-09-28T09:51:59+00:00                  
+    2731918156           0  3290550217  XAUUSDm     BUY           out      0.01    4156.396      -11.24  1790589120  MOBILE          
+                                                                                                        2026-09-28T09:52:00+00:00                  
+    2732592254  3291317913  3291317913  XAUUSDm     SELL          in      0.01    4148.245       +0.00  1790596471  EXPERT          
+                                                                                                        2026-09-28T11:54:31+00:00                  
+    2732653877           0  3291317913  XAUUSDm     BUY           out      0.01    4157.721       -9.47  1790597050  MOBILE          
+                                                                                                        2026-09-28T12:04:10+00:00                  
+    2744198933  3303375177  3303375177  XAUUSDm     BUY           in      0.01    4181.533       +0.00  1790766557  CLIENT          
+                                                                                                        2026-09-30T11:09:17+00:00                  
+    2744209810  3303385408  3303375177  XAUUSDm     SELL          out      0.01    4179.552       -1.98  1790766613  reason=1        
+                                                                                                        2026-09-30T11:10:13+00:00                  
+    2744613698  3303844776  3303844776  XAUUSDm     BUY           in      0.01    4189.953       +0.00  1790771282  EXPERT          
+                                                                                                        2026-09-30T12:28:02+00:00                  
+    2744624108  3303858055  3303858055  XAUUSDm     BUY           in      0.01    4193.236       +0.00  1790771399  EXPERT          
+                                                                                                        2026-09-30T12:29:59+00:00                  
+    2744695389           0  3303844776  XAUUSDm     SELL          out      0.01    4218.821      +28.87  1790771518  WEB             
+                                                                                                        2026-09-30T12:31:58+00:00                  
+    2744724478  3303954971  3303858055  XAUUSDm     SELL          out      0.01    4213.496      +20.26  1790771618  reason=1        
+                                                                                                        2026-09-30T12:33:38+00:00                  
+
+================================================================================
+POSITION-BY-POSITION RECONCILIATION
+================================================================================
+
+  Position #3249547762  state=CLOSED
+    entry deals:  1
+      deal_id=2693088382  order=3249547762  USDJPYm  type=0  vol=0.05  price=157.95  time=1789726859
+    exit deals:   1
+      deal_id=2693105168  order=3249565887  USDJPYm  type=1  vol=0.05  price=157.98  profit=+0.95  reason=1  time=1789727193
+    realized profit: $+0.95  commission: $+0.00  swap: $+0.00  NET: $+0.95
+
+  Position #3249566894  state=CLOSED
+    entry deals:  1
+      deal_id=2693106057  order=3249566894  USDJPYm  type=0  vol=0.01  price=157.97  time=1789727221
+    exit deals:   1
+      deal_id=2693110887  order=3249572022  USDJPYm  type=1  vol=0.01  price=157.919  profit=-0.32  reason=1  time=1789727321
+    realized profit: $-0.32  commission: $+0.00  swap: $+0.00  NET: $-0.32
+
+  Position #3249606507  state=CLOSED
+    entry deals:  1
+      deal_id=2693143750  order=3249606507  EURUSDm  type=1  vol=0.01  price=1.1478300000000001  time=1789727886
+    exit deals:   1
+      deal_id=2693160147  order=3249623560  EURUSDm  type=0  vol=0.01  price=1.1474700000000002  profit=+0.36  reason=1  time=1789728194
+    realized profit: $+0.36  commission: $+0.00  swap: $+0.00  NET: $+0.36
+
+  Position #3249674363  state=CLOSED
+    entry deals:  1
+      deal_id=2693208248  order=3249674363  BTCUSDm  type=0  vol=0.01  price=78250.52  time=1789728926
+    exit deals:   1
+      deal_id=2693282786  order=3249750662  BTCUSDm  type=1  vol=0.01  price=78015.65000000001  profit=-2.35  reason=1  time=1789729627
+    realized profit: $-2.35  commission: $+0.00  swap: $+0.00  NET: $-2.35
+
+  Position #3249787690  state=CLOSED
+    entry deals:  1
+      deal_id=2693318666  order=3249787690  BTCUSDm  type=1  vol=0.01  price=77992.28  time=1789729930
+    exit deals:   1
+      deal_id=2693321216  order=3249790406  BTCUSDm  type=0  vol=0.01  price=78024.67  profit=-0.33  reason=1  time=1789729961
+    realized profit: $-0.33  commission: $+0.00  swap: $+0.00  NET: $-0.33
+
+  Position #3267732138  state=CLOSED
+    entry deals:  1
+      deal_id=2710372648  order=3267732138  XAUUSDm  type=0  vol=0.01  price=4352.662  time=1790103300
+    exit deals:   1
+      deal_id=2710591751  order=3267970459  XAUUSDm  type=1  vol=0.01  price=4368.018  profit=+15.36  reason=1  time=1790106167
+    realized profit: $+15.36  commission: $+0.00  swap: $+0.00  NET: $+15.36
+
+  Position #3267758094  state=CLOSED
+    entry deals:  1
+      deal_id=2710391231  order=3267758094  XAUUSDm  type=0  vol=0.01  price=4355.189  time=1790103674
+    exit deals:   1
+      deal_id=2710591752  order=3267970460  XAUUSDm  type=1  vol=0.01  price=4368.018  profit=+12.83  reason=1  time=1790106167
+    realized profit: $+12.83  commission: $+0.00  swap: $+0.00  NET: $+12.83
+
+  Position #3267770880  state=CLOSED
+    entry deals:  1
+      deal_id=2710401469  order=3267770880  XAUUSDm  type=0  vol=0.01  price=4354.823  time=1790103900
+    exit deals:   1
+      deal_id=2710591753  order=3267970461  XAUUSDm  type=1  vol=0.01  price=4368.018  profit=+13.20  reason=1  time=1790106167
+    realized profit: $+13.20  commission: $+0.00  swap: $+0.00  NET: $+13.20
+
+  Position #3267794366  state=CLOSED
+    entry deals:  1
+      deal_id=2710422057  order=3267794366  XAUUSDm  type=0  vol=0.01  price=4357.636  time=1790104201
+    exit deals:   1
+      deal_id=2710591754  order=3267970462  XAUUSDm  type=1  vol=0.01  price=4368.018  profit=+10.38  reason=1  time=1790106167
+    realized profit: $+10.38  commission: $+0.00  swap: $+0.00  NET: $+10.38
+
+  Position #3270297245  state=CLOSED
+    entry deals:  1
+      deal_id=2712764229  order=3270297245  XAUUSDm  type=1  vol=0.01  price=4315.935  time=1790158941
+    exit deals:   1
+      deal_id=2713043649  order=3270584309  XAUUSDm  type=0  vol=0.01  price=4307.374000000001  profit=+8.57  reason=1  time=1790162711
+    realized profit: $+8.57  commission: $+0.00  swap: $+0.00  NET: $+8.57
+
+  Position #3270307506  state=CLOSED
+    entry deals:  1
+      deal_id=2712774257  order=3270307506  XAUUSDm  type=1  vol=0.01  price=4315.541  time=1790159099
+    exit deals:   1
+      deal_id=2713043648  order=3270584311  XAUUSDm  type=0  vol=0.01  price=4307.374000000001  profit=+8.17  reason=1  time=1790162711
+    realized profit: $+8.17  commission: $+0.00  swap: $+0.00  NET: $+8.17
+
+  Position #3276724828  state=CLOSED
+    entry deals:  1
+      deal_id=2718728920  order=3276724828  XAUUSDm  type=0  vol=0.01  price=4264.497  time=1790248830
+    exit deals:   1
+      deal_id=2720102138  order=3278195227  XAUUSDm  type=1  vol=0.01  price=4254.026  profit=-10.47  reason=1  time=1790261955
+    realized profit: $-10.47  commission: $+0.00  swap: $+0.00  NET: $-10.47
+
+  Position #3290550217  state=CLOSED
+    entry deals:  1
+      deal_id=2731848372  order=3290550217  XAUUSDm  type=1  vol=0.01  price=4145.161  time=1790588370
+    exit deals:   1
+      deal_id=2731918156  order=0  XAUUSDm  type=0  vol=0.01  price=4156.396  profit=-11.24  reason=4  time=1790589120
+    realized profit: $-11.24  commission: $+0.00  swap: $+0.00  NET: $-11.24
+
+  Position #3290551867  state=CLOSED
+    entry deals:  1
+      deal_id=2731849814  order=3290551867  XAUUSDm  type=1  vol=0.01  price=4145.062  time=1790588400
+    exit deals:   1
+      deal_id=2731917580  order=0  XAUUSDm  type=0  vol=0.01  price=4156.065  profit=-11.01  reason=4  time=1790589119
+    realized profit: $-11.01  commission: $+0.00  swap: $+0.00  NET: $-11.01
+
+  Position #3291317913  state=CLOSED
+    entry deals:  1
+      deal_id=2732592254  order=3291317913  XAUUSDm  type=1  vol=0.01  price=4148.245  time=1790596471
+    exit deals:   1
+      deal_id=2732653877  order=0  XAUUSDm  type=0  vol=0.01  price=4157.721  profit=-9.47  reason=4  time=1790597050
+    realized profit: $-9.47  commission: $+0.00  swap: $+0.00  NET: $-9.47
+
+  Position #3303375177  state=CLOSED
+    entry deals:  1
+      deal_id=2744198933  order=3303375177  XAUUSDm  type=0  vol=0.01  price=4181.532999999999  time=1790766557
+    exit deals:   1
+      deal_id=2744209810  order=3303385408  XAUUSDm  type=1  vol=0.01  price=4179.552  profit=-1.98  reason=1  time=1790766613
+    realized profit: $-1.98  commission: $+0.00  swap: $+0.00  NET: $-1.98
+
+  Position #3303844776  state=CLOSED
+    entry deals:  1
+      deal_id=2744613698  order=3303844776  XAUUSDm  type=0  vol=0.01  price=4189.9529999999995  time=1790771282
+    exit deals:   1
+      deal_id=2744695389  order=0  XAUUSDm  type=1  vol=0.01  price=4218.821  profit=+28.87  reason=5  time=1790771518
+    realized profit: $+28.87  commission: $+0.00  swap: $+0.00  NET: $+28.87
+
+  Position #3303858055  state=CLOSED
+    entry deals:  1
+      deal_id=2744624108  order=3303858055  XAUUSDm  type=0  vol=0.01  price=4193.236  time=1790771399
+    exit deals:   1
+      deal_id=2744724478  order=3303954971  XAUUSDm  type=1  vol=0.01  price=4213.496  profit=+20.26  reason=1  time=1790771618
+    realized profit: $+20.26  commission: $+0.00  swap: $+0.00  NET: $+20.26
+
+================================================================================
+AUDIT-DB FILLS CROSS-REFERENCED AGAINST MT5
+================================================================================
+
+  Audit DB has 5 fill row(s):
+  db_id  db_ts                      ticket  symbol      dir     lots    db_price   db_profit  retcode
+  --------------------------------------------------------------------------------------------------------------
+      1  2026-09-28T09:39:30.553202    3290550217  XAUUSDm     SELL    0.01    4145.161       +0.00    10009
+      2  2026-09-28T09:40:01.254310    3290551867  XAUUSDm     SELL    0.01    4145.062       +0.00    10009
+      3  2026-09-28T11:54:31.690807    3291317913  XAUUSDm     SELL    0.01    4148.245       +0.00    10009
+      4  2026-09-30T12:28:03.796089    3303844776  XAUUSDm     BUY     0.01    4189.953       +0.00    10009
+      5  2026-09-30T12:30:01.062923    3303858055  XAUUSDm     BUY     0.01    4193.236       +0.00    10009
+
+  Ground truth cross-reference:
+  audit row 1 (ticket=3290550217, mt5_ticket=3290550217): NOT FOUND in MT5 history
+  audit row 2 (ticket=3290551867, mt5_ticket=3290551867): NOT FOUND in MT5 history
+  audit row 3 (ticket=3291317913, mt5_ticket=3291317913): NOT FOUND in MT5 history
+  audit row 4 (ticket=3303844776, mt5_ticket=3303844776): NOT FOUND in MT5 history
+  audit row 5 (ticket=3303858055, mt5_ticket=3303858055): NOT FOUND in MT5 history
+
+================================================================================
+ORDER HISTORY (last 14 days) ΓÇö what the broker recorded as orders
+================================================================================
+Traceback (most recent call last):
+  File "C:\Users\RIDGE\MARS-QUANT\ground_truth.py", line 196, in <module>
+    print(f"  order={o.order}  ticket={o.ticket}  {o.symbol}  type={o.type}  "
+                     ^^^^^^^
+AttributeError: 'TradeOrder' object has no attribute 'order'

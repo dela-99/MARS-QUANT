@@ -20,7 +20,7 @@ import sqlite3
 import os
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from threading import Lock
@@ -432,8 +432,8 @@ class MT5OrderRouter:
 
 class MT5AuditLogger:
     """Persists all trading activity to SQLite for audit trail with WAL mode and auto-backup."""
-    
-    def __init__(self, db_path: str = "mt5_audit.db"):
+
+    def __init__(self, db_path: str = "mt5_audit.db", mt5_module=None):
         self.db_path = Path(db_path)
         self.backup_paths = [
             Path.home() / "MARS_AUDIT_BACKUP" / f"mt5_audit_{datetime.now().strftime('%Y%m%d')}.db",
@@ -441,7 +441,17 @@ class MT5AuditLogger:
         ]
         for bp in self.backup_paths:
             bp.parent.mkdir(parents=True, exist_ok=True)
+        self._mt5 = mt5_module  # Optional: enables close-fill reconciliation
         self._init_db()
+
+    def _ensure_mt5(self):
+        if self._mt5 is None:
+            raise RuntimeError(
+                "MT5AuditLogger has no MT5 module reference; "
+                "instantiate with MT5AuditLogger(db_path, mt5_module) "
+                "to enable history_deals_get lookups (close-fill reconciliation)."
+            )
+        return self._mt5
     
     def _init_db(self):
         """Initialize database schema with WAL mode."""
@@ -506,6 +516,23 @@ class MT5AuditLogger:
                     comment TEXT
                 )
             """)
+
+            # MIGRATION: add exit-tracking columns to fills if absent (idempotent)
+            existing_fill_cols = {row[1] for row in cursor.execute("PRAGMA table_info(fills)").fetchall()}
+            fill_migrations = [
+                ("position_id",       "INTEGER"),
+                ("exit_time",         "TEXT"),
+                ("exit_price",        "REAL"),
+                ("exit_reason",       "TEXT"),
+                ("exit_commission",   "REAL"),
+                ("exit_swap",         "REAL"),
+                ("exit_profit",       "REAL"),
+                ("exit_deal_ticket",  "INTEGER"),
+                ("is_closed",         "INTEGER DEFAULT 0"),
+            ]
+            for col, decl in fill_migrations:
+                if col not in existing_fill_cols:
+                    cursor.execute(f"ALTER TABLE fills ADD COLUMN {col} {decl}")
             
             # Risk decisions table
             cursor.execute("""
@@ -667,29 +694,37 @@ class MT5AuditLogger:
             conn.commit()
    
     def log_fill(self, fill, config: TradeConfig, expected_price: float):
-        """Log order fill with slippage calculation."""
+        """Log order fill with slippage calculation.
+
+        Captures the MT5 position_id so the closing deal can be reconciled
+        later via history_deals_get(position=position_id).
+        """
         import sqlite3
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
-            
+
             # Calculate slippage in points and percentage
             spread_at_fill = fill.ask - fill.bid
-            
-            # Get actual commission, swap, profit from MT5 history for this fill
+
+            # Get actual commission/swap/profit from MT5 history for THIS deal.
+            # For entry deals, profit is always 0; commission and swap may apply.
             commission = 0.0
             swap = 0.0
             profit = 0.0
+            position_id = None
             try:
-                if hasattr(fill, 'mt5_ticket') and fill.mt5_ticket:
-                    deals = self.mt5.history_deals_get(ticket=fill.mt5_ticket)
-                    if deals and len(deals) > 0:
-                        deal = deals[0]
-                        commission = getattr(deal, 'commission', 0.0)
-                        swap = getattr(deal, 'swap', 0.0)
-                        profit = getattr(deal, 'profit', 0.0)
+                # fill.ticket is the DEAL ticket returned by order_send (this is
+                # the correct key for history_deals_get(ticket=...)).
+                deals = self._mt5.history_deals_get(ticket=fill.ticket)
+                if deals and len(deals) > 0:
+                    deal = deals[0]
+                    commission = getattr(deal, 'commission', 0.0)
+                    swap = getattr(deal, 'swap', 0.0)
+                    profit = getattr(deal, 'profit', 0.0)
+                    position_id = getattr(deal, 'position_id', None)
             except Exception:
                 pass  # Keep defaults if history lookup fails
-            
+
             cursor.execute("""
                             INSERT INTO fills (
                                 timestamp, ticket, order_id, symbol, direction,
@@ -698,11 +733,12 @@ class MT5AuditLogger:
                                 requested_tp, filled_tp, slippage_points,
                                 slippage_pct, size_slippage, spread_at_fill, commission, swap,
                                 profit, mt5_ticket, mt5_order_id,
-                                retcode, retcode_external, comment
-                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                retcode, retcode_external, comment,
+                                position_id
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """, (
                             fill.timestamp.isoformat() if hasattr(fill, 'timestamp') else datetime.now().isoformat(),
-                            fill.ticket, fill.order_id, 
+                            fill.ticket, fill.order_id,
                             fill.request.symbol if hasattr(fill, 'request') else config.symbol,
                             "BUY" if (hasattr(fill, 'request') and fill.request.signal == 1) else (config.signal == 1 and "BUY" or "SELL"),
                             fill.request.volume if hasattr(fill, 'request') else config.position_size,
@@ -719,10 +755,154 @@ class MT5AuditLogger:
                             fill.order_id,
                             fill.result_code,
                             fill.retcode_external if not isinstance(fill.retcode_external, type(None)) else -1,
-                            fill.comment
+                            fill.comment,
+                            position_id,
                         ))
             conn.commit()
+            return int(cursor.lastrowid)
     
+    def log_close_fill(self, open_fill_rowid: int) -> bool:
+        """Look up the exit deal in MT5 history and update the open fill row.
+
+        Idempotent: if the row is already marked is_closed=1, returns True
+        without making any DB changes.
+
+        Returns True on success, False if the exit deal cannot be found.
+        """
+        import sqlite3
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT id, position_id, ticket, is_closed FROM fills WHERE id = ?",
+                (open_fill_rowid,),
+            )
+            row = cursor.fetchone()
+            if not row:
+                return False
+            rid, position_id, ticket, is_closed = row
+            if is_closed:
+                return True
+
+            exit_deal = None
+            try:
+                mt5_api = self._ensure_mt5()
+                # Prefer position= (broker-authoritative). Fall back to ticket=
+                # (position ticket == ticket for entries without position_id).
+                if position_id:
+                    deals = mt5_api.history_deals_get(position=position_id)
+                else:
+                    deals = mt5_api.history_deals_get(position=ticket)
+                exit_deals = [d for d in deals if getattr(d, 'entry', None) == 1]
+                if exit_deals:
+                    exit_deal = exit_deals[0]
+            except Exception:
+                pass
+
+            if exit_deal is None:
+                return False
+
+            exit_time = (
+                datetime.fromtimestamp(getattr(exit_deal, 'time', 0), tz=timezone.utc).isoformat()
+                if getattr(exit_deal, 'time', 0) else datetime.now(tz=timezone.utc).isoformat()
+            )
+            exit_price = float(getattr(exit_deal, 'price', 0.0) or 0.0)
+            exit_commission = float(getattr(exit_deal, 'commission', 0.0) or 0.0)
+            exit_swap = float(getattr(exit_deal, 'swap', 0.0) or 0.0)
+            exit_profit = float(getattr(exit_deal, 'profit', 0.0) or 0.0)
+            reason_code = int(getattr(exit_deal, 'reason', 0) or 0)
+            reason_map = {
+                0: "client", 1: "client", 2: "client", 3: "expert", 4: "mobile",
+                5: "web", 6: "sl_hit", 7: "tp_hit", 8: "stopout", 9: "stopout",
+            }
+            exit_reason = reason_map.get(reason_code, f"reason={reason_code}")
+            exit_ticket = int(getattr(exit_deal, 'ticket', 0) or 0)
+
+            cursor.execute(
+                """
+                UPDATE fills SET
+                    exit_time = ?,
+                    exit_price = ?,
+                    exit_reason = ?,
+                    exit_commission = ?,
+                    exit_swap = ?,
+                    exit_profit = ?,
+                    exit_deal_ticket = ?,
+                    is_closed = 1
+                WHERE id = ?
+                """,
+                (
+                    exit_time, exit_price, exit_reason,
+                    exit_commission, exit_swap, exit_profit,
+                    exit_ticket, rid,
+                ),
+            )
+            conn.commit()
+            return True
+
+    def reconcile_from_broker(self, days_back: int = 30) -> dict:
+        """Catch up the audit DB with any closes that happened offline.
+
+        For every fill in the audit DB that has is_closed = 0, query MT5
+        history_deals_get(position=position_id). If the broker shows an exit
+        deal (entry=1), write it into the fill row using log_close_fill.
+
+        Also: scan for OPEN positions in MT5 that the audit DB doesn't know
+        about (positions opened manually or by another session). Return them
+        in the result for the caller to act on.
+
+        Returns a summary dict:
+          {
+            "fills_reconciled": N,
+            "fills_unmatched":  M,   # open in audit DB but no exit deal found
+            "orphan_positions": [ticket, ...],  # open in MT5 but no audit row
+          }
+        """
+        import sqlite3
+        from datetime import timedelta as _td
+        result = {"fills_reconciled": 0, "fills_unmatched": 0, "orphan_positions": []}
+
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT id, position_id, ticket, symbol, direction
+                FROM fills
+                WHERE (is_closed = 0 OR is_closed IS NULL)
+            """)
+            open_rows = cursor.fetchall()
+
+        for rid, position_id, ticket, symbol, direction in open_rows:
+            ok = self.log_close_fill(rid)
+            if ok:
+                result["fills_reconciled"] += 1
+            else:
+                result["fills_unmatched"] += 1
+
+        # Also: find positions the broker holds that aren't in our audit DB.
+        try:
+            mt5_api = self._ensure_mt5()
+            broker_positions = mt5_api.positions_get() or []
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT ticket FROM fills WHERE is_closed = 0 OR is_closed IS NULL")
+                known = {r[0] for r in cursor.fetchall()}
+            for bp in broker_positions:
+                if bp.magic == 123456 and bp.ticket not in known:
+                    result["orphan_positions"].append({
+                        "ticket": bp.ticket,
+                        "position_id": bp.identifier,
+                        "symbol": bp.symbol,
+                        "direction": "BUY" if bp.type == 0 else "SELL",
+                        "volume": bp.volume,
+                        "price_open": bp.price_open,
+                        "sl": bp.sl,
+                        "tp": bp.tp,
+                        "time": datetime.fromtimestamp(bp.time, tz=timezone.utc).isoformat(),
+                    })
+        except Exception:
+            pass
+
+        return result
+
     def log_risk_decision(self, config: TradeConfig, decision: str, reason: str,
                           position_value: float, equity: float,
                           risk_pct: float, tier_risk_cap_pct: float,
@@ -878,7 +1058,7 @@ class MT5Executor:
             self.mt5 = None
             self.symbol_resolver = None
             self.order_router = None
-            self.audit_logger = MT5AuditLogger(audit_db_path)
+            self.audit_logger = MT5AuditLogger(audit_db_path, self.mt5)
 
             # State
             self.open_positions: Dict[str, Dict] = {}
@@ -1273,6 +1453,7 @@ class MT5Executor:
         # ALWAYS log the order_send() result (success or failure)
         if fill.success:
             # Open position tracking
+            audit_row_id = self.audit_logger.log_fill(fill, config, config.entry_price)
             self.open_positions[config.symbol] = {
                 "entry_price": fill.price,
                 "stop_price": config.stop_price,
@@ -1283,6 +1464,8 @@ class MT5Executor:
                 "entry_equity": self.equity,
                 "mt5_ticket": fill.ticket,
                 "mt5_order_id": fill.order_id,
+                "audit_row_id": audit_row_id,
+                "position_id": getattr(fill, 'mt5_ticket', None) or fill.ticket,
             }
 
             # Register position risk with risk manager for aggregate tracking
@@ -1290,8 +1473,6 @@ class MT5Executor:
             is_min_lot_override = (fill.volume <= 0.01)
             self.risk_manager.register_position_risk(config.symbol, risk_at_stop, is_min_lot_override)
 
-            # Log fill with slippage
-            self.audit_logger.log_fill(fill, config, config.entry_price)
             return True
         else:
             # Log failed order too
@@ -1392,12 +1573,12 @@ class MT5Executor:
         }
         
         result = self.mt5.order_send(request)
-        
+
         if result is not None and result.retcode == self.mt5.TRADE_RETCODE_DONE:
-            # Update equity
+            # Update equity using ESTIMATED pnl as immediate feedback
             self.equity += pnl
             self.equity_curve.append(self.equity)
-            
+
             # Log closed trade
             closed_trade = {
                 "symbol": symbol,
@@ -1411,13 +1592,41 @@ class MT5Executor:
                 "mt5_ticket": mt5_ticket,
             }
             self.closed_trades.append(closed_trade)
-            
+
+            # PERSIST the close to the audit DB by looking up the actual exit
+            # deal via the broker's history. This is the broker-authoritative
+            # realized P&L (commission + swap + price-delta), not the estimate.
+            try:
+                deals = self.mt5.history_deals_get(position=mt5_ticket)
+                exit_deals = [d for d in deals if getattr(d, 'entry', None) == 1]
+                if exit_deals:
+                    ex = exit_deals[0]
+                    audit_row_id = pos.get("audit_row_id")
+                    if audit_row_id:
+                        self.audit_logger.log_close_fill(open_fill_rowid=int(audit_row_id))
+                    # Also store the broker-authoritative numbers on the in-mem
+                    # closed_trade for downstream consumers.
+                    closed_trade["broker_profit"] = float(getattr(ex, 'profit', 0.0) or 0.0)
+                    closed_trade["broker_commission"] = float(getattr(ex, 'commission', 0.0) or 0.0)
+                    closed_trade["broker_swap"] = float(getattr(ex, 'swap', 0.0) or 0.0)
+                    closed_trade["broker_exit_price"] = float(getattr(ex, 'price', 0.0) or 0.0)
+                    closed_trade["broker_exit_time"] = datetime.fromtimestamp(
+                        getattr(ex, 'time', 0), tz=timezone.utc
+                    ).isoformat() if getattr(ex, 'time', 0) else None
+                    # Recompute equity with the broker number, replacing the estimate.
+                    delta = closed_trade["broker_profit"] + closed_trade["broker_commission"] + closed_trade["broker_swap"] - pnl
+                    self.equity += delta
+            except Exception as e:
+                # Don't fail the close if logging fails — the broker already
+                # accepted the order. Just record the failure for visibility.
+                self._last_close_log_error = str(e)
+
             # Remove from tracking
             del self.open_positions[symbol]
-            
+
             # Update risk manager
             self.risk_manager.unregister_position_risk(symbol)
-            
+
             print(f"✅ Position closed: {symbol} | {reason} | PnL: ${pnl:.2f} | Equity: ${self.equity:.2f}")
             return True
         else:
