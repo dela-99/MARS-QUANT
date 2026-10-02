@@ -1,0 +1,13 @@
+import sqlite3, tempfile, pandas as pd
+c = sqlite3.connect(tempfile.gettempdir() + r'\mt5_audit_real.db', check_same_thread=False)
+df = pd.read_sql_query('SELECT id, timestamp, symbol, gate_result FROM evaluations ORDER BY timestamp DESC LIMIT 5', c)
+print('Most recent 5 evaluations:')
+print(df.to_string(index=False))
+print()
+print('Total evaluations:', len(pd.read_sql_query("SELECT id FROM evaluations", c)))
+print('Total signals:', len(pd.read_sql_query("SELECT id FROM signals", c)))
+print('Total fills:', len(pd.read_sql_query("SELECT id FROM fills", c)))
+print('Total risk_decisions:', len(pd.read_sql_query("SELECT id FROM risk_decisions", c)))
+print('Last eval timestamp:', pd.read_sql_query("SELECT timestamp FROM evaluations ORDER BY id DESC LIMIT 1", c).iloc[0, 0])
+print('Last signal timestamp:', pd.read_sql_query("SELECT timestamp FROM signals ORDER BY id DESC LIMIT 1", c).iloc[0, 0])
+c.close()

@@ -48,6 +48,32 @@ st.set_page_config(
 st.markdown(
     """
 <style>
+    /* All card backgrounds are light fills — text MUST be explicitly dark to
+       remain readable under Streamlit's default dark theme. Without this,
+       Streamlit's inherited text color (light) makes the card contents
+       invisible against the light card background. */
+    .metric-card,
+    .metric-card.bullish,
+    .metric-card.bearish,
+    .metric-card.neutral,
+    .metric-card.tradeable,
+    .metric-card.not-tradeable,
+    .metric-card.allowed,
+    .metric-card.rejected {
+        color: #111827 !important;  /* high-contrast dark primary text */
+    }
+    .metric-card h1, .metric-card h2, .metric-card h3, .metric-card h4,
+    .metric-card h5, .metric-card h6,
+    .metric-card p, .metric-card span, .metric-card div,
+    .metric-card b, .metric-card strong, .metric-card small {
+        color: inherit !important;
+    }
+    .metric-card b, .metric-card strong {
+        color: #000000 !important;  /* bold text black for max contrast */
+    }
+    .metric-card small {
+        color: #374151 !important;  /* secondary label grey */
+    }
     .metric-card {
         background-color: #f0f2f6;
         padding: 1rem;
@@ -55,18 +81,21 @@ st.markdown(
         border-left: 4px solid #1f77b4;
         margin-bottom: 0.5rem;
     }
-    .metric-card.bullish { border-left-color: #2e7d32; background-color: #e8f5e9; }
-    .metric-card.bearish { border-left-color: #c62828; background-color: #ffebee; }
-    .metric-card.neutral { border-left-color: #757575; background-color: #f5f5f5; }
-    .metric-card.tradeable { border-left-color: #2e7d32; background-color: #e8f5e9; }
-    .metric-card.not-tradeable { border-left-color: #c62828; background-color: #ffebee; }
-    .metric-card.allowed { border-left-color: #2e7d32; background-color: #e8f5e9; }
-    .metric-card.rejected { border-left-color: #c62828; background-color: #ffebee; }
-    .risk-event-critical { background-color: #ffebee; border-left-color: #f44336; }
-    .risk-event-warning { background-color: #fff3e0; border-left-color: #ff9800; }
-    .risk-event-info { background-color: #e3f2fd; border-left-color: #2196f3; }
-    .enabled-badge { background-color: #c8e6c9; color: #2e7d32; padding: 0.25rem 0.5rem; border-radius: 0.25rem; }
-    .disabled-badge { background-color: #ffcdd2; color: #c62828; padding: 0.25rem 0.5rem; border-radius: 0.25rem; }
+    .metric-card.bullish { border-left-color: #2e7d32; background-color: #e8f5e9; color: #1b5e20 !important; }
+    .metric-card.bearish { border-left-color: #c62828; background-color: #ffebee; color: #b71c1c !important; }
+    .metric-card.neutral { border-left-color: #757575; background-color: #f5f5f5; color: #424242 !important; }
+    .metric-card.tradeable { border-left-color: #2e7d32; background-color: #e8f5e9; color: #1b5e20 !important; }
+    .metric-card.not-tradeable { border-left-color: #c62828; background-color: #ffebee; color: #b71c1c !important; }
+    .metric-card.allowed { border-left-color: #2e7d32; background-color: #e8f5e9; color: #1b5e20 !important; }
+    .metric-card.rejected { border-left-color: #c62828; background-color: #ffebee; color: #b71c1c !important; }
+    .risk-event-critical { background-color: #ffebee; border-left-color: #f44336; color: #b71c1c !important; }
+    .risk-event-warning { background-color: #fff3e0; border-left-color: #ff9800; color: #5d4037 !important; }
+    .risk-event-info { background-color: #e3f2fd; border-left-color: #2196f3; color: #0d47a1 !important; }
+    .risk-event-critical *, .risk-event-warning *, .risk-event-info * {
+        color: inherit !important;
+    }
+    .enabled-badge { background-color: #c8e6c9; color: #1b5e20 !important; padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-weight: 700; }
+    .disabled-badge { background-color: #ffcdd2; color: #b71c1c !important; padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-weight: 700; }
     .heartbeat-fresh { background-color: #e8f5e9; padding: 0.75rem; border-radius: 0.5rem; border-left: 6px solid #2e7d32; }
     .heartbeat-warn { background-color: #fff3e0; padding: 0.75rem; border-radius: 0.5rem; border-left: 6px solid #ff9800; }
     .heartbeat-stale { background-color: #ffebee; padding: 0.75rem; border-radius: 0.5rem; border-left: 6px solid #c62828; }
@@ -725,60 +754,106 @@ regime_df = compute_regime_per_symbol(session_symbols)
 
 
 # ===============================================================
-# PANEL 1 — System Heartbeat (top, prominent)
+# PANEL 1 — System Heartbeat (top, prominent, HIGH-CONTRAST)
 # ===============================================================
 st.title("M.A.R.S. Multi-Pair Trading Dashboard")
 
 
 def _fmt_age(ts_str: Optional[str]) -> tuple[str, str, str]:
-    """Return (display, css_class, verb) for a timestamp."""
+    """Return (display, color_hex, verb) for a timestamp.
+
+    Returns inline color hex so the dashboard's custom HTML can override
+    Streamlit's theme text color. Cards use light fills + explicit black
+    text so they remain readable in both light and dark Streamlit themes.
+    """
     if not ts_str:
-        return ("never", "heartbeat-stale", "no data")
+        return ("never", "#c62828", "no data")
     try:
         ts = pd.to_datetime(ts_str, errors="coerce", utc=True)
         if pd.isna(ts):
-            return (str(ts_str), "heartbeat-stale", "unparseable")
+            return (str(ts_str), "#c62828", "unparseable")
         age = pd.Timestamp.now(tz="UTC") - ts
         secs = int(age.total_seconds())
         if secs < 60:
-            return (f"{secs}s ago", "heartbeat-fresh", "active")
+            return (f"{secs}s ago", "#1b5e20", "active")
         if secs < 300:
-            return (f"{secs // 60}m {secs % 60}s ago", "heartbeat-fresh", "active")
+            return (f"{secs // 60}m {secs % 60}s ago", "#1b5e20", "active")
         if secs < 1800:
-            return (f"{secs // 60}m ago", "heartbeat-warn", "warn")
-        return (f"{secs // 60}m ago", "heartbeat-stale", "STALE")
+            return (f"{secs // 60}m ago", "#e65100", "warn")
+        return (f"{secs // 60}m ago", "#b71c1c", "STALE")
     except Exception:
-        return (str(ts_str), "heartbeat-stale", "error")
+        return (str(ts_str), "#c62828", "error")
 
 
-st.markdown("<div class='panel-divider'></div>", unsafe_allow_html=True)
-st.header("💓 System Heartbeat")
+def _heartbeat_card(label: str, ts: Optional[str], verb_label: Optional[str] = None) -> str:
+    """Render one heartbeat card with explicit inline colors (visible in any theme)."""
+    display, color, verb = _fmt_age(ts)
+    bg = {
+        "#1b5e20": "#c8e6c9",  # active  → light green
+        "#e65100": "#ffe0b2",  # warn    → light orange
+        "#b71c1c": "#ffcdd2",  # STALE   → light red
+        "#c62828": "#ffcdd2",  # no data → light red
+    }.get(color, "#eeeeee")
+    return (
+        f'<div style="background:{bg}; border-left:6px solid {color}; '
+        f'padding:12px 16px; border-radius:6px; margin-bottom:8px; '
+        f'font-family:inherit;">'
+        f'<div style="color:#222; font-size:13px; font-weight:600; '
+        f'text-transform:uppercase; letter-spacing:0.5px;">{label}</div>'
+        f'<div style="color:{color}; font-size:22px; font-weight:700; '
+        f'margin-top:4px;">{display}</div>'
+        f'<div style="color:#555; font-size:12px; margin-top:2px;">'
+        f'{verb_label or verb}</div>'
+        f'</div>'
+    )
+
+
+def _db_card() -> str:
+    db_size_kb = recon.get('db_size_bytes', 0) / 1024
+    total_rows = sum(recon.get('row_counts', {}).values())
+    return (
+        f'<div style="background:#e3f2fd; border-left:6px solid #0d47a1; '
+        f'padding:12px 16px; border-radius:6px; margin-bottom:8px;">'
+        f'<div style="color:#222; font-size:13px; font-weight:600; '
+        f'text-transform:uppercase; letter-spacing:0.5px;">Audit DB</div>'
+        f'<div style="color:#0d47a1; font-size:22px; font-weight:700; '
+        f'margin-top:4px;">{db_size_kb:.1f} KB</div>'
+        f'<div style="color:#555; font-size:12px; margin-top:2px;">'
+        f'{total_rows} rows across {len(recon.get("row_counts", {}))} tables</div>'
+        f'<div style="color:#777; font-size:10px; margin-top:4px; '
+        f'word-break:break-all;">{DB_PATH}</div>'
+        f'</div>'
+    )
+
+
+st.markdown(
+    "<hr style='border:none; border-top:2px solid #e0e0e0; margin:1rem 0;'>",
+    unsafe_allow_html=True,
+)
+st.markdown(
+    '<h2 style="margin-top:0.5rem;">💓 System Heartbeat '
+    '<span style="font-size:14px; color:#888; font-weight:400;">'
+    '— is the live session polling?</span></h2>',
+    unsafe_allow_html=True,
+)
 hb_cols = st.columns(4)
 with hb_cols[0]:
-    label, css, verb = _fmt_age(heartbeat["last_eval_ts"])
     st.markdown(
-        f"<div class='{css}'><b>Last gate evaluation:</b><br>{label}<br><small>({verb})</small></div>",
+        _heartbeat_card("Last gate evaluation", heartbeat["last_eval_ts"]),
         unsafe_allow_html=True,
     )
 with hb_cols[1]:
-    label, css, verb = _fmt_age(heartbeat["last_fill_ts"])
     st.markdown(
-        f"<div class='{css}'><b>Last fill:</b><br>{label}<br><small>({verb})</small></div>",
+        _heartbeat_card("Last fill", heartbeat["last_fill_ts"]),
         unsafe_allow_html=True,
     )
 with hb_cols[2]:
-    label, css, verb = _fmt_age(heartbeat["last_signal_ts"])
     st.markdown(
-        f"<div class='{css}'><b>Last signal:</b><br>{label}<br><small>({verb})</small></div>",
+        _heartbeat_card("Last signal", heartbeat["last_signal_ts"]),
         unsafe_allow_html=True,
     )
 with hb_cols[3]:
-    st.markdown(
-        f"<div class='heartbeat-fresh'><b>DB:</b> {DB_PATH}<br>"
-        f"<small>{recon.get('db_size_bytes', 0) / 1024:.1f} KB, "
-        f"{sum(recon.get('row_counts', {}).values())} total rows</small></div>",
-        unsafe_allow_html=True,
-    )
+    st.markdown(_db_card(), unsafe_allow_html=True)
 
 
 # ===============================================================
@@ -859,70 +934,108 @@ if tier:
 # ===============================================================
 # PANEL 3 — Regime Indicator (1H / 30M / 15M per symbol)
 # ===============================================================
-st.markdown("<div class='panel-divider'></div>", unsafe_allow_html=True)
-st.header("2️⃣ Regime Indicator")
-st.caption("Latest MTF gate evaluation per active symbol — updated each cycle. "
-           "Required for the Nov 3 decision: was Donchian losing disproportionately in choppy regimes?")
+st.markdown(
+    "<hr style='border:none; border-top:2px solid #e0e0e0; margin:1.5rem 0;'>",
+    unsafe_allow_html=True,
+)
+st.markdown(
+    '<h2 style="margin-top:0.5rem;">2️⃣ Regime Indicator '
+    '<span style="font-size:14px; color:#888; font-weight:400;">'
+    '— current 1H trend / 30M bias / 15M tradeability per symbol</span></h2>',
+    unsafe_allow_html=True,
+)
+st.markdown(
+    '<div style="color:#666; font-size:13px; margin-bottom:8px;">'
+    'Latest MTF gate evaluation per active symbol — updated each cycle. '
+    'Required for the Nov 3 decision: was Donchian losing disproportionately '
+    'in choppy regimes?</div>',
+    unsafe_allow_html=True,
+)
+
+
+def _regime_value_html(label: str, value: str) -> tuple[str, str]:
+    """Return (color_hex, bg_hex) for a regime value."""
+    if value == "LONG_BIAS":
+        return ("#1b5e20", "#c8e6c9")
+    if value == "SHORT_BIAS":
+        return ("#b71c1c", "#ffcdd2")
+    if value == "TRADEABLE":
+        return ("#1b5e20", "#c8e6c9")
+    if value == "NOT_TRADEABLE":
+        return ("#b71c1c", "#ffcdd2")
+    if value == "ALLOWED":
+        return ("#1b5e20", "#c8e6c9")
+    if value == "REJECTED":
+        return ("#e65100", "#ffe0b2")
+    return ("#555555", "#eeeeee")  # neutral / unknown
+
+
+def _regime_pill(value: str) -> str:
+    """Compact colored pill for a regime value (label only, not the row)."""
+    color, bg = _regime_value_html("", value)
+    return (
+        f'<span style="background:{bg}; color:{color}; padding:3px 10px; '
+        f'border-radius:12px; font-size:13px; font-weight:700; '
+        f'border:1px solid {color}; display:inline-block;">{value}</span>'
+    )
+
+
+def _regime_row(label: str, value: str) -> str:
+    color, _ = _regime_value_html(label, value)
+    return (
+        f'<div style="display:flex; justify-content:space-between; '
+        f'align-items:center; padding:6px 0; border-bottom:1px solid #eee;">'
+        f'<span style="color:#333; font-size:13px; font-weight:600;">'
+        f'{label}</span>'
+        f'{_regime_pill(value)}'
+        f'</div>'
+    )
+
 
 if regime_df.empty:
-    st.info("No regime data yet (no evaluations recorded for the selected symbols).")
+    st.markdown(
+        '<div style="background:#fff8e1; padding:12px; border-radius:6px; '
+        'border-left:6px solid #ffc107; color:#5d4037;">'
+        'No regime data yet (no evaluations recorded for the selected symbols).'
+        '</div>',
+        unsafe_allow_html=True,
+    )
 else:
     cols = st.columns(len(regime_df))
     for idx, (_, row) in enumerate(regime_df.iterrows()):
         with cols[idx]:
             sym = row["symbol"]
-            t1 = row["trend_1h"]
-            t30 = row["bias_30m"]
-            c15 = row["context_15m"]
-            gate = row["gate_result"]
+            t1 = row["trend_1h"] or "—"
+            t30 = row["bias_30m"] or "—"
+            c15 = row["context_15m"] or "—"
+            gate = row["gate_result"] or "—"
+            asof = row.get("as_of", "") or "—"
 
-            def style_1h(v: str) -> tuple[str, str]:
-                if v == "LONG_BIAS":
-                    return "🟢 LONG_BIAS", "bullish"
-                if v == "SHORT_BIAS":
-                    return "🔴 SHORT_BIAS", "bearish"
-                return f"⚪ {v}", "neutral"
+            asof_display = asof
+            if hasattr(asof, "isoformat"):
+                asof_display = asof.isoformat()
+            # Trim microseconds for compactness
+            if isinstance(asof_display, str) and len(asof_display) > 19:
+                asof_display = asof_display[:19].replace("T", " ") + " UTC"
 
-            def style_30(v: str) -> tuple[str, str]:
-                if v == "LONG_BIAS":
-                    return "🟢 LONG_BIAS", "bullish"
-                if v == "SHORT_BIAS":
-                    return "🔴 SHORT_BIAS", "bearish"
-                return f"⚪ {v}", "neutral"
-
-            def style_15(v: str) -> tuple[str, str]:
-                if v == "TRADEABLE":
-                    return "🟢 TRADEABLE", "tradeable"
-                if v == "NOT_TRADEABLE":
-                    return "🔴 NOT_TRADEABLE", "not-tradeable"
-                return f"⚪ {v}", "neutral"
-
-            def style_gate(v: str) -> tuple[str, str]:
-                if v == "ALLOWED":
-                    return "🟢 ALLOWED", "allowed"
-                if v == "REJECTED":
-                    return "🔴 REJECTED", "rejected"
-                return f"⚪ {v}", "neutral"
-
-            d1, c1 = style_1h(t1)
-            d2, c2 = style_30(t30)
-            d3, c3 = style_15(c15)
-            d4, c4 = style_gate(gate)
-            asof = row.get("as_of", "") or ""
-            st.markdown(
-                f"""
-                <div class="metric-card {c1}">
-                    <h4 style="margin:0">{sym}</h4>
-                    <small>{asof}</small>
-                    <hr style="margin: 0.25rem 0">
-                    <b>1H trend:</b> {d1}<br>
-                    <b>30M bias:</b> {d2}<br>
-                    <b>15M context:</b> {d3}<br>
-                    <b>Gate:</b> {d4}
-                </div>
-                """,
-                unsafe_allow_html=True,
+            html = (
+                f'<div style="background:#ffffff; border:2px solid #1976d2; '
+                f'border-radius:8px; padding:14px 16px; margin-bottom:8px; '
+                f'box-shadow:0 1px 3px rgba(0,0,0,0.08);">'
+                f'<div style="display:flex; justify-content:space-between; '
+                f'align-items:baseline; border-bottom:2px solid #1976d2; '
+                f'padding-bottom:6px; margin-bottom:8px;">'
+                f'<span style="color:#0d47a1; font-size:18px; font-weight:700;">'
+                f'{sym}</span>'
+                f'<span style="color:#888; font-size:11px;">{asof_display}</span>'
+                f'</div>'
+                f'{_regime_row("1H trend",    str(t1))}'
+                f'{_regime_row("30M bias",    str(t30))}'
+                f'{_regime_row("15M context", str(c15))}'
+                f'{_regime_row("Gate result", str(gate))}'
+                f'</div>'
             )
+            st.markdown(html, unsafe_allow_html=True)
 
 
 # ===============================================================
@@ -1173,7 +1286,7 @@ else:
             badge_text = "✅ ENABLED" if enabled else "❌ DISABLED"
             st.markdown(
                 f"<div class='metric-card'>"
-                f"<h4 style='margin:0'>{symbol}</h4>"
+                f"<h4 style='margin:0;color:#0d47a1;font-size:18px;font-weight:700;'>{symbol}</h4>"
                 f"<span class='{badge}'>{badge_text}</span>"
                 f"</div>",
                 unsafe_allow_html=True,
