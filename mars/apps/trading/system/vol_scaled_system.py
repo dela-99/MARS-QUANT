@@ -163,10 +163,39 @@ class VolScaledSizer:
 
         # Reindex vol_series to use session timestamps
         vol_series.index = session_ts
-        vol_series = vol_series.sort_index()
+        vol_series = vol_series[~vol_series.index.duplicated(keep='last')].sort_index()
 
-        # Resample to match price frequency using forward fill
-        vol_hourly = vol_series.reindex(price.index, method='ffill')
+        # Resample to match price frequency using forward fill.
+        #
+        # Defensive dtype handling: `pd.read_parquet()` returns RangeIndex/int64 by
+        # default, but a DatetimeIndex if the parquet was written with one. Our
+        # production parquets were written with int64 index + a `timestamp` column,
+        # so callers used to hit "Cannot compare dtypes datetime64[us, UTC] and int64".
+        # We accept any of:
+        #   - price.index is a DatetimeIndex (the "intended" case)
+        #   - price has a 'timestamp' column we can reindex by
+        #   - otherwise align by row position with last-value padding
+        price_index_is_dt = pd.api.types.is_datetime64_any_dtype(price.index)
+        if price_index_is_dt:
+            vol_hourly = vol_series.reindex(price.index, method='ffill')
+        elif 'timestamp' in price.columns:
+            price_ts = pd.to_datetime(price['timestamp'])
+            vol_hourly = vol_series.reindex(price_ts, method='ffill')
+            vol_hourly.index = price.index  # restore caller-supplied index
+        else:
+            # No timestamps anywhere. Align by row position, padding with last value.
+            n = len(price)
+            vals = np.asarray(vol_series.values)
+            if len(vals) >= n:
+                out = vals[:n]
+            else:
+                out = np.concatenate([vals, np.full(n - len(vals), vals[-1])])
+            vol_hourly = pd.Series(out, index=price.index, name='vol')
+
+        # If the price frame is shorter than the vol series (rare), trim; if
+        # longer, ffill any trailing NaN that arose because the last session_ts
+        # is older than the last price bar.
+        vol_hourly = vol_hourly.ffill().bfill()
 
         self._vol_forecasts = vol_hourly
         return self._vol_forecasts

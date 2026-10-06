@@ -439,19 +439,36 @@ def compute_expectancy_breakdown() -> dict:
 
     out["source"] = "ok"
 
+    # Degraded-sizing split. Trades flagged degraded_sizing=1 used a wrong-size
+    # lot because the sizer.fit() / fallback path was broken at the time. They
+    # are NOT clean v1 baseline data and must be broken out separately.
+    if "degraded_sizing" in closed.columns:
+        clean_mask = (closed["degraded_sizing"].fillna(0).astype(int) == 0)
+    else:
+        clean_mask = pd.Series([True] * len(closed), index=closed.index)
+    degraded_mask = ~clean_mask
+    clean = closed[clean_mask].copy()
+    degraded = closed[degraded_mask].copy()
+
     er = closed["exit_reason"].fillna("unknown") if "exit_reason" in closed.columns \
         else pd.Series(["unknown"] * len(closed), index=closed.index)
+    er_clean = clean["exit_reason"].fillna("unknown") if "exit_reason" in clean.columns \
+        else pd.Series(["unknown"] * len(clean), index=clean.index)
 
-    # Counts for the all-trades breakdown
+    # Counts for the all-trades breakdown (built on the CLEAN subset so
+    # v1 baseline metrics never silently include degraded-size trades)
     all_breakdown: dict = {}
     for reason in ("sl_hit", "tp_hit"):
-        all_breakdown[reason] = int((er == reason).sum())
+        all_breakdown[reason] = int((er_clean == reason).sum())
     manual_reasons = ["mobile", "web", "client", "expert"]
     for r in manual_reasons:
-        all_breakdown[r] = int((er == r).sum())
-    all_breakdown["unknown"] = int((~er.isin(list(SYSTEM_EXIT_REASONS) + manual_reasons)).sum())
+        all_breakdown[r] = int((er_clean == r).sum())
+    all_breakdown["unknown"] = int(
+        (~er_clean.isin(list(SYSTEM_EXIT_REASONS) + manual_reasons)).sum()
+    )
     all_breakdown["manual_total"] = sum(all_breakdown[r] for r in manual_reasons + ["unknown"])
-    all_breakdown["total"] = int(len(closed))
+    all_breakdown["total"] = int(len(clean))
+    all_breakdown["degraded_excluded"] = int(len(degraded))
 
     # Manual breakdown (mobile/web/client/expert + unknown grouped as 'manual')
     manual_breakdown: dict = {r: all_breakdown[r] for r in manual_reasons}
@@ -465,23 +482,28 @@ def compute_expectancy_breakdown() -> dict:
         "total":  all_breakdown["sl_hit"] + all_breakdown["tp_hit"],
     }
 
-    system_mask = er.isin(SYSTEM_EXIT_REASONS)
+    system_mask = er_clean.isin(SYSTEM_EXIT_REASONS)
     manual_mask = ~system_mask
 
     out["all"] = {
-        **_expectancy_from_trades(closed),
+        **_expectancy_from_trades(clean),
         "breakdown": all_breakdown,
-        "is_empty": len(closed) == 0,
+        "is_empty": len(clean) == 0,
     }
     out["system"] = {
-        **_expectancy_from_trades(closed[system_mask]),
+        **_expectancy_from_trades(clean[system_mask]),
         "breakdown": system_breakdown,
-        "is_empty": len(closed[system_mask]) == 0,
+        "is_empty": len(clean[system_mask]) == 0,
     }
     out["manual"] = {
-        **_expectancy_from_trades(closed[manual_mask]),
+        **_expectancy_from_trades(clean[manual_mask]),
         "breakdown": manual_breakdown,
-        "is_empty": len(closed[manual_mask]) == 0,
+        "is_empty": len(clean[manual_mask]) == 0,
+    }
+    out["degraded"] = {
+        **_expectancy_from_trades(degraded),
+        "breakdown": {"total": int(len(degraded))},
+        "is_empty": len(degraded) == 0,
     }
     return out
 
@@ -1171,7 +1193,9 @@ else:
     all_m = expectancy_breakdown["all"]
     sys_m = expectancy_breakdown["system"]
     man_m = expectancy_breakdown["manual"]
+    deg_m = expectancy_breakdown.get("degraded", {"is_empty": True, "n_trades": 0})
     all_bd = all_m["breakdown"]
+    deg_excluded = all_bd.get("degraded_excluded", 0)
 
     def _render_metrics_row(metrics, label: str, breakdown: dict | None):
         """Render one row of metrics. If empty, show explicit 'no data'."""
@@ -1242,14 +1266,33 @@ else:
     if man_caption:
         st.caption(man_caption)
 
+    # Degraded-sizing bucket: trades where the sizer fell back to the wrong
+    # formula (or where fit() failed) and used incorrect lot size. Same split
+    # principle as system-exit vs manual-close: never silently blended into
+    # the v1 baseline metrics shown in "All trades" above.
+    deg_bd = deg_m.get("breakdown", {})
+    if deg_excluded > 0:
+        st.subheader("⚠️ Degraded sizing (excluded from All / System / Manual above)")
+        _render_metrics_row(deg_m, "Degraded", None)
+        st.caption(
+            f"{deg_excluded} trade(s) tagged `degraded_sizing=1` because the sizer "
+            f"fit() or fallback path produced incorrect lot sizes. These are NOT "
+            f"clean v1 baseline data and must not be aggregated with system/manual "
+            f"metrics above. Review and re-classify before the Nov 3 checkpoint."
+        )
+    elif deg_bd.get("total", 0) > 0:
+        st.subheader("⚠️ Degraded sizing (excluded from All / System / Manual above)")
+        _render_metrics_row(deg_m, "Degraded", None)
+
     # Footer explanation
     st.caption(
         f"System-generated performance (SL/TP only) is shown separately from manual "
         f"closes so the bot's own exit-decision quality is never silently blended with "
         f"trades a human closed via MT5 terminal. "
-        f"All trades combined: {all_bd['total']} fills, "
+        f"All trades (clean only): {all_bd['total']} fills, "
         f"gross ${all_m['gross_profit_usd']:,.2f} / "
-        f"${all_m['gross_loss_usd']:,.2f}."
+        f"${all_m['gross_loss_usd']:,.2f}. "
+        f"Degraded-sizing trades broken out: {deg_excluded}."
     )
 
 

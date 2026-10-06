@@ -39,7 +39,9 @@ from mars.apps.trading.mt5_executor import (
     MT5OrderRouter,
 )
 from mars.apps.trading.system.vol_scaled_system import RiskManager, SizingConfig, TradeConfig
-from mars.apps.trading.system.pair_config import get_pair_config, get_enabled_symbols, PAIR_CONFIG
+from mars.apps.trading.system.pair_config import (
+    get_pair_config, get_enabled_symbols, get_data_path, get_contract_specs, PAIR_CONFIG,
+)
 from mars.apps.trading.signals.trend_breakout import DonchianBreakoutSignal
 from mars.apps.trading.signals.mtf_gate import MTFGate, create_mtf_gate
 
@@ -324,6 +326,12 @@ class MultiSymbolSession:
     def fit_sizers(self):
         """Fit volatility sizers for all symbols using recent data.
         Uses VolScaledSizer (GARCH/CARR) which is the actual production sizer.
+
+        Path resolution: uses `get_data_path(symbol)` which routes through
+        `get_config_key()` to map broker symbol (EURUSDm) to the catalog key
+        (EURUSD), then reads `data_path` from SYMBOL_CONFIGS. This avoids the
+        broker suffix-mismatch bug where `EURUSDm.lower()` produced `eurusdm`
+        but the actual parquet lives at `data/processed/eurusd/...`.
         """
         import pandas as pd
         from mars.apps.trading.system.vol_scaled_system import VolScaledSizer, SizingConfig
@@ -331,8 +339,9 @@ class MultiSymbolSession:
         print("Fitting volatility sizers (VolScaledSizer GARCH)...")
         for symbol in self.symbols:
             try:
-                # Load recent data for sizer fitting
-                data_path = f"data/processed/{symbol.lower()}/m5/v1.0.0/data.parquet"
+                # Resolve the catalog-stored data path correctly for any
+                # broker symbol (EURUSDm -> EURUSD, XAUUSDm -> XAUUSD, etc.)
+                data_path = get_data_path(symbol)
                 df = pd.read_parquet(data_path)
                 df = df.sort_index()
                 # Use last 2000 bars for fitting
@@ -343,7 +352,7 @@ class MultiSymbolSession:
                 sizer = VolScaledSizer(sizer_config, garch_variant='garch')
                 sizer.fit(recent)
                 self.executor.sizers[symbol] = sizer
-                print(f"  {symbol}: fitted (GARCH vol forecast ready)")
+                print(f"  {symbol}: fitted (GARCH vol forecast ready) [data_path={data_path}]")
             except Exception as e:
                 print(f"  {symbol}: WARNING - could not fit sizer: {e}")
 
@@ -394,36 +403,84 @@ class MultiSymbolSession:
                         if sizer is not None:
                             # Use the fitted VolScaledSizer to get vol forecast and compute position size
                             import pandas as pd
-                            data_path = f"data/processed/{symbol.lower()}/m5/v1.0.0/data.parquet"
-                            if os.path.exists(data_path):
-                                df = pd.read_parquet(data_path).sort_index()
-                                recent = df.tail(2000)
-                                # Get vol forecast
-                                forecast_vol = sizer.forecast_vol(recent)
-                                if len(forecast_vol) > 0:
-                                    latest_vol = forecast_vol.iloc[-1]  # annualized % vol
-                                    # Compute position size: target_vol / forecast_vol * equity / (price * contract_multiplier)
-                                    target_vol = sizer.config.target_vol  # e.g., 0.15
-                                    kelly_fraction = sizer.config.kelly_fraction  # e.g., 0.5
-                                    leverage = (target_vol / (latest_vol / 100)) * kelly_fraction
-                                    leverage = max(sizer.config.min_leverage, min(sizer.config.max_leverage, leverage))
-                                    position_value = self.equity * leverage
-                                    contract_multiplier = 100.0  # XAUUSD: 100 oz per lot
-                                    position_size = position_value / (signal['entry_price'] * contract_multiplier)
-                                    # Cap by max position %
-                                    max_position_value = self.equity * sizer.config.max_position_pct
-                                    max_contracts = max_position_value / (signal['entry_price'] * contract_multiplier)
-                                    position_size = min(position_size, max_contracts)
-                                    position_size = max(0.01, round(position_size, 2))
+                            # Resolve the parquet path via get_data_path so the
+                            # broker suffix (EURUSDm -> EURUSD) doesn't break the lookup
+                            try:
+                                data_path = get_data_path(symbol)
+                                if os.path.exists(data_path):
+                                    df = pd.read_parquet(data_path)
+                                # Promote timestamp column to a real DatetimeIndex
+                                # so forecast_vol()'s reindex is well-typed. If the
+                                # parquet already had a datetime index, leave it.
+                                if not pd.api.types.is_datetime64_any_dtype(df.index) \
+                                        and 'timestamp' in df.columns:
+                                    df = df.set_index('timestamp').sort_index()
+                                    recent = df.tail(2000)
+                                    # Get vol forecast
+                                    forecast_vol = sizer.forecast_vol(recent)
+                                    if len(forecast_vol) > 0:
+                                        latest_vol = forecast_vol.iloc[-1]  # annualized % vol
+                                        # Compute position size: target_vol / forecast_vol * equity / (price * contract_multiplier)
+                                        target_vol = sizer.config.target_vol  # e.g., 0.15
+                                        kelly_fraction = sizer.config.kelly_fraction  # e.g., 0.5
+                                        leverage = (target_vol / (latest_vol / 100)) * kelly_fraction
+                                        leverage = max(sizer.config.min_leverage, min(sizer.config.max_leverage, leverage))
+                                        position_value = self.equity * leverage
+                                        # Use the symbol's actual contract_size from SYMBOL_CONFIGS,
+                                        # not a hardcoded 100 (which is XAUUSD-only and wrong for FX pairs).
+                                        contract_specs = get_contract_specs(symbol)
+                                        contract_multiplier = float(contract_specs.get("contract_size", 100.0))
+                                        position_size = position_value / (signal['entry_price'] * contract_multiplier)
+                                        # Cap by max position %
+                                        max_position_value = self.equity * sizer.config.max_position_pct
+                                        max_contracts = max_position_value / (signal['entry_price'] * contract_multiplier)
+                                        position_size = min(position_size, max_contracts)
+                                        position_size = max(0.01, round(position_size, 2))
+                                    else:
+                                        # VISIBLE LOG: forecast was empty; do not let this slip past silently.
+                                        print(f"  [WARN] *** FALLBACK SIZING *** {symbol}: empty vol forecast → "
+                                              f"using min-lot 0.01")
+                                        position_size = 0.01
                                 else:
-                                    position_size = 0.01
-                            else:
-                                position_size = 0.01  # fallback
+                                    # VISIBLE LOG: parquet missing for this symbol — do not let this slip past silently.
+                                    print(f"  [WARN] *** FALLBACK SIZING *** {symbol}: parquet missing at {data_path} → "
+                                          f"using min-lot 0.01")
+                                    position_size = 0.01  # parquet path resolved but file missing
+                            except Exception as sizing_e:
+                                # If the per-cycle vol forecast path itself errors, fall back
+                                # to the safe 1% / correct-contract-size formula below.
+                                # VISIBLE LOG: a silently-degraded trade is unacceptable.
+                                print(f"  [WARN] *** FALLBACK SIZING *** {symbol}: vol forecast error → "
+                                      f"using fixed-fractional fallback. error={sizing_e!r}")
+                                contract_specs = get_contract_specs(symbol)
+                                stop_distance = abs(signal['entry_price'] - signal['stop_price'])
+                                pip_size = float(contract_specs.get("pip_size", 0.0001))
+                                contract_size = float(contract_specs.get("contract_size", 100000.0))
+                                # risk_per_lot in USD = stop_distance_in_pips * pip_value_per_pip_per_lot
+                                # For XAUUSD: pip_size=0.01, contract_size=100 -> $1/pip/lot
+                                # For EURUSDm: pip_size=0.0001, contract_size=100000 -> $10/pip/lot
+                                pip_value_per_lot = pip_size * contract_size
+                                stop_distance_pips = stop_distance / pip_size if pip_size > 0 else stop_distance
+                                risk_per_lot = stop_distance_pips * pip_value_per_lot
+                                target_risk = self.equity * 0.01
+                                position_size = max(0.01, round(target_risk / risk_per_lot, 2))
                         else:
-                            # Fallback: fixed fractional sizing
+                            # Sizer never fitted (fit_sizers failed). Use the SAME
+                            # fixed-fractional formula but with the SYMBOL'S ACTUAL
+                            # contract_size / pip_size from SYMBOL_CONFIGS — NOT a
+                            # hardcoded 100 (which assumed XAUUSD's contract size and
+                            # was wrong by ~1000x for FX pairs like USDJPYm/EURUSDm).
+                            # VISIBLE LOG: a silently-degraded trade is unacceptable.
+                            print(f"  [WARN] *** FALLBACK SIZING *** {symbol}: no fitted sizer → "
+                                  f"using fixed-fractional fallback (sizer.fit() never succeeded)")
+                            contract_specs = get_contract_specs(symbol)
                             stop_distance = abs(signal['entry_price'] - signal['stop_price'])
-                            risk_per_lot = stop_distance * 100  # XAUUSD: $1/pip per oz, 100 oz/lot
-                            target_risk = self.equity * 0.01  # 1% risk
+                            pip_size = float(contract_specs.get("pip_size", 0.0001))
+                            contract_size = float(contract_specs.get("contract_size", 100000.0))
+                            pip_value_per_lot = pip_size * contract_size
+                            stop_distance_pips = stop_distance / pip_size if pip_size > 0 else stop_distance
+                            risk_per_lot = stop_distance_pips * pip_value_per_lot
+                            target_risk = self.equity * 0.01
                             position_size = max(0.01, round(target_risk / risk_per_lot, 2))
                         
                         # Create TradeConfig
