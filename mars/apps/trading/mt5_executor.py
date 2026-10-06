@@ -713,15 +713,33 @@ class MT5AuditLogger:
             profit = 0.0
             position_id = None
             try:
-                # fill.ticket is the DEAL ticket returned by order_send (this is
-                # the correct key for history_deals_get(ticket=...)).
-                deals = self._mt5.history_deals_get(ticket=fill.ticket)
-                if deals and len(deals) > 0:
-                    deal = deals[0]
+                # fill.ticket is actually the ORDER ticket (returned by
+                # order_send as the order id, not the deal id). For instant
+                # market orders on MT5, position_id == order_ticket. To get
+                # position_id reliably, try BOTH lookup paths:
+                #   1. history_orders_get(ticket=fill.ticket) → order.position_id
+                #   2. history_deals_get(position=fill.ticket) → position_id directly
+                # Either succeeds for normal market orders; the deal-by-ticket
+                # lookup that the old code used returns empty because fill.ticket
+                # is NOT a deal ticket.
+                try:
+                    orders = self._mt5.history_orders_get(ticket=fill.ticket)
+                    if orders and len(orders) > 0:
+                        position_id = getattr(orders[0], 'position_id', None) or position_id
+                except Exception:
+                    pass
+                if not position_id:
+                    deals_by_pos = self._mt5.history_deals_get(position=fill.ticket)
+                    if deals_by_pos and len(deals_by_pos) > 0:
+                        position_id = getattr(deals_by_pos[0], 'position_id', None) or position_id
+                # Pull commission / swap / profit from the entry deal
+                deals = self._mt5.history_deals_get(position=position_id) if position_id else []
+                entry_deals = [d for d in deals if getattr(d, 'entry', None) == 0]
+                if entry_deals:
+                    deal = entry_deals[0]
                     commission = getattr(deal, 'commission', 0.0)
                     swap = getattr(deal, 'swap', 0.0)
                     profit = getattr(deal, 'profit', 0.0)
-                    position_id = getattr(deal, 'position_id', None)
             except Exception:
                 pass  # Keep defaults if history lookup fails
 
@@ -810,9 +828,24 @@ class MT5AuditLogger:
             exit_swap = float(getattr(exit_deal, 'swap', 0.0) or 0.0)
             exit_profit = float(getattr(exit_deal, 'profit', 0.0) or 0.0)
             reason_code = int(getattr(exit_deal, 'reason', 0) or 0)
+            # Authoritative MT5 DEAL_REASON_* constants:
+            #   0=CLIENT (desktop terminal), 1=MOBILE, 2=WEB, 3=EXPERT (EA),
+            #   4=SL triggered, 5=TP triggered, 6=SO (margin stop-out),
+            #   7=ROLLOVER, 8=VMARGIN, 9=SPLIT.
+            # Previously this map was off-by-N — codes 4-9 were mapped to
+            # "mobile"/"web"/"stopout" instead of SL/TP/SO/rollover/vmargin/split,
+            # so every exit tagged by the old map was wrong for those codes.
             reason_map = {
-                0: "client", 1: "client", 2: "client", 3: "expert", 4: "mobile",
-                5: "web", 6: "sl_hit", 7: "tp_hit", 8: "stopout", 9: "stopout",
+                0: "client",
+                1: "mobile",
+                2: "web",
+                3: "expert",
+                4: "sl_hit",
+                5: "tp_hit",
+                6: "stopout",
+                7: "rollover",
+                8: "vmargin",
+                9: "split",
             }
             exit_reason = reason_map.get(reason_code, f"reason={reason_code}")
             exit_ticket = int(getattr(exit_deal, 'ticket', 0) or 0)
@@ -1084,12 +1117,21 @@ class MT5Executor:
         self.mt5 = self.conn_manager.mt5
         self.symbol_resolver = MT5SymbolResolver(self.mt5)
         self.order_router = MT5OrderRouter(self.mt5, self.symbol_resolver)
-        
+
+        # Propagate the live MT5 module to the audit logger so
+        # reconcile_from_broker() / log_close_fill() can do history_deals_get
+        # lookups. Without this, _ensure_mt5() raises RuntimeError, the except
+        # block in log_close_fill() swallows it, exit_deal stays None, and
+        # every reconcile reports "fills_unmatched" even when the broker has
+        # the close deals ready. (Regression test: live 2026-10-05 session
+        # log showed "Fills unmatched: 6" against a DB with 6 closable fills.)
+        self.audit_logger._mt5 = self.mt5
+
         # Log initial account state
         account_info = self.mt5.account_info()
         if account_info:
             print(f"MT5 DEMO ACCOUNT: #{account_info.login} | Balance: {account_info.balance:.2f} | Equity: {account_info.equity:.2f}")
-        
+
         # Sync positions from MT5 on startup
         self._sync_positions_from_mt5()
     
