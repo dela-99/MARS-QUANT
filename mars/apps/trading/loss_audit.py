@@ -13,6 +13,8 @@ from typing import Any
 
 import pandas as pd
 
+from mars.apps.trading.risk_metrics import realized_r
+
 
 SYSTEM_EXIT_TYPES = ("sl_hit", "tp_hit")
 ATR_WINDOW = 14
@@ -69,11 +71,21 @@ def _net_pnl(fill: sqlite3.Row) -> float:
 
 def _realized_r(fill: sqlite3.Row) -> tuple[float | None, float | None]:
     stop_distance = abs(float(fill["filled_sl"] or 0.0) - float(fill["filled_price"] or 0.0))
-    filled_lots = abs(float(fill["filled_lots"] or 0.0))
-    denominator = stop_distance * filled_lots * 100.0
-    if denominator <= 0:
+    try:
+        return (
+            realized_r(
+                symbol=fill["symbol"],
+                entry_price=float(fill["filled_price"] or 0.0),
+                stop_price=float(fill["filled_sl"] or 0.0),
+                filled_lots=float(fill["filled_lots"] or 0.0),
+                realized_pnl_usd=_net_pnl(fill),
+            ),
+            stop_distance or None,
+        )
+    except (KeyError, ValueError):
+        # A non-USD quote without an audited conversion must remain explicit
+        # rather than silently using an invalid price-space denominator.
         return None, stop_distance or None
-    return _net_pnl(fill) / denominator, stop_distance
 
 
 def _source_signal(conn: sqlite3.Connection, fill: sqlite3.Row) -> tuple[int | None, str | None, str]:

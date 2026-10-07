@@ -696,8 +696,26 @@ class MT5AuditLogger:
             conn.commit()
             return int(cursor.lastrowid)
 
-    def begin_latency_trace(self, config: TradeConfig) -> int:
+    def begin_latency_trace(
+        self,
+        config: TradeConfig,
+    ) -> int:
         """Create an audit-only latency trace for a signal attempt."""
+        return self.begin_latency_trace_for_signal(
+            config.symbol,
+            config.signal,
+            config.movement_detected_at,
+            config.signal_generated_at,
+        )
+
+    def begin_latency_trace_for_signal(
+        self,
+        symbol: str,
+        signal: int,
+        movement_detected_at: Optional[str],
+        signal_generated_at: Optional[str],
+    ) -> int:
+        """Create a trace before MTF/risk approval without constructing an order."""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute(
@@ -707,10 +725,10 @@ class MT5AuditLogger:
                 ) VALUES (?, ?, ?, ?)
                 """,
                 (
-                    config.symbol,
-                    config.signal,
-                    utc_iso(config.movement_detected_at),
-                    utc_iso(config.signal_generated_at) or utc_now_iso(),
+                    symbol,
+                    signal,
+                    utc_iso(movement_detected_at),
+                    utc_iso(signal_generated_at) or utc_now_iso(),
                 ),
             )
             conn.commit()

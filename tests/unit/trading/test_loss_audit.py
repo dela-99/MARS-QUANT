@@ -19,10 +19,10 @@ def test_broker_close_creates_clean_system_exit_audit_row(tmp_path, monkeypatch)
     exit_deal = SimpleNamespace(
         entry=1,
         time=exit_epoch,
-        price=99.0,
-        commission=-1.0,
+        price=149.0,
+        commission=0.0,
         swap=0.0,
-        profit=-10.0,
+        profit=-66.66666666666667,
         reason=4,
         ticket=9002,
     )
@@ -37,7 +37,7 @@ def test_broker_close_creates_clean_system_exit_audit_row(tmp_path, monkeypatch)
             INSERT INTO signals (timestamp, symbol, signal, risk_check_passed)
             VALUES (?, ?, ?, ?)
             """,
-            ("2026-10-05T12:00:00+00:00", "TEST", 1, 1),
+            ("2026-10-05T12:00:00+00:00", "USDJPYm", 1, 1),
         )
         cursor = conn.execute(
             """
@@ -46,8 +46,8 @@ def test_broker_close_creates_clean_system_exit_audit_row(tmp_path, monkeypatch)
                 filled_sl, filled_tp, position_id, is_closed, degraded_sizing
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            ("2026-10-05T12:00:02+00:00", 9001, "TEST", "BUY", 0.1, 100.0,
-             99.0, 102.0, 9001, 0, 0),
+            ("2026-10-05T12:00:02+00:00", 9001, "USDJPYm", "BUY", 0.1, 150.0,
+             149.0, 153.0, 9001, 0, 0),
         )
         clean_fill_id = cursor.lastrowid
         conn.execute(
@@ -57,8 +57,8 @@ def test_broker_close_creates_clean_system_exit_audit_row(tmp_path, monkeypatch)
                 filled_sl, filled_tp, exit_time, exit_reason, is_closed, degraded_sizing
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            ("2026-10-05T12:01:00+00:00", 9003, "TEST", "BUY", 0.1, 100.0,
-             99.0, 102.0, "2026-10-05T12:11:00+00:00", "tp_hit", 1, 1),
+            ("2026-10-05T12:01:00+00:00", 9003, "USDJPYm", "BUY", 0.1, 150.0,
+             149.0, 153.0, "2026-10-05T12:11:00+00:00", "tp_hit", 1, 1),
         )
 
     assert logger.log_close_fill(clean_fill_id) is True
@@ -73,5 +73,4 @@ def test_broker_close_creates_clean_system_exit_audit_row(tmp_path, monkeypatch)
             """
         ).fetchone()
 
-    assert row == (clean_fill_id, 1, 2000.0, -1.1, 1.0, 0.5, 2.0, "sl_hit", None)
-
+    assert row == (clean_fill_id, 1, 2000.0, -1.0, 1.0, 0.5, 2.0, "sl_hit", None)

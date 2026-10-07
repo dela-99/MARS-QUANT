@@ -36,6 +36,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from mars.apps.trading.latency import derive_latency_metrics, format_latency_ms
+from mars.apps.trading.risk_metrics import realized_r
 
 # ---------------------------------------------------------------
 # Page config + custom CSS
@@ -369,14 +370,13 @@ SYSTEM_EXIT_REASONS = {"sl_hit", "tp_hit"}
 def _expectancy_from_trades(closed: pd.DataFrame) -> dict:
     """Compute expectancy metrics on a pre-filtered closed-trades DataFrame.
 
-    Assumes columns: net_pnl, stop_dist, filled_lots (already computed by
-    the caller) and exit_time/timestamp for ordering.
+    Assumes an entry-time USD-normalized ``R`` column computed by the shared
+    risk-metrics helper, plus exit_time/timestamp for ordering.
     Returns dict with all numeric metrics; caller wraps in status envelope.
     """
     if closed.empty:
         return {"n_trades": 0}
     closed = closed.copy()
-    closed["R"] = closed["net_pnl"] / (closed["stop_dist"] * closed["filled_lots"] * 100)
     wins = closed[closed["R"] > 0]
     losses = closed[closed["R"] <= 0]
 
@@ -466,6 +466,26 @@ def compute_expectancy_breakdown() -> dict:
     closed = closed[(closed["stop_dist"] > 0) & (closed["filled_lots"] > 0)]
     if closed.empty:
         out["source"] = "no_valid_stop_distance"
+        return out
+
+    def _shared_realized_r(row: pd.Series) -> float | None:
+        try:
+            return realized_r(
+                symbol=str(row["symbol"]),
+                entry_price=float(row["filled_price"]),
+                stop_price=float(row["filled_sl"]),
+                filled_lots=float(row["filled_lots"]),
+                realized_pnl_usd=float(row["net_pnl"]),
+            )
+        except (KeyError, ValueError):
+            return None
+
+    # Use the same contract-size and entry-time quote-to-USD conversion as
+    # loss_audit. Never replace unavailable non-USD conversions with a wrong R.
+    closed["R"] = closed.apply(_shared_realized_r, axis=1)
+    closed = closed.dropna(subset=["R"])
+    if closed.empty:
+        out["source"] = "no_usd_normalized_stop_risk"
         return out
 
     out["source"] = "ok"

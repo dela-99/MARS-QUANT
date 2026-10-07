@@ -275,6 +275,10 @@ class MultiSymbolSession:
         self.mt5_config = mt5_config
         self.dry_run = dry_run
         self.use_mock = use_mock
+        # One audit-only trace survives repeated MTF rejections for the same
+        # continuous Donchian breakout. It is intentionally separate from
+        # trading state and is never read by signal, sizing, or risk logic.
+        self._pending_latency_traces: dict[str, dict] = {}
 
         # Initialize MT5 executor with live trading system
         audit_db_path = os.path.join(tempfile.gettempdir(), 'mt5_audit_real.db')
@@ -379,6 +383,44 @@ class MultiSymbolSession:
                 # Generate live signal
                 signal = signal_gen.compute_live(self.executor.mt5, symbol, self.equity)
                 signal_val = signal['signal']
+
+                # Preserve the FIRST 5M breakout bar and FIRST strategy
+                # emission until MTF/risk reaches a terminal result. Without
+                # this, a rejected breakout would receive a fresh near-zero
+                # timestamp on every polling cycle and hide gate wait time.
+                latency_trace = self._pending_latency_traces.get(symbol)
+                movement_detected_at = signal.get('movement_detected_at')
+                if signal_val == 0:
+                    if latency_trace is not None:
+                        self.executor.audit_logger.mark_latency_risk_decision(
+                            latency_trace['trace_id']
+                        )
+                        self._pending_latency_traces.pop(symbol, None)
+                    latency_trace = None
+                else:
+                    breakout_identity = (signal_val, movement_detected_at)
+                    if latency_trace is not None and latency_trace['identity'] != breakout_identity:
+                        # The prior directional breakout ended or reversed
+                        # without approval; record its terminal rejection.
+                        self.executor.audit_logger.mark_latency_risk_decision(
+                            latency_trace['trace_id']
+                        )
+                        self._pending_latency_traces.pop(symbol, None)
+                        latency_trace = None
+                    if latency_trace is None:
+                        trace_id = self.executor.audit_logger.begin_latency_trace_for_signal(
+                            symbol=symbol,
+                            signal=signal_val,
+                            movement_detected_at=movement_detected_at,
+                            signal_generated_at=signal.get('signal_generated_at'),
+                        )
+                        latency_trace = {
+                            'trace_id': trace_id,
+                            'identity': breakout_identity,
+                            'movement_detected_at': movement_detected_at,
+                            'signal_generated_at': signal.get('signal_generated_at'),
+                        }
+                        self._pending_latency_traces[symbol] = latency_trace
 
                 # Evaluate MTF gate for EVERY cycle (including FLAT signals)
                 mtf_context = None
@@ -495,8 +537,9 @@ class MultiSymbolSession:
                             entry_time=pd.Timestamp.now(tz='UTC'),
                             # Audit-only pipeline timestamps produced by the
                             # strategy; they are not used by risk or routing.
-                            movement_detected_at=signal.get('movement_detected_at'),
-                            signal_generated_at=signal.get('signal_generated_at'),
+                            movement_detected_at=latency_trace['movement_detected_at'],
+                            signal_generated_at=latency_trace['signal_generated_at'],
+                            latency_trace_id=latency_trace['trace_id'],
                         )
                         
                         success = self.executor.open_position(trade_config)
@@ -507,6 +550,9 @@ class MultiSymbolSession:
                             cycle_results['orders_failed'][symbol] = 1
                             # Debug: check risk manager state
                             print(f"  RiskMgr: tier={self.risk_manager._current_tier}, open_positions={len(self.risk_manager.current_positions)}, total_open_risk={self.risk_manager.total_open_risk:.2f}")
+                    # This breakout now has a terminal MTF/risk outcome. A
+                    # later breakout creates a new trace with a new first bar.
+                    self._pending_latency_traces.pop(symbol, None)
                 else:
                     cycle_results['signals_generated'][symbol] = 0
 
