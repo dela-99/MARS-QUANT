@@ -35,6 +35,12 @@ from mars.apps.trading.system.vol_scaled_system import (
     VolScaledSizer,
     TradeConfig,
 )
+from mars.apps.trading.latency import utc_iso, utc_now_iso
+from mars.apps.trading.loss_audit import (
+    backfill_loss_audit,
+    ensure_loss_audit_schema,
+    upsert_loss_audit_for_fill,
+)
 
 
 class DemoAccountGate:
@@ -529,10 +535,29 @@ class MT5AuditLogger:
                 ("exit_profit",       "REAL"),
                 ("exit_deal_ticket",  "INTEGER"),
                 ("is_closed",         "INTEGER DEFAULT 0"),
+                ("degraded_sizing",   "INTEGER DEFAULT 0"),
             ]
             for col, decl in fill_migrations:
                 if col not in existing_fill_cols:
                     cursor.execute(f"ALTER TABLE fills ADD COLUMN {col} {decl}")
+
+            # One audit row represents one signal attempt from movement through
+            # broker response.  Keeping this separate from fills lets rejected
+            # signals retain their detection/risk timing without inventing a fill.
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS pipeline_latency (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    signal_id INTEGER,
+                    fill_id INTEGER,
+                    symbol TEXT NOT NULL,
+                    signal INTEGER NOT NULL,
+                    movement_detected_at TEXT,
+                    signal_generated_at TEXT,
+                    risk_approved_at TEXT,
+                    order_submitted_at TEXT,
+                    order_filled_at TEXT
+                )
+            """)
             
             # Risk decisions table
             cursor.execute("""
@@ -628,11 +653,21 @@ class MT5AuditLogger:
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_signals_symbol ON signals(symbol)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_fills_timestamp ON fills(timestamp)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_fills_symbol ON fills(symbol)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_pipeline_latency_signal ON pipeline_latency(signal_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_pipeline_latency_fill ON pipeline_latency(fill_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_pipeline_latency_symbol ON pipeline_latency(symbol)")
+            ensure_loss_audit_schema(conn)
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_risk_events_timestamp ON risk_events(timestamp)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_risk_events_type ON risk_events(event_type)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_manual_mods_timestamp ON manual_modifications(timestamp)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_manual_mods_ticket ON manual_modifications(ticket)")
             
+            # Rebuild the purely analytical system-exit audit from persisted fills.
+            # It is best-effort so analytical recovery never blocks live startup.
+            try:
+                backfill_loss_audit(conn, utc_now_iso())
+            except Exception as exc:
+                print(f"Loss-audit historical backfill unavailable: {exc}")
             conn.commit()
     
     def log_signal(self, config: TradeConfig, fill_price: float,
@@ -658,6 +693,63 @@ class MT5AuditLogger:
                 "",  # bar_key not available here
                 config.max_hold_hours if config.max_hold_hours else 0,
             ))
+            conn.commit()
+            return int(cursor.lastrowid)
+
+    def begin_latency_trace(self, config: TradeConfig) -> int:
+        """Create an audit-only latency trace for a signal attempt."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO pipeline_latency (
+                    symbol, signal, movement_detected_at, signal_generated_at
+                ) VALUES (?, ?, ?, ?)
+                """,
+                (
+                    config.symbol,
+                    config.signal,
+                    utc_iso(config.movement_detected_at),
+                    utc_iso(config.signal_generated_at) or utc_now_iso(),
+                ),
+            )
+            conn.commit()
+            return int(cursor.lastrowid)
+
+    def link_latency_signal(self, trace_id: Optional[int], signal_id: int) -> None:
+        """Associate a pipeline trace with its existing signal audit row."""
+        if trace_id is None:
+            return
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute("UPDATE pipeline_latency SET signal_id = ? WHERE id = ?", (signal_id, trace_id))
+            conn.commit()
+
+    def mark_latency_risk_decision(self, trace_id: Optional[int]) -> None:
+        """Record when the risk engine produced its final decision."""
+        self._mark_latency(trace_id, "risk_approved_at")
+
+    def mark_latency_order_submitted(self, trace_id: Optional[int]) -> None:
+        """Record the instant immediately before calling the broker API."""
+        self._mark_latency(trace_id, "order_submitted_at")
+
+    def mark_latency_order_filled(self, trace_id: Optional[int], fill_id: int) -> None:
+        """Record the broker success response and link its fill audit row."""
+        if trace_id is None:
+            return
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                "UPDATE pipeline_latency SET fill_id = ?, order_filled_at = ? WHERE id = ?",
+                (fill_id, utc_now_iso(), trace_id),
+            )
+            conn.commit()
+
+    def _mark_latency(self, trace_id: Optional[int], column: str) -> None:
+        if trace_id is None:
+            return
+        if column not in {"risk_approved_at", "order_submitted_at"}:
+            raise ValueError(f"Unsupported latency timestamp column: {column}")
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(f"UPDATE pipeline_latency SET {column} = ? WHERE id = ?", (utc_now_iso(), trace_id))
             conn.commit()
 
     def log_evaluation(self, symbol: str, mtf_context) -> None:
@@ -869,6 +961,12 @@ class MT5AuditLogger:
                     exit_ticket, rid,
                 ),
             )
+            # The row is derived only after broker reconciliation supplies the
+            # final, authoritative exit fields. It never feeds trading logic.
+            try:
+                upsert_loss_audit_for_fill(conn, rid, utc_now_iso())
+            except Exception as exc:
+                print(f"Loss-audit row unavailable for fill {rid}: {exc}")
             conn.commit()
             return True
 
@@ -1418,6 +1516,8 @@ class MT5Executor:
         signal_price = config.entry_price
         risk_at_stop = abs(config.entry_price - config.stop_price) * config.position_size * 100
         risk_pct = risk_at_stop / self.equity * 100 if self.equity > 0 else 0
+        trace_id = config.latency_trace_id or self.audit_logger.begin_latency_trace(config)
+        config.latency_trace_id = trace_id
         
         # Get current bar key for idempotency
         entry_time = config.entry_time.to_pydatetime() if hasattr(config.entry_time, 'to_pydatetime') else config.entry_time
@@ -1426,12 +1526,14 @@ class MT5Executor:
         # Check idempotency - skip if same signal for same bar already processed
         if self._is_duplicate_signal(config.symbol, bar_key, config.signal):
             print(f"  [DEBUG open_position] DUPLICATE: symbol={config.symbol} bar_key={bar_key} signal={config.signal}")
-            self.audit_logger.log_signal(
+            signal_id = self.audit_logger.log_signal(
                 config, config.entry_price,
                 risk_check_passed=False,
                 rejection_reason=f"DUPLICATE_SIGNAL: signal {config.signal} for bar {bar_key} already processed",
                 risk_at_stop=risk_at_stop, risk_pct=risk_pct
             )
+            self.audit_logger.link_latency_signal(trace_id, signal_id)
+            self.audit_logger.mark_latency_risk_decision(trace_id)
             return False
         else:
             print(f"  [DEBUG open_position] NOT DUPLICATE: symbol={config.symbol} bar_key={bar_key} signal={config.signal}")
@@ -1443,6 +1545,7 @@ class MT5Executor:
             live_position_value + config.position_size * config.entry_price,
             self.equity
         )
+        self.audit_logger.mark_latency_risk_decision(trace_id)
         print(f"  [DEBUG open_position] Concurrent check: can_open={can_open}, reason={reason}, live_position_value={live_position_value}")
 
         self.audit_logger.log_risk_decision(
@@ -1452,15 +1555,17 @@ class MT5Executor:
         )
 
         if not can_open:
-            self.audit_logger.log_signal(
+            signal_id = self.audit_logger.log_signal(
                 config, config.entry_price,
                 risk_check_passed=False, rejection_reason=reason,
                 risk_at_stop=risk_at_stop, risk_pct=risk_pct
             )
+            self.audit_logger.link_latency_signal(trace_id, signal_id)
             return False
 
         # 2. Per-trade risk limit
         can_open, reason = self.risk_manager.check_per_trade_risk(config, self.equity)
+        self.audit_logger.mark_latency_risk_decision(trace_id)
         print(f"  [DEBUG open_position] Per-trade risk check: can_open={can_open}, reason={reason}")
         if not can_open:
             self.audit_logger.log_risk_decision(
@@ -1468,11 +1573,12 @@ class MT5Executor:
                 config.position_size * config.entry_price, self.equity,
                 risk_pct, 50.0, 0.0
             )
-            self.audit_logger.log_signal(
+            signal_id = self.audit_logger.log_signal(
                 config, config.entry_price,
                 risk_check_passed=False, rejection_reason=reason,
                 risk_at_stop=risk_at_stop, risk_pct=risk_pct
             )
+            self.audit_logger.link_latency_signal(trace_id, signal_id)
             return False
         
         # All risk checks passed - log approval
@@ -1482,20 +1588,23 @@ class MT5Executor:
             risk_pct, 50.0, 0.0
         )
         
-        self.audit_logger.log_signal(
+        signal_id = self.audit_logger.log_signal(
             config, config.entry_price,
             risk_check_passed=True, rejection_reason=None,
             risk_at_stop=risk_at_stop, risk_pct=risk_pct
         )
+        self.audit_logger.link_latency_signal(trace_id, signal_id)
         
         # Route order to MT5
         spec = self.symbol_resolver.get_symbol_info(config.symbol)
+        self.audit_logger.mark_latency_order_submitted(trace_id)
         fill = self.order_router.send_order(config, spec)
 
         # ALWAYS log the order_send() result (success or failure)
         if fill.success:
             # Open position tracking
             audit_row_id = self.audit_logger.log_fill(fill, config, config.entry_price)
+            self.audit_logger.mark_latency_order_filled(trace_id, audit_row_id)
             self.open_positions[config.symbol] = {
                 "entry_price": fill.price,
                 "stop_price": config.stop_price,

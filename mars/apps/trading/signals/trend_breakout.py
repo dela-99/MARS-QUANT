@@ -9,7 +9,7 @@ Implements:
 
 from __future__ import annotations
 
-from datetime import datetime, time
+from datetime import datetime, time, timezone
 from typing import Literal, Optional
 
 import numpy as np
@@ -139,6 +139,25 @@ class DonchianBreakoutSignal:
             "short_exit": short_exit,
         }, index=price.index)
 
+    @staticmethod
+    def _movement_detected_at(signals: pd.DataFrame, direction: int) -> pd.Timestamp:
+        """Return the first breakout bar in the current directional position.
+
+        This is audit-only metadata: it neither changes nor feeds the existing
+        Donchian conditions.  A live signal can remain directional for multiple
+        polling cycles, so the first qualifying long/short breakout bar in that
+        continuous position is the movement start rather than the poll time.
+        """
+        active = signals["signal"].eq(direction)
+        start = len(signals) - 1
+        while start > 0 and active.iloc[start - 1]:
+            start -= 1
+
+        entry_column = "long_entry" if direction == 1 else "short_entry"
+        breakout_mask = signals[entry_column].iloc[start:]
+        breakout_times = signals.index[start:][breakout_mask.to_numpy()]
+        return breakout_times[0] if len(breakout_times) else signals.index[-1]
+
     def compute_live(self, mt5, symbol: str, equity: float) -> dict:
         """
         Compute live signal for a symbol using recent MT5 data.
@@ -160,7 +179,10 @@ class DonchianBreakoutSignal:
         n_bars = max(self.window, self.exit_window) + 50
         rates = mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_M5, 0, n_bars)
         if rates is None or len(rates) < self.window:
-            return {'signal': 0, 'entry_price': 0, 'stop_price': 0, 'take_profit': 0}
+            return {
+                'signal': 0, 'entry_price': 0, 'stop_price': 0, 'take_profit': 0,
+                'movement_detected_at': None, 'signal_generated_at': None,
+            }
         
         # Convert to DataFrame
         df = pd.DataFrame(rates)
@@ -188,17 +210,24 @@ class DonchianBreakoutSignal:
                 'signal': 1,
                 'entry_price': latest_entry_price,
                 'stop_price': latest_long_stop,
-                'take_profit': latest_entry_price + (latest_entry_price - latest_long_stop) * 3  # 3:1 R:R
+                'take_profit': latest_entry_price + (latest_entry_price - latest_long_stop) * 3,  # 3:1 R:R
+                'movement_detected_at': self._movement_detected_at(signals, 1).isoformat(),
+                'signal_generated_at': datetime.now(timezone.utc).isoformat(),
             }
         elif latest_signal == -1:
             return {
                 'signal': -1,
                 'entry_price': latest_entry_price,
                 'stop_price': latest_short_stop,
-                'take_profit': latest_entry_price - (latest_short_stop - latest_entry_price) * 3  # 3:1 R:R
+                'take_profit': latest_entry_price - (latest_short_stop - latest_entry_price) * 3,  # 3:1 R:R
+                'movement_detected_at': self._movement_detected_at(signals, -1).isoformat(),
+                'signal_generated_at': datetime.now(timezone.utc).isoformat(),
             }
         else:
-            return {'signal': 0, 'entry_price': 0, 'stop_price': 0, 'take_profit': 0}
+            return {
+                'signal': 0, 'entry_price': 0, 'stop_price': 0, 'take_profit': 0,
+                'movement_detected_at': None, 'signal_generated_at': None,
+            }
 
 
 class MACrossoverSignal:

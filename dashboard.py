@@ -35,6 +35,8 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
+from mars.apps.trading.latency import derive_latency_metrics, format_latency_ms
+
 # ---------------------------------------------------------------
 # Page config + custom CSS
 # ---------------------------------------------------------------
@@ -202,6 +204,24 @@ def load_fills(limit: int = 500) -> pd.DataFrame:
 
 
 @st.cache_data(ttl=5)
+def load_pipeline_latency(limit: int = 500) -> pd.DataFrame:
+    """Load additive per-attempt timing records; tolerate pre-migration DBs."""
+    try:
+        return _q("SELECT * FROM pipeline_latency ORDER BY rowid DESC LIMIT ?", (limit,))
+    except sqlite3.OperationalError:
+        return pd.DataFrame()
+
+
+@st.cache_data(ttl=5)
+def load_loss_audit(limit: int = 500) -> pd.DataFrame:
+    """Load clean broker-closed SL/TP audit rows; tolerate pre-migration DBs."""
+    try:
+        return _q("SELECT * FROM loss_audit ORDER BY exit_time DESC, id DESC LIMIT ?", (limit,))
+    except sqlite3.OperationalError:
+        return pd.DataFrame()
+
+
+@st.cache_data(ttl=5)
 def load_risk_events(limit: int = 500) -> pd.DataFrame:
     return _q("SELECT * FROM risk_events ORDER BY rowid DESC LIMIT ?", (limit,))
 
@@ -241,7 +261,18 @@ def load_reconciliation_status() -> dict:
         conn = _conn_ro()
         try:
             counts = {}
-            for t in ("signals", "fills", "risk_decisions", "risk_events", "evaluations"):
+            tables = ["signals", "fills", "risk_decisions", "risk_events", "evaluations"]
+            has_latency_table = conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'pipeline_latency'"
+            ).fetchone()
+            if has_latency_table:
+                tables.append("pipeline_latency")
+            has_loss_audit_table = conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'loss_audit'"
+            ).fetchone()
+            if has_loss_audit_table:
+                tables.append("loss_audit")
+            for t in tables:
                 cur = conn.execute(f"SELECT COUNT(*) FROM {t}")
                 counts[t] = cur.fetchone()[0]
         finally:
@@ -761,6 +792,8 @@ if refresh_secs and refresh_secs > 0:
 signals_df = load_signals(500)
 risk_decisions_df = load_risk_decisions(500)
 fills_df = load_fills(500)
+pipeline_latency_df = load_pipeline_latency(500)
+loss_audit_df = load_loss_audit(500)
 risk_events_df = load_risk_events(500)
 evaluations_df = load_evaluations(500)
 kill_switch = load_kill_switch()
@@ -1063,10 +1096,44 @@ else:
 # ===============================================================
 # PANEL 4 — Live Signal / Trade Log
 # ===============================================================
+_LATENCY_COLUMNS = (
+    "detection_latency",
+    "signal_latency",
+    "execution_latency",
+    "total_latency",
+)
+
+
+def _latency_display(trace: dict | None) -> dict[str, str]:
+    """Format read-time pipeline durations without persisting derived values."""
+    if trace is None:
+        return {column: "—" for column in _LATENCY_COLUMNS}
+    metrics = derive_latency_metrics(trace)
+    return {
+        "detection_latency": format_latency_ms(metrics["detection_latency_ms"]),
+        "signal_latency": format_latency_ms(metrics["signal_latency_ms"]),
+        "execution_latency": format_latency_ms(metrics["execution_latency_ms"]),
+        "total_latency": format_latency_ms(metrics["total_latency_ms"]),
+    }
+
+
+latency_by_signal: dict[int, dict] = {}
+latency_by_fill: dict[int, dict] = {}
+if not pipeline_latency_df.empty:
+    for _, latency_trace in pipeline_latency_df.iterrows():
+        trace = latency_trace.to_dict()
+        signal_id = trace.get("signal_id")
+        fill_id = trace.get("fill_id")
+        if pd.notna(signal_id):
+            latency_by_signal[int(signal_id)] = trace
+        if pd.notna(fill_id):
+            latency_by_fill[int(fill_id)] = trace
+
+
 st.markdown("<div class='panel-divider'></div>", unsafe_allow_html=True)
 st.header("3️⃣ Live Signal / Trade Log")
 st.caption("Combined stream of signals, MTF evaluations, risk decisions, and fills, "
-           "sorted by timestamp desc. Updates on every refresh.")
+           "sorted by timestamp desc. Latencies are computed from raw UTC audit timestamps.")
 
 log_cols = st.columns([2, 2, 1])
 with log_cols[0]:
@@ -1100,6 +1167,7 @@ if "EVAL" in type_filter and not evaluations_df.empty:
             "symbol": r.get("symbol"),
             "detail": f"{r.get('gate_result', '?')} ({rr_str})",
             "extra": f"1H={r.get('trend_1h','?')} 30M={r.get('bias_30m','?')} 15M={r.get('context_15m','?')} sig={r.get('breakout_signal',0)}",
+            **_latency_display(None),
         })
 
 if "SIGNAL" in type_filter and not signals_df.empty:
@@ -1117,6 +1185,11 @@ if "SIGNAL" in type_filter and not signals_df.empty:
             "symbol": r.get("symbol"),
             "detail": f"{sig_text} @ {r.get('entry_price', 0):.3f} | risk_check={passed}",
             "extra": rr_str[:60],
+            **(
+                _latency_display(latency_by_signal.get(int(r["id"])))
+                if pd.notna(r.get("id"))
+                else _latency_display(None)
+            ),
         })
 
 if "RISK" in type_filter and not risk_decisions_df.empty:
@@ -1131,6 +1204,7 @@ if "RISK" in type_filter and not risk_decisions_df.empty:
             "symbol": r.get("symbol"),
             "detail": f"{r.get('decision', '?')} | signal={r.get('signal', 0)}",
             "extra": reason_str[:60],
+            **_latency_display(None),
         })
 
 if "FILL" in type_filter and not fills_df.empty:
@@ -1145,6 +1219,11 @@ if "FILL" in type_filter and not fills_df.empty:
             "symbol": r.get("symbol"),
             "detail": f"{r.get('direction', '?')} {r.get('filled_lots', 0):.2f} @ {r.get('filled_price', 0):.3f} | {pnl_str}",
             "extra": f"ticket={r.get('ticket', '?')}",
+            **(
+                _latency_display(latency_by_fill.get(int(r["id"])))
+                if pd.notna(r.get("id"))
+                else _latency_display(None)
+            ),
         })
 
 if rows:
@@ -1152,7 +1231,10 @@ if rows:
     log_df["ts_parsed"] = pd.to_datetime(log_df["timestamp"], errors="coerce", utc=True)
     log_df = log_df.dropna(subset=["ts_parsed"]).sort_values("ts_parsed", ascending=False).head(log_limit)
     log_df["timestamp"] = log_df["ts_parsed"].dt.strftime("%Y-%m-%d %H:%M:%S")
-    log_df = log_df[["timestamp", "type", "symbol", "detail", "extra"]]
+    log_df = log_df[[
+        "timestamp", "type", "symbol", "detail", "extra",
+        "detection_latency", "signal_latency", "execution_latency", "total_latency",
+    ]]
     st.dataframe(
         log_df,
         use_container_width=True,
@@ -1163,6 +1245,10 @@ if rows:
             "symbol": "Symbol",
             "detail": "Detail",
             "extra": "Extra",
+            "detection_latency": "Detection",
+            "signal_latency": "Signal → risk",
+            "execution_latency": "Execution",
+            "total_latency": "Total",
         },
     )
 else:
@@ -1297,7 +1383,61 @@ else:
 
 
 # ===============================================================
-# PANEL 6 — Open Positions
+# PANEL 6 — System-exit loss audit
+# ===============================================================
+st.markdown("<div class='panel-divider'></div>", unsafe_allow_html=True)
+st.header("System-exit loss audit")
+st.caption(
+    "Broker-confirmed SL/TP exits only. Manual exits and degraded sizing are "
+    "excluded. Entry delay is reconstructed from the best available signal audit; "
+    "regime is intentionally NULL until the retrospective regime backfill exists."
+)
+
+if loss_audit_df.empty:
+    st.info("No clean system-exit audit rows are available yet.")
+else:
+    loss_audit_display = loss_audit_df.copy()
+    for numeric_column in (
+        "entry_delay_ms", "r_realized", "stop_distance", "atr_at_entry", "stop_distance_vs_atr",
+    ):
+        if numeric_column in loss_audit_display.columns:
+            loss_audit_display[numeric_column] = pd.to_numeric(
+                loss_audit_display[numeric_column], errors="coerce"
+            ).round(6)
+    loss_audit_display = loss_audit_display.rename(
+        columns={
+            "fill_id": "Fill ID",
+            "source_signal_id": "Signal ID",
+            "symbol": "Symbol",
+            "direction": "Direction",
+            "entry_time": "Entry time (UTC)",
+            "source_signal_time": "Signal time (UTC)",
+            "entry_delay_ms": "Entry delay (ms)",
+            "entry_delay_source": "Entry-delay source",
+            "r_realized": "Realized R",
+            "stop_distance": "Stop distance",
+            "atr_at_entry": "ATR at entry",
+            "stop_distance_vs_atr": "Stop / ATR",
+            "atr_recovery_status": "ATR recovery",
+            "exit_type": "Exit type",
+            "exit_time": "Exit time (UTC)",
+            "regime_at_entry": "Regime at entry",
+        }
+    )
+    audit_columns = [
+        "Fill ID", "Signal ID", "Symbol", "Direction", "Entry time (UTC)",
+        "Signal time (UTC)", "Entry delay (ms)", "Entry-delay source", "Realized R",
+        "Stop distance", "ATR at entry", "Stop / ATR", "ATR recovery", "Exit type",
+        "Exit time (UTC)", "Regime at entry",
+    ]
+    st.dataframe(
+        loss_audit_display[[column for column in audit_columns if column in loss_audit_display]],
+        hide_index=True,
+    )
+
+
+# ===============================================================
+# PANEL 7 — Open Positions
 # ===============================================================
 st.markdown("<div class='panel-divider'></div>", unsafe_allow_html=True)
 st.header("5️⃣ Open Positions")

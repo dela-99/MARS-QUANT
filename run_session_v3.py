@@ -492,7 +492,11 @@ class MultiSymbolSession:
                             take_profit=signal['take_profit'],
                             position_size=position_size,
                             max_hold_hours=24,
-                            entry_time=pd.Timestamp.now(tz='UTC')
+                            entry_time=pd.Timestamp.now(tz='UTC'),
+                            # Audit-only pipeline timestamps produced by the
+                            # strategy; they are not used by risk or routing.
+                            movement_detected_at=signal.get('movement_detected_at'),
+                            signal_generated_at=signal.get('signal_generated_at'),
                         )
                         
                         success = self.executor.open_position(trade_config)

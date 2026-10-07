@@ -824,6 +824,10 @@ class TradeConfig:
     max_hold_hours: int = 24
     risk_pct: float = 0.01   # 1% risk per trade
     entry_time: pd.Timestamp = None  # Bar timestamp for time-based exits
+    # Audit-only timestamps; no sizing, risk, or order logic reads these fields.
+    movement_detected_at: Optional[str] = None
+    signal_generated_at: Optional[str] = None
+    latency_trace_id: Optional[int] = None
 
 
 class TradeExecutor:
