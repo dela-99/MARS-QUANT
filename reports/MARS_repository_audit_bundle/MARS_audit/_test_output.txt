@@ -1,0 +1,12 @@
+........................................F............................... [ 66%]
+........F............................                                    [100%]
+================================== FAILURES ===================================
+E   sqlite3.IntegrityError: NOT NULL constraint failed: signals.entry_price
+C:\Users\RIDGE\MARS-QUANT\tests\unit\trading\test_loss_audit.py:35: sqlite3.IntegrityError: NOT NULL constraint failed: signals.entry_price
+E   AssertionError: Expected commission -7.50, got 0.0
+    assert 0.0 == -7.5
+C:\Users\RIDGE\MARS-QUANT\tests\unit\trading\test_risk_rules.py:768: AssertionError: Expected commission -7.50, got 0.0
+=========================== short test summary info ===========================
+FAILED tests/unit/trading/test_loss_audit.py::test_broker_close_creates_clean_system_exit_audit_row
+FAILED tests/unit/trading/test_risk_rules.py::TestFillLogsRealCommissionSwapProfit::test_log_fill_records_nonzero_commission_swap_profit
+2 failed, 107 passed in 130.04s (0:02:10)
