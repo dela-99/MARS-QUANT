@@ -541,6 +541,55 @@ class MT5AuditLogger:
                 if col not in existing_fill_cols:
                     cursor.execute(f"ALTER TABLE fills ADD COLUMN {col} {decl}")
 
+
+            # MIGRATION: make signals.entry_price nullable if it was NOT NULL (idempotent)
+            try:
+                cursor.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='signals'")
+                row = cursor.fetchone()
+                if row and 'entry_price REAL NOT NULL' in row[0]:
+                    # SQLite doesn't support ALTER COLUMN to drop NOT NULL directly
+                    # Need to recreate the table. Use explicit transaction for safety.
+                    # The actual schema has no FK constraints on signals, so simple RENAME works.
+                    cursor.execute("BEGIN IMMEDIATE TRANSACTION")
+                    try:
+                        cursor.execute("ALTER TABLE signals RENAME TO signals_old")
+                        cursor.execute("""
+                            CREATE TABLE signals (
+                                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                                timestamp TEXT NOT NULL,
+                                symbol TEXT NOT NULL,
+                                signal INTEGER NOT NULL,
+                                entry_price REAL,
+                                stop_price REAL NOT NULL,
+                                take_profit REAL NOT NULL,
+                                position_size REAL NOT NULL,
+                                risk_at_stop REAL NOT NULL,
+                                risk_pct REAL NOT NULL,
+                                risk_check_passed INTEGER NOT NULL,
+                                rejection_reason TEXT,
+                                bar_key TEXT,
+                                max_hold_hours REAL
+                            )
+                        """)
+                        cursor.execute("""
+                            INSERT INTO signals
+                            SELECT id, timestamp, symbol, signal, entry_price, stop_price,
+                                   take_profit, position_size, risk_at_stop, risk_pct,
+                                   risk_check_passed, rejection_reason, bar_key, max_hold_hours
+                            FROM signals_old
+                        """)
+                        cursor.execute("DROP TABLE signals_old")
+                        # Recreate indexes
+                        cursor.execute("CREATE INDEX IF NOT EXISTS idx_signals_timestamp ON signals(timestamp)")
+                        cursor.execute("CREATE INDEX IF NOT EXISTS idx_signals_symbol ON signals(symbol)")
+                        cursor.execute("COMMIT")
+                        print("  ✅ Migrated signals.entry_price to nullable")
+                    except Exception as e:
+                        cursor.execute("ROLLBACK")
+                        raise
+            except Exception as e:
+                print(f"  ⚠️  Signals migration check failed: {e}")
+
             # One audit row represents one signal attempt from movement through
             # broker response.  Keeping this separate from fills lets rejected
             # signals retain their detection/risk timing without inventing a fill.

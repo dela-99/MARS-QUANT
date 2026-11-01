@@ -1199,11 +1199,16 @@ if "SIGNAL" in type_filter and not signals_df.empty:
         passed = "PASS" if r.get("risk_check_passed") == 1 else "FAIL"
         rr = r.get("rejection_reason")
         rr_str = "" if rr is None or (isinstance(rr, float) and pd.isna(rr)) else str(rr)
+        entry_price = r.get("entry_price")
+        if entry_price is None or (isinstance(entry_price, float) and pd.isna(entry_price)):
+            entry_price_str = "N/A"
+        else:
+            entry_price_str = f"{entry_price:.3f}"
         rows.append({
             "timestamp": r.get("timestamp"),
             "type": "SIGNAL",
             "symbol": r.get("symbol"),
-            "detail": f"{sig_text} @ {r.get('entry_price', 0):.3f} | risk_check={passed}",
+            "detail": f"{sig_text} @ {entry_price_str} | risk_check={passed}",
             "extra": rr_str[:60],
             **(
                 _latency_display(latency_by_signal.get(int(r["id"])))

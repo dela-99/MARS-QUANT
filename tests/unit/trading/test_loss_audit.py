@@ -34,10 +34,10 @@ def test_broker_close_creates_clean_system_exit_audit_row(tmp_path, monkeypatch)
     with sqlite3.connect(logger.db_path) as conn:
         conn.execute(
             """
-            INSERT INTO signals (timestamp, symbol, signal, risk_check_passed)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO signals (timestamp, symbol, signal, stop_price, take_profit, position_size, risk_at_stop, risk_pct, risk_check_passed)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            ("2026-10-05T12:00:00+00:00", "USDJPYm", 1, 1),
+            ("2026-10-05T12:00:00+00:00", "USDJPYm", 1, 149.0, 153.0, 0.1, 1.0, 0.01, 1),
         )
         cursor = conn.execute(
             """
