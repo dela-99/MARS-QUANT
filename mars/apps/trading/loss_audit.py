@@ -62,11 +62,17 @@ def _iso_or_none(value: Any) -> str | None:
 
 
 def _net_pnl(fill: sqlite3.Row) -> float:
-    """Use the same realized-P&L definition as the dashboard expectancy view."""
+    """Use the same realized-P&L definition as the dashboard expectancy view.
+    
+    Net P&L = exit_profit + exit_commission + exit_swap + entry_commission + entry_swap
+    (entry_profit is typically 0 for entry deals)
+    """
     exit_profit = float(fill["exit_profit"] or 0.0)
     exit_commission = float(fill["exit_commission"] or 0.0)
     exit_swap = float(fill["exit_swap"] or 0.0)
-    return exit_profit + exit_commission + exit_swap
+    entry_commission = float(fill["commission"] or 0.0)
+    entry_swap = float(fill["swap"] or 0.0)
+    return exit_profit + exit_commission + exit_swap + entry_commission + entry_swap
 
 
 def _realized_r(fill: sqlite3.Row) -> tuple[float | None, float | None]:

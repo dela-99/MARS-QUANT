@@ -728,6 +728,9 @@ class TestFillLogsRealCommissionSwapProfit:
             result_code=0,
             retcode_external=0,
             timestamp=pd.Timestamp.now(tz='UTC'),
+            commission=-7.50,
+            swap=-1.25,
+            profit=250.00,
         )
         # Add mt5_ticket attribute that log_fill uses
         fill.mt5_ticket = 123456789

@@ -200,6 +200,8 @@ class FillResult:
     commission: float = 0.0
     swap: float = 0.0
     profit: float = 0.0
+    position_id: int = None
+    deal_status: str = "unknown"  # "confirmed" | "not_found" | "lookup_failed" | "invalid_ticket" | "no_entry_deal"
 
 
 class MT5ConnectionManager:
@@ -313,30 +315,66 @@ class MT5OrderRouter:
         self.mt5 = mt5_module
         self.symbol_resolver = symbol_resolver
     
-    def send_order(self, config: TradeConfig, spec) -> "OrderFill":
-        """Send order to MT5 and return fill result."""
-        from dataclasses import dataclass
+    def _lookup_entry_deal(self, deal_ticket: int) -> tuple[float, float, float, float, int, str]:
+                """
+                Look up the entry deal by deal ticket to get commission, swap, profit, executed_volume, and position_id.
+            
+                Always aggregates ALL entry deals for the position to handle partial fills correctly.
+                Avoids double-counting the initially retrieved deal.
+            
+                Returns: (commission, swap, profit, executed_volume, position_id, status)
+                status: "confirmed" | "not_found" | "lookup_failed" | "invalid_ticket" | "no_entry_deal"
+                """
+                commission = 0.0
+                swap = 0.0
+                profit = 0.0
+                executed_volume = 0.0
+                position_id = None
+                status = "not_found"
         
-        @dataclass
-        class OrderFill:
-            success: bool
-            ticket: int
-            order_id: int
-            price: float
-            volume: float
-            sl: float
-            tp: float
-            slippage: float
-            size_slippage: float
-            bid: float
-            ask: float
-            spread: float
-            commission: float
-            swap: float
-            profit: float
-            result_code: int
-            retcode_external: int
-            comment: str
+                if deal_ticket == 0:
+                    return commission, swap, profit, executed_volume, position_id, "invalid_ticket"
+        
+                try:
+                    # Get the deal by ticket to find its position_id
+                    deals = self.mt5.history_deals_get(ticket=deal_ticket)
+                    if deals and len(deals) > 0:
+                        deal = deals[0]
+                        position_id = getattr(deal, 'position_id', None)
+                    
+                        # Always look up all entry deals for this position to aggregate
+                        if position_id:
+                            all_deals = self.mt5.history_deals_get(position=position_id)
+                            if all_deals:
+                                entry_deals = [d for d in all_deals if getattr(d, 'entry', None) == 0]
+                                if entry_deals:
+                                    # Aggregate all entry deals for this position
+                                    total_commission = sum(getattr(d, 'commission', 0.0) for d in entry_deals)
+                                    total_swap = sum(getattr(d, 'swap', 0.0) for d in entry_deals)
+                                    total_profit = sum(getattr(d, 'profit', 0.0) for d in entry_deals)
+                                    total_volume = sum(getattr(d, 'volume', 0.0) for d in entry_deals)
+                                    commission = total_commission
+                                    swap = total_swap
+                                    profit = total_profit
+                                    executed_volume = total_volume
+                                    return commission, swap, profit, executed_volume, position_id, "confirmed"
+                                else:
+                                    status = "no_entry_deal"
+                            else:
+                                status = "lookup_failed"
+                        else:
+                            status = "no_entry_deal"
+                    else:
+                        status = "not_found"
+                except Exception:
+                    status = "lookup_failed"
+        
+                return commission, swap, profit, executed_volume, position_id, status
+    
+    def send_order(self, config: TradeConfig, spec) -> "FillResult":
+        """Send order to MT5 and return fill result with actual deal data."""
+        from dataclasses import dataclass
+        from datetime import datetime
         
         # Determine order type
         order_type = self.mt5.ORDER_TYPE_BUY if config.signal > 0 else self.mt5.ORDER_TYPE_SELL
@@ -344,12 +382,12 @@ class MT5OrderRouter:
         # Get current prices
         tick = self.mt5.symbol_info_tick(config.symbol)
         if tick is None:
-            return OrderFill(
-                success=False, ticket=0, order_id=0, price=0, volume=0,
-                sl=config.stop_price, tp=config.take_profit,
-                slippage=0, size_slippage=0, bid=0, ask=0, spread=0,
-                commission=0, swap=0, profit=0, result_code=-1, retcode_external=-1,
-                comment="No tick data"
+            return FillResult(
+                success=False, ticket=0, order_id=0, volume=0, price=0,
+                bid=0, ask=0, sl=config.stop_price, tp=config.take_profit,
+                comment="No tick data", request=config,
+                result_code=-1, retcode_external=-1,
+                timestamp=datetime.now(),
             )
         
         price = tick.ask if config.signal > 0 else tick.bid
@@ -384,13 +422,16 @@ class MT5OrderRouter:
         result = self.mt5.order_send(request)
         
         if result is None:
-            error = self.mt5.last_error()
-            return OrderFill(
-                success=False, ticket=0, order_id=0, price=price, volume=volume,
-                sl=sl, tp=tp, slippage=0, size_slippage=0, bid=tick.bid, ask=tick.ask,
-                spread=tick.ask - tick.bid, commission=0, swap=0, profit=0,
-                result_code=-1, retcode_external=-1, comment=f"order_send returned None: {error}"
-            )
+                    error = self.mt5.last_error()
+                    return FillResult(
+                        success=False, ticket=0, order_id=0, volume=0, price=price,
+                        bid=tick.bid, ask=tick.ask, sl=sl, tp=tp,
+                        slippage=0, size_slippage=0, spread=tick.ask - tick.bid,
+                        commission=0, swap=0, profit=0,
+                        result_code=-1, retcode_external=-1,
+                        comment=f"order_send returned None: {error}", request=config,
+                        timestamp=datetime.now(),
+                    )
         
         # Calculate slippage
         expected_price = price
@@ -398,38 +439,61 @@ class MT5OrderRouter:
         slippage = abs(actual_price - expected_price) * 10000  # in pips
         
         if result.retcode == self.mt5.TRADE_RETCODE_DONE:
-            return OrderFill(
-                success=True,
-                ticket=result.order,
-                order_id=result.order,
-                price=actual_price,
-                volume=result.volume,
-                sl=sl,
-                tp=tp,
-                slippage=slippage,
-                size_slippage=0.0,
-                bid=tick.bid,
-                ask=tick.ask,
-                spread=tick.ask - tick.bid,
-                commission=result.commission if hasattr(result, 'commission') else 0,
-                swap=result.swap if hasattr(result, 'swap') else 0,
-                profit=result.profit if hasattr(result, 'profit') else 0,
-                result_code=result.retcode,
-                retcode_external=result.retcode_external if hasattr(result, 'retcode_external') else -1,
-                comment=result.comment if hasattr(result, 'comment') else "",
-            )
+                        # Get actual deal data from MT5 history
+                        deal_ticket = getattr(result, 'deal', 0)
+                        commission, swap, profit, executed_volume, position_id, status = self._lookup_entry_deal(deal_ticket)
+        
+                        # Use broker-reported executed volume from entry deals for accurate accounting
+                        # Fall back to result.volume if lookup failed
+                        filled_volume = executed_volume if executed_volume > 0 else result.volume
+                        size_slippage = filled_volume - volume
+        
+                        return FillResult(
+                                        success=True,
+                                        ticket=result.order,
+                                        order_id=result.order,
+                                        volume=filled_volume,
+                                        price=actual_price,
+                                        bid=tick.bid,
+                                        ask=tick.ask,
+                                        sl=sl,
+                                        tp=tp,
+                                        comment=result.comment if hasattr(result, 'comment') else "",
+                                        request=config,
+                                        result_code=result.retcode,
+                                        retcode_external=result.retcode_external if hasattr(result, 'retcode_external') else -1,
+                                        timestamp=datetime.now(),
+                                        slippage=slippage,
+                                        size_slippage=size_slippage,
+                                        commission=commission,
+                                        swap=swap,
+                                        profit=profit,
+                                        position_id=position_id,
+                                        deal_status=status,
+                                    )
         else:
-            return OrderFill(
-                success=False, ticket=result.order if hasattr(result, 'order') else 0,
-                order_id=result.order if hasattr(result, 'order') else 0,
-                price=price, volume=volume, sl=sl, tp=tp,
-                slippage=slippage, size_slippage=0.0,
-                bid=tick.bid, ask=tick.ask, spread=tick.ask - tick.bid,
-                commission=0, swap=0, profit=0,
-                result_code=result.retcode,
-                retcode_external=result.retcode_external if hasattr(result, 'retcode_external') else -1,
-                comment=f"Order failed: {result.comment} (retcode={result.retcode})"
-            )
+                    return FillResult(
+                        success=False,
+                        ticket=result.order if hasattr(result, 'order') else 0,
+                        order_id=result.order if hasattr(result, 'order') else 0,
+                        volume=volume,
+                        price=price,
+                        bid=tick.bid,
+                        ask=tick.ask,
+                        sl=sl,
+                        tp=tp,
+                        slippage=slippage,
+                        size_slippage=0.0,
+                        spread=tick.ask - tick.bid,
+                        commission=0,
+                        swap=0,
+                        profit=0,
+                        result_code=result.retcode,
+                        retcode_external=result.retcode_external if hasattr(result, 'retcode_external') else -1,
+                        comment=f"Order failed: {result.comment} (retcode={result.retcode})",
+                        request=config,
+                        timestamp=datetime.now(),
+                    )
 
 
 # ============================================================================
@@ -853,189 +917,170 @@ class MT5AuditLogger:
             conn.commit()
    
     def log_fill(self, fill, config: TradeConfig, expected_price: float):
-        """Log order fill with slippage calculation.
+            """Log order fill with slippage calculation.
 
-        Captures the MT5 position_id so the closing deal can be reconciled
-        later via history_deals_get(position=position_id).
-        """
-        import sqlite3
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.cursor()
+            The fill object (FillResult) already contains commission, swap, profit,
+            and position_id from the entry deal lookup performed in send_order().
+            """
+            import sqlite3
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
 
-            # Calculate slippage in points and percentage
-            spread_at_fill = fill.ask - fill.bid
+                # Calculate slippage in points and percentage
+                spread_at_fill = fill.ask - fill.bid
 
-            # Get actual commission/swap/profit from MT5 history for THIS deal.
-            # For entry deals, profit is always 0; commission and swap may apply.
-            commission = 0.0
-            swap = 0.0
-            profit = 0.0
-            position_id = None
-            try:
-                # fill.ticket is actually the ORDER ticket (returned by
-                # order_send as the order id, not the deal id). For instant
-                # market orders on MT5, position_id == order_ticket. To get
-                # position_id reliably, try BOTH lookup paths:
-                #   1. history_orders_get(ticket=fill.ticket) → order.position_id
-                #   2. history_deals_get(position=fill.ticket) → position_id directly
-                # Either succeeds for normal market orders; the deal-by-ticket
-                # lookup that the old code used returns empty because fill.ticket
-                # is NOT a deal ticket.
-                try:
-                    orders = self._mt5.history_orders_get(ticket=fill.ticket)
-                    if orders and len(orders) > 0:
-                        position_id = getattr(orders[0], 'position_id', None) or position_id
-                except Exception:
-                    pass
-                if not position_id:
-                    deals_by_pos = self._mt5.history_deals_get(position=fill.ticket)
-                    if deals_by_pos and len(deals_by_pos) > 0:
-                        position_id = getattr(deals_by_pos[0], 'position_id', None) or position_id
-                # Pull commission / swap / profit from the entry deal
-                deals = self._mt5.history_deals_get(position=position_id) if position_id else []
-                entry_deals = [d for d in deals if getattr(d, 'entry', None) == 0]
-                if entry_deals:
-                    deal = entry_deals[0]
-                    commission = getattr(deal, 'commission', 0.0)
-                    swap = getattr(deal, 'swap', 0.0)
-                    profit = getattr(deal, 'profit', 0.0)
-            except Exception:
-                pass  # Keep defaults if history lookup fails
+                # Use commission, swap, profit, position_id from the FillResult
+                # which were populated by send_order() via _lookup_entry_deal()
+                commission = getattr(fill, 'commission', 0.0)
+                swap = getattr(fill, 'swap', 0.0)
+                profit = getattr(fill, 'profit', 0.0)
+                position_id = getattr(fill, 'position_id', None)
 
-            cursor.execute("""
-                            INSERT INTO fills (
-                                timestamp, ticket, order_id, symbol, direction,
-                                requested_lots, filled_lots, signal_price,
-                                filled_price, requested_sl, filled_sl,
-                                requested_tp, filled_tp, slippage_points,
-                                slippage_pct, size_slippage, spread_at_fill, commission, swap,
-                                profit, mt5_ticket, mt5_order_id,
-                                retcode, retcode_external, comment,
-                                position_id
-                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        """, (
-                            fill.timestamp.isoformat() if hasattr(fill, 'timestamp') else datetime.now().isoformat(),
-                            fill.ticket, fill.order_id,
-                            fill.request.symbol if hasattr(fill, 'request') else config.symbol,
-                            "BUY" if (hasattr(fill, 'request') and fill.request.signal == 1) else (config.signal == 1 and "BUY" or "SELL"),
-                            fill.request.volume if hasattr(fill, 'request') else config.position_size,
-                            fill.volume,
-                            expected_price, fill.price,
-                            config.stop_price, fill.sl,
-                            config.take_profit, fill.tp,
-                            fill.slippage,
-                            fill.slippage / expected_price * 10000 if expected_price > 0 else 0,
-                            fill.size_slippage,
-                            spread_at_fill,
-                            commission, swap, profit,
-                            fill.mt5_ticket if hasattr(fill, 'mt5_ticket') else fill.ticket,
-                            fill.order_id,
-                            fill.result_code,
-                            fill.retcode_external if not isinstance(fill.retcode_external, type(None)) else -1,
-                            fill.comment,
-                            position_id,
-                        ))
-            conn.commit()
-            return int(cursor.lastrowid)
+                cursor.execute("""
+                                INSERT INTO fills (
+                                    timestamp, ticket, order_id, symbol, direction,
+                                    requested_lots, filled_lots, signal_price,
+                                    filled_price, requested_sl, filled_sl,
+                                    requested_tp, filled_tp, slippage_points,
+                                    slippage_pct, size_slippage, spread_at_fill, commission, swap,
+                                    profit, mt5_ticket, mt5_order_id,
+                                    retcode, retcode_external, comment,
+                                    position_id
+                                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            """, (
+                                fill.timestamp.isoformat() if hasattr(fill, 'timestamp') else datetime.now().isoformat(),
+                                fill.ticket, fill.order_id,
+                                fill.request.symbol if hasattr(fill, 'request') else config.symbol,
+                                "BUY" if (hasattr(fill, 'request') and fill.request.signal == 1) else (config.signal == 1 and "BUY" or "SELL"),
+                                fill.request.volume if hasattr(fill, 'request') and hasattr(fill.request, 'volume') else config.position_size,
+                                fill.volume,
+                                expected_price, fill.price,
+                                config.stop_price, fill.sl,
+                                config.take_profit, fill.tp,
+                                fill.slippage,
+                                fill.slippage / expected_price * 10000 if expected_price > 0 else 0,
+                                fill.size_slippage,
+                                spread_at_fill,
+                                commission, swap, profit,
+                                fill.mt5_ticket if hasattr(fill, 'mt5_ticket') else fill.ticket,
+                                fill.order_id,
+                                fill.result_code,
+                                fill.retcode_external if not isinstance(fill.retcode_external, type(None)) else -1,
+                                fill.comment,
+                                position_id,
+                            ))
+                conn.commit()
+                return int(cursor.lastrowid)
     
     def log_close_fill(self, open_fill_rowid: int) -> bool:
-        """Look up the exit deal in MT5 history and update the open fill row.
+            """Look up the exit deal(s) in MT5 history and update the open fill row.
 
-        Idempotent: if the row is already marked is_closed=1, returns True
-        without making any DB changes.
+            Aggregates all exit deals for the position. Idempotent: if the row is
+            already marked is_closed=1, returns True without making any DB changes.
 
-        Returns True on success, False if the exit deal cannot be found.
-        """
-        import sqlite3
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                "SELECT id, position_id, ticket, is_closed FROM fills WHERE id = ?",
-                (open_fill_rowid,),
-            )
-            row = cursor.fetchone()
-            if not row:
-                return False
-            rid, position_id, ticket, is_closed = row
-            if is_closed:
+            Returns True on success, False if the exit deal cannot be found.
+            """
+            import sqlite3
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "SELECT id, position_id, ticket, is_closed, commission, swap, profit FROM fills WHERE id = ?",
+                    (open_fill_rowid,),
+                )
+                row = cursor.fetchone()
+                if not row:
+                    return False
+                rid, position_id, ticket, is_closed, entry_commission, entry_swap, entry_profit = row
+                # Handle NULL values for legacy rows
+                entry_commission = float(entry_commission or 0.0)
+                entry_swap = float(entry_swap or 0.0)
+                entry_profit = float(entry_profit or 0.0)
+                if is_closed:
+                    return True
+
+                exit_deals = []
+                try:
+                    mt5_api = self._ensure_mt5()
+                    # Prefer position= (broker-authoritative). Fall back to ticket=
+                    # (position ticket == ticket for entries without position_id).
+                    if position_id:
+                        deals = mt5_api.history_deals_get(position=position_id)
+                    else:
+                        deals = mt5_api.history_deals_get(position=ticket)
+                    exit_deals = [d for d in deals if getattr(d, 'entry', None) == 1]
+                except Exception:
+                    pass
+
+                if not exit_deals:
+                    return False
+
+                # Aggregate all exit deals for this position
+                exit_time = None
+                exit_price = 0.0
+                total_exit_commission = 0.0
+                total_exit_swap = 0.0
+                total_exit_profit = 0.0
+                exit_reasons = []
+                exit_tickets = []
+
+                for exit_deal in exit_deals:
+                    deal_time = getattr(exit_deal, 'time', 0)
+                    if deal_time:
+                        dt = datetime.fromtimestamp(deal_time, tz=timezone.utc).isoformat()
+                        if exit_time is None or dt > exit_time:
+                            exit_time = dt
+                    exit_price = max(exit_price, float(getattr(exit_deal, 'price', 0.0) or 0.0))
+                    total_exit_commission += float(getattr(exit_deal, 'commission', 0.0) or 0.0)
+                    total_exit_swap += float(getattr(exit_deal, 'swap', 0.0) or 0.0)
+                    total_exit_profit += float(getattr(exit_deal, 'profit', 0.0) or 0.0)
+
+                    reason_code = int(getattr(exit_deal, 'reason', 0) or 0)
+                    reason_map = {
+                        0: "client", 1: "mobile", 2: "web", 3: "expert",
+                        4: "sl_hit", 5: "tp_hit", 6: "stopout",
+                        7: "rollover", 8: "vmargin", 9: "split",
+                    }
+                    exit_reasons.append(reason_map.get(reason_code, f"reason={reason_code}"))
+                    exit_tickets.append(int(getattr(exit_deal, 'ticket', 0) or 0))
+
+                if exit_time is None:
+                    exit_time = datetime.now(tz=timezone.utc).isoformat()
+                exit_reason = ";".join(exit_reasons)
+                exit_ticket = ",".join(str(t) for t in exit_tickets)
+
+                # Net P&L = entry_profit + exit_profit + entry_commission + exit_commission + entry_swap + exit_swap
+                # Note: entry_profit is typically 0 for entry deals; entry_commission/entry_swap are from entry
+                net_pnl = (entry_profit + total_exit_profit +
+                           entry_commission + total_exit_commission +
+                           entry_swap + total_exit_swap)
+
+                cursor.execute(
+                    """
+                    UPDATE fills SET
+                        exit_time = ?,
+                        exit_price = ?,
+                        exit_reason = ?,
+                        exit_commission = ?,
+                        exit_swap = ?,
+                        exit_profit = ?,
+                        exit_deal_ticket = ?,
+                        is_closed = 1
+                    WHERE id = ?
+                    """,
+                    (
+                        exit_time, exit_price, exit_reason,
+                        total_exit_commission, total_exit_swap, total_exit_profit,
+                        exit_ticket, rid,
+                    ),
+                )
+                # The row is derived only after broker reconciliation supplies the
+                # final, authoritative exit fields. It never feeds trading logic.
+                try:
+                    upsert_loss_audit_for_fill(conn, rid, utc_now_iso())
+                except Exception as exc:
+                    print(f"Loss-audit row unavailable for fill {rid}: {exc}")
+                conn.commit()
                 return True
-
-            exit_deal = None
-            try:
-                mt5_api = self._ensure_mt5()
-                # Prefer position= (broker-authoritative). Fall back to ticket=
-                # (position ticket == ticket for entries without position_id).
-                if position_id:
-                    deals = mt5_api.history_deals_get(position=position_id)
-                else:
-                    deals = mt5_api.history_deals_get(position=ticket)
-                exit_deals = [d for d in deals if getattr(d, 'entry', None) == 1]
-                if exit_deals:
-                    exit_deal = exit_deals[0]
-            except Exception:
-                pass
-
-            if exit_deal is None:
-                return False
-
-            exit_time = (
-                datetime.fromtimestamp(getattr(exit_deal, 'time', 0), tz=timezone.utc).isoformat()
-                if getattr(exit_deal, 'time', 0) else datetime.now(tz=timezone.utc).isoformat()
-            )
-            exit_price = float(getattr(exit_deal, 'price', 0.0) or 0.0)
-            exit_commission = float(getattr(exit_deal, 'commission', 0.0) or 0.0)
-            exit_swap = float(getattr(exit_deal, 'swap', 0.0) or 0.0)
-            exit_profit = float(getattr(exit_deal, 'profit', 0.0) or 0.0)
-            reason_code = int(getattr(exit_deal, 'reason', 0) or 0)
-            # Authoritative MT5 DEAL_REASON_* constants:
-            #   0=CLIENT (desktop terminal), 1=MOBILE, 2=WEB, 3=EXPERT (EA),
-            #   4=SL triggered, 5=TP triggered, 6=SO (margin stop-out),
-            #   7=ROLLOVER, 8=VMARGIN, 9=SPLIT.
-            # Previously this map was off-by-N — codes 4-9 were mapped to
-            # "mobile"/"web"/"stopout" instead of SL/TP/SO/rollover/vmargin/split,
-            # so every exit tagged by the old map was wrong for those codes.
-            reason_map = {
-                0: "client",
-                1: "mobile",
-                2: "web",
-                3: "expert",
-                4: "sl_hit",
-                5: "tp_hit",
-                6: "stopout",
-                7: "rollover",
-                8: "vmargin",
-                9: "split",
-            }
-            exit_reason = reason_map.get(reason_code, f"reason={reason_code}")
-            exit_ticket = int(getattr(exit_deal, 'ticket', 0) or 0)
-
-            cursor.execute(
-                """
-                UPDATE fills SET
-                    exit_time = ?,
-                    exit_price = ?,
-                    exit_reason = ?,
-                    exit_commission = ?,
-                    exit_swap = ?,
-                    exit_profit = ?,
-                    exit_deal_ticket = ?,
-                    is_closed = 1
-                WHERE id = ?
-                """,
-                (
-                    exit_time, exit_price, exit_reason,
-                    exit_commission, exit_swap, exit_profit,
-                    exit_ticket, rid,
-                ),
-            )
-            # The row is derived only after broker reconciliation supplies the
-            # final, authoritative exit fields. It never feeds trading logic.
-            try:
-                upsert_loss_audit_for_fill(conn, rid, utc_now_iso())
-            except Exception as exc:
-                print(f"Loss-audit row unavailable for fill {rid}: {exc}")
-            conn.commit()
-            return True
 
     def reconcile_from_broker(self, days_back: int = 30) -> dict:
         """Catch up the audit DB with any closes that happened offline.
