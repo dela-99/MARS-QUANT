@@ -20,10 +20,12 @@ import sqlite3
 import os
 import threading
 import time
+import math
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from threading import Lock
+from enum import Enum
 
 try:
     import MetaTrader5 as mt5
@@ -125,7 +127,275 @@ class MT5SymbolInfo:
     order_mode: int = 0
 
 
+@dataclass(frozen=True)
+class InstrumentSpec:
+    """
+    Immutable instrument specification for calculations.
+    
+    Combines live broker metadata (MT5) with static config (SYMBOL_CONFIGS).
+    Live values take precedence when available; static config serves as
+    documented offline/backtesting fallback.
+    """
+    symbol: str
+    contract_size: float          # Units per lot (e.g., 100 for XAUUSD, 100000 for FX)
+    min_lot: float                # Minimum order volume
+    max_lot: float                # Maximum order volume
+    lot_step: float               # Volume step increment
+    digits: int                   # Price decimal digits
+    point: float                  # Point size (smallest price change)
+    tick_size: float              # Tick size (minimum price movement)
+    tick_value: float             # Monetary value of one tick per lot
+    pip_size: float               # Pip size for risk calculations
+    swap_long: float              # Swap per lot per day (long)
+    swap_short: float             # Swap per lot per day (short)
+    margin_initial: float         # Initial margin per lot
+    margin_maintenance: float     # Maintenance margin per lot
+    quote_currency: str           # Quote currency (USD, JPY, etc.)
+    
+    # Derived properties
+    @property
+    def pip_value_per_lot(self) -> float:
+        """Monetary value of 1 pip per lot in quote currency."""
+        return self.pip_size * self.contract_size
+    
+    @property
+    def tick_value_per_lot(self) -> float:
+        """Monetary value of 1 tick per lot (alias for tick_value)."""
+        return self.tick_value
+    
+    @property
+    def contract_multiplier(self) -> float:
+        """Alias for contract_size used in position sizing."""
+        return self.contract_size
+    
+    def risk_per_contract(self, stop_distance: float) -> float:
+        """Risk per lot for a given stop distance in price units."""
+        return stop_distance * self.contract_size
+
+
+class SpecificationResolver:
+    """Unified instrument specification source with explicit LIVE/OFFLINE modes.
+    
+    LIVE MODE:
+    - Require successfully retrieved MT5 symbol metadata
+    - Validate all mandatory specification fields
+    - Reject missing, zero, negative or invalid metadata
+    - Never silently fall back to static or built-in specifications
+    - Cache live lookups with TTL (5 min)
+    
+    OFFLINE MODE:
+    - Use explicitly configured static SYMBOL_CONFIGS only
+    - Require documented provenance and versioning
+    - Reject unknown symbols (no built-in defaults)
+    - Clearly identify the source and mode of every resolved specification
+    """
+    
+    def __init__(self, mt5_module, symbol_configs: dict):
+        self.mt5 = mt5_module
+        self.symbol_configs = symbol_configs  # SYMBOL_CONFIGS from run_multi_pair_backtest
+        self._live_cache: Dict[str, Tuple[InstrumentSpec, float]] = {}  # symbol -> (spec, timestamp)
+        self._cache_ttl = 300.0  # 5 minutes
+    
+    def _validate_mt5_metadata(self, symbol: str, info) -> None:
+        """Validate MT5 symbol metadata for live execution.
+        
+        Raises:
+            ValueError: If any mandatory field is missing, invalid, or contradictory.
+        """
+        # Required numeric fields must be present and positive
+        required_fields = [
+            ("trade_contract_size", "contract size"),
+            ("volume_min", "minimum volume"),
+            ("volume_max", "maximum volume"),
+            ("volume_step", "volume step"),
+            ("digits", "digits"),
+            ("point", "point size"),
+            ("trade_tick_size", "tick size"),
+            ("trade_tick_value", "tick value"),
+        ]
+        
+        for attr, name in required_fields:
+            value = getattr(info, attr, None)
+            if value is None:
+                raise ValueError(f"Symbol {symbol}: missing mandatory field {name} ({attr})")
+            try:
+                float_val = float(value)
+                if not math.isfinite(float_val):
+                    raise ValueError(f"Symbol {symbol}: {name} ({attr}) is not finite: {value}")
+                if attr in ("trade_contract_size", "volume_min", "volume_max", "volume_step", "point", "trade_tick_size", "trade_tick_value"):
+                    if float_val <= 0:
+                        raise ValueError(f"Symbol {symbol}: {name} ({attr}) must be positive: {value}")
+            except (TypeError, ValueError) as e:
+                if "must be positive" in str(e) or "not finite" in str(e):
+                    raise
+                raise ValueError(f"Symbol {symbol}: {name} ({attr}) is not a valid number: {value}")
+        
+        # Validate volume constraints
+        volume_min = float(info.volume_min)
+        volume_max = float(info.volume_max)
+        volume_step = float(info.volume_step)
+        
+        if volume_min > volume_max:
+            raise ValueError(f"Symbol {symbol}: volume_min ({volume_min}) exceeds volume_max ({volume_max})")
+        if volume_step <= 0:
+            raise ValueError(f"Symbol {symbol}: volume_step must be positive: {volume_step}")
+        if volume_step > volume_max:
+            raise ValueError(f"Symbol {symbol}: volume_step ({volume_step}) exceeds volume_max ({volume_max})")
+        
+        # Validate digits is non-negative integer
+        digits = int(info.digits)
+        if digits < 0:
+            raise ValueError(f"Symbol {symbol}: digits must be non-negative: {digits}")
+        
+        # Validate point size is reasonable
+        point = float(info.point)
+        if point <= 0:
+            raise ValueError(f"Symbol {symbol}: point size must be positive: {point}")
+    
+    def _mt5_to_instrument_spec(self, symbol: str, info) -> InstrumentSpec:
+        """Convert MT5 symbol_info to InstrumentSpec with full validation."""
+        # Validate metadata first
+        self._validate_mt5_metadata(symbol, info)
+        
+        # Get static config for pip_size and quote_currency
+        config_key = self._mt5_symbol_to_config_key(symbol)
+        static = self.symbol_configs.get(config_key, {})
+        
+        pip_size = static.get("pip_size", info.point * 10)  # Fallback: 10 points = 1 pip
+        quote_currency = static.get("quote_currency", "USD")
+        
+        return InstrumentSpec(
+            symbol=symbol,
+            contract_size=float(info.trade_contract_size),
+            min_lot=float(info.volume_min),
+            max_lot=float(info.volume_max),
+            lot_step=float(info.volume_step),
+            digits=int(info.digits),
+            point=float(info.point),
+            tick_size=float(info.trade_tick_size),
+            tick_value=float(info.trade_tick_value),
+            pip_size=float(pip_size),
+            swap_long=float(info.swap_long),
+            swap_short=float(info.swap_short),
+            margin_initial=float(info.margin_initial),
+            margin_maintenance=float(info.margin_maintenance),
+            quote_currency=quote_currency,
+        )
+    
+    def _static_to_instrument_spec(self, symbol: str, strict: bool = True) -> InstrumentSpec:
+        """Build InstrumentSpec from static SYMBOL_CONFIGS only (offline/backtesting mode).
+        
+        Args:
+            symbol: MT5 symbol (e.g., "XAUUSDm")
+            strict: If True, raise ValueError for missing config. If False, return minimal spec for testing only.
+            
+        Raises:
+            ValueError: If symbol not found in static config and strict=True.
+        """
+        config_key = self._mt5_symbol_to_config_key(symbol)
+        static = self.symbol_configs.get(config_key)
+        
+        if static is None:
+            if strict:
+                raise ValueError(f"No static config for symbol {symbol} (config_key={config_key}). "
+                                 f"Available: {list(self.symbol_configs.keys())}")
+            # Non-strict mode: return minimal spec for testing only
+            static = {"contract_size": 1.0, "pip_size": 0.01, "quote_currency": "USD", 
+                     "digits": 2, "point": 0.01, "volume_min": 0.01, "volume_max": 10.0, "volume_step": 0.01}
+        
+        # Build spec from static config
+        # Note: live values (tick_size, tick_value, swap, margin) unavailable offline
+        return InstrumentSpec(
+            symbol=symbol,
+            contract_size=float(static["contract_size"]),
+            min_lot=float(static.get("volume_min", 0.01)),
+            max_lot=float(static.get("volume_max", 100.0)),
+            lot_step=float(static.get("volume_step", 0.01)),
+            digits=int(static.get("digits", 2)),
+            point=float(static.get("point", static.get("pip_size", 0.01) / 10)),
+            tick_size=float(static.get("tick_size", static.get("pip_size", 0.01) / 10)),
+            tick_value=float(static.get("tick_value", static.get("pip_size", 0.01) * static["contract_size"] / 10)),
+            pip_size=float(static["pip_size"]),
+            swap_long=0.0,  # Unknown offline
+            swap_short=0.0,
+            margin_initial=0.0,
+            margin_maintenance=0.0,
+            quote_currency=static.get("quote_currency", "USD"),
+        )
+    
+    class SpecResolutionMode(Enum):
+        """Specification resolution mode."""
+        LIVE = "live"           # Require live MT5 metadata, no fallback
+        OFFLINE = "offline"     # Use static SYMBOL_CONFIGS only
+    
+    def get_spec(self, symbol: str, mode: SpecResolutionMode = SpecResolutionMode.LIVE) -> InstrumentSpec:
+        """
+        Get instrument specification for a symbol.
+        
+        Args:
+            symbol: MT5 symbol (e.g., "XAUUSDm")
+            mode: Resolution mode - LIVE (require MT5) or OFFLINE (static config only)
+            
+        Returns:
+            InstrumentSpec with all required fields
+            
+        Raises:
+            ValueError: If symbol not found in MT5 (LIVE mode) or static config (OFFLINE mode)
+            RuntimeError: If MT5 module not available in LIVE mode
+        """
+        if mode == self.SpecResolutionMode.LIVE:
+            # LIVE MODE: Require successful MT5 metadata retrieval
+            # Try live cache first
+            now = time.time()
+            if symbol in self._live_cache:
+                spec, cached_at = self._live_cache[symbol]
+                if now - cached_at < self._cache_ttl:
+                    return spec
+            
+            # Must have live MT5
+            if self.mt5 is None:
+                raise RuntimeError(f"LIVE mode: MT5 module not available for {symbol}")
+            
+            # Get live metadata - must succeed
+            info = self.mt5.symbol_info(symbol)
+            if info is None:
+                raise ValueError(f"LIVE mode: Symbol {symbol} not found in MT5")
+            
+            # Validate and convert
+            spec = self._mt5_to_instrument_spec(symbol, info)
+            self._live_cache[symbol] = (spec, now)
+            return spec
+        
+        else:  # OFFLINE mode
+            # OFFLINE MODE: Use static SYMBOL_CONFIGS only
+            return self._static_to_instrument_spec(symbol, strict=True)
+    
+    def invalidate_cache(self, symbol: str = None) -> None:
+        """Invalidate cached specs. If symbol=None, clear all."""
+        if symbol is None:
+            self._live_cache.clear()
+        else:
+            self._live_cache.pop(symbol, None)
+    
+    def get_pip_value(self, symbol: str, mode: SpecResolutionMode = SpecResolutionMode.LIVE) -> float:
+        """Get pip value per lot in quote currency."""
+        return self.get_spec(symbol, mode).pip_value_per_lot
+    
+    def get_tick_value(self, symbol: str, mode: SpecResolutionMode = SpecResolutionMode.LIVE) -> float:
+        """Get tick value per lot."""
+        return self.get_spec(symbol, mode).tick_value_per_lot
+
+    def _mt5_symbol_to_config_key(self, symbol: str) -> str:
+        """Convert MT5 symbol (e.g., XAUUSDm) to SYMBOL_CONFIGS key (e.g., XAUUSD)."""
+        # Remove 'm' suffix if present
+        if symbol.endswith('m'):
+            return symbol[:-1]
+        return symbol
+
 # ============================================================================
+# MT5 Connection & Order Routing
+# ============================================================================
+
 # MT5 Connection & Order Routing
 # ============================================================================
 
@@ -286,9 +556,10 @@ class MT5ConnectionManager:
 class MT5SymbolResolver:
     """Resolves symbol names and provides trading specifications."""
     
-    def __init__(self, mt5_module):
+    def __init__(self, mt5_module, symbol_configs: dict = None):
         self.mt5 = mt5_module
         self._symbol_cache: Dict[str, Any] = {}
+        self._spec_resolver = SpecificationResolver(mt5_module, symbol_configs or {})
     
     def get_symbol_info(self, symbol: str):
         """Get MT5 symbol info with caching."""
@@ -302,10 +573,25 @@ class MT5SymbolResolver:
             self._symbol_cache[symbol] = info
         return self._symbol_cache[symbol]
     
-    def get_pip_value(self, symbol: str) -> float:
-        """Get pip value for 1 lot."""
-        info = self.get_symbol_info(symbol)
-        return info.trade_tick_value  # Usually $1 per pip per lot for XAUUSD
+    def get_spec(self, symbol: str, mode: SpecificationResolver.SpecResolutionMode = SpecificationResolver.SpecResolutionMode.LIVE) -> InstrumentSpec:
+        """Get full instrument specification."""
+        return self._spec_resolver.get_spec(symbol, mode)
+    
+    def get_pip_value(self, symbol: str, mode: SpecificationResolver.SpecResolutionMode = SpecificationResolver.SpecResolutionMode.LIVE) -> float:
+        """Get pip value per lot in quote currency."""
+        return self._spec_resolver.get_pip_value(symbol, mode)
+    
+    def get_tick_value(self, symbol: str, mode: SpecificationResolver.SpecResolutionMode = SpecificationResolver.SpecResolutionMode.LIVE) -> float:
+        """Get tick value per lot."""
+        return self._spec_resolver.get_tick_value(symbol, mode)
+    
+    def invalidate_spec_cache(self, symbol: str = None) -> None:
+        """Invalidate cached specifications."""
+        self._spec_resolver.invalidate_cache(symbol)
+        if symbol is not None:
+            self._symbol_cache.pop(symbol, None)
+        else:
+            self._symbol_cache.clear()
 
 
 class MT5OrderRouter:
@@ -1282,59 +1568,61 @@ class MT5Executor:
     """
     
     def __init__(
-            self,
-            equity: float,
-            risk_manager: Optional[RiskManager] = None,
-            sizer: Optional[VolScaledSizer] = None,
-            mt5_config: Optional[MT5Config] = None,
-            audit_db_path: str = "mt5_audit.db",
-            conn_manager: Optional[MT5ConnectionManager] = None,
-            auto_initialize: bool = True,
-        ) -> None:
-            self.equity = equity
-            self.risk_manager = risk_manager or RiskManager()
-            self.sizer = sizer
+        self,
+        equity: float,
+        risk_manager: Optional[RiskManager] = None,
+        sizer: Optional[VolScaledSizer] = None,
+        mt5_config: Optional[MT5Config] = None,
+        audit_db_path: str = "mt5_audit.db",
+        conn_manager: Optional[MT5ConnectionManager] = None,
+        auto_initialize: bool = True,
+        symbol_configs: Optional[dict] = None,
+    ) -> None:
+        self.equity = equity
+        self.risk_manager = risk_manager or RiskManager()
+        self.sizer = sizer
 
-            # MT5 components
-            self.mt5_config = mt5_config or DEFAULT_MT5_CONFIG
-            self.conn_manager = conn_manager or MT5ConnectionManager(self.mt5_config)
-            self.mt5 = None
-            self.symbol_resolver = None
-            self.order_router = None
-            self.audit_logger = MT5AuditLogger(audit_db_path, self.mt5)
+        # MT5 components
+        self.mt5_config = mt5_config or DEFAULT_MT5_CONFIG
+        self.conn_manager = conn_manager or MT5ConnectionManager(self.mt5_config)
+        self.mt5 = None
+        self.symbol_resolver = None
+        self.order_router = None
+        self.spec_resolver = None
+        self.audit_logger = MT5AuditLogger(audit_db_path, self.mt5)
 
-            # State
-            self.open_positions: Dict[str, Dict] = {}
-            self.closed_trades: List[Dict] = []
-            self.equity_curve = [equity]
-            self._signal_counter = 0
-            self._lock = Lock()
-            self.sizers: Dict[str, VolScaledSizer] = {}  # per-symbol fitted sizers
+        # State
+        self.open_positions: Dict[str, Dict] = {}
+        self.closed_trades: List[Dict] = []
+        self.equity_curve = [equity]
+        self._signal_counter = 0
+        self._lock = Lock()
+        self.sizers: Dict[str, VolScaledSizer] = {}  # per-symbol fitted sizers
 
-            # Idempotency tracking (persisted to survive restart, bounded to prevent memory leak)
-            self._processed_signals: set[str] = set()  # "symbol_bar_signal" keys
-            self._IDEMPOTENCY_FILE = Path(audit_db_path).with_suffix('.idempotency.json')
-            self._MAX_PROCESSED_SIGNALS = 10000  # ~2 months of 5-min bars
-            self._load_idempotency_state()
+        # Idempotency tracking (persisted to survive restart, bounded to prevent memory leak)
+        self._processed_signals: set[str] = set()  # "symbol_bar_signal" keys
+        self._IDEMPOTENCY_FILE = Path(audit_db_path).with_suffix('.idempotency.json')
+        self._MAX_PROCESSED_SIGNALS = 10000  # ~2 months of 5-min bars
+        self._load_idempotency_state()
 
-            # Connect and initialize
-            if auto_initialize:
-                self._initialize()
+        # Symbol configs for static fallback
+        self.symbol_configs = symbol_configs or {}
+
+        # Connect and initialize
+        if auto_initialize:
+            self._initialize()
     
     def _initialize(self):
         """Initialize MT5 connection and components."""
         self.conn_manager.connect()
         self.mt5 = self.conn_manager.mt5
-        self.symbol_resolver = MT5SymbolResolver(self.mt5)
+        
+        # Create specification resolver (live + static fallback)
+        self.spec_resolver = SpecificationResolver(self.mt5, self.symbol_configs)
+        
+        # Create symbol resolver with spec resolver
+        self.symbol_resolver = MT5SymbolResolver(self.mt5, self.symbol_configs)
         self.order_router = MT5OrderRouter(self.mt5, self.symbol_resolver)
-
-        # Propagate the live MT5 module to the audit logger so
-        # reconcile_from_broker() / log_close_fill() can do history_deals_get
-        # lookups. Without this, _ensure_mt5() raises RuntimeError, the except
-        # block in log_close_fill() swallows it, exit_deal stays None, and
-        # every reconcile reports "fills_unmatched" even when the broker has
-        # the close deals ready. (Regression test: live 2026-10-05 session
-        # log showed "Fills unmatched: 6" against a DB with 6 closable fills.)
         self.audit_logger._mt5 = self.mt5
 
         # Log initial account state
@@ -1392,17 +1680,21 @@ class MT5Executor:
         return False
     
     def _get_live_open_positions_value(self, symbol: str) -> float:
-        """Get current open position value for a symbol from LIVE MT5."""
-        self._ensure_connection()
-        positions = self.mt5.positions_get(symbol=symbol)
-        if not positions:
-            return 0.0
+            """Get current open position value for a symbol from LIVE MT5."""
+            self._ensure_connection()
+            positions = self.mt5.positions_get(symbol=symbol)
+            if not positions:
+                return 0.0
         
-        total_value = 0.0
-        for pos in positions:
-            if pos.magic == 123456:
-                total_value += pos.volume * pos.price_open * 100  # contract_size=100
-        return total_value
+            # Get instrument spec for contract size
+            spec = self.symbol_resolver.get_spec(symbol, SpecificationResolver.SpecResolutionMode.LIVE)
+            contract_size = spec.contract_size
+        
+            total_value = 0.0
+            for pos in positions:
+                if pos.magic == 123456:
+                    total_value += pos.volume * pos.price_open * contract_size
+            return total_value
     
     def _sync_positions_from_mt5(self) -> None:
         """Sync internal position tracking with live MT5 positions."""
@@ -1469,14 +1761,18 @@ class MT5Executor:
             entry_price = internal_pos["entry_price"]
             position_size = internal_pos["position_size"]
             
+            # Get instrument spec for contract size
+            spec = self.symbol_resolver.get_spec(symbol, SpecificationResolver.SpecResolutionMode.LIVE)
+            contract_size = spec.contract_size
+            
             # Calculate risk with OLD stop
             old_stop_distance = abs(entry_price - tracked_sl) if tracked_sl > 0 else 0
-            old_risk_usd = old_stop_distance * abs(position_size) * 100  # XAUUSD: $1/pip per oz, 100 oz/lot
+            old_risk_usd = old_stop_distance * abs(position_size) * contract_size
             old_risk_pct = old_risk_usd / self.equity if self.equity > 0 else 0
             
             # Calculate risk with NEW stop
             new_stop_distance = abs(entry_price - live_sl) if live_sl > 0 else 0
-            new_risk_usd = new_stop_distance * abs(position_size) * 100
+            new_risk_usd = new_stop_distance * abs(position_size) * contract_size
             new_risk_pct = new_risk_usd / self.equity if self.equity > 0 else 0
             
             # Get tier and aggregate risk caps
@@ -1623,19 +1919,28 @@ class MT5Executor:
         Includes idempotency guard and live risk checks.
         """
         self._ensure_connection()
-        
+
         # Log signal
         signal_price = config.entry_price
-        risk_at_stop = abs(config.entry_price - config.stop_price) * config.position_size * 100
+
+        spec = self.symbol_resolver.get_spec(config.symbol, SpecificationResolver.SpecResolutionMode.LIVE)
+        contract_size = spec.contract_size
+        
+        # Set contract size on config for risk calculations
+        config.contract_size = contract_size
+        
+        self.risk_manager.set_contract_size(config.symbol, contract_size)
+        
+        risk_at_stop = abs(config.entry_price - config.stop_price) * config.position_size * contract_size
+        
         risk_pct = risk_at_stop / self.equity * 100 if self.equity > 0 else 0
         trace_id = config.latency_trace_id or self.audit_logger.begin_latency_trace(config)
         config.latency_trace_id = trace_id
-        
+
         # Get current bar key for idempotency
         entry_time = config.entry_time.to_pydatetime() if hasattr(config.entry_time, 'to_pydatetime') else config.entry_time
         bar_key = self._get_bar_key(entry_time)
-        
-        # Check idempotency - skip if same signal for same bar already processed
+
         if self._is_duplicate_signal(config.symbol, bar_key, config.signal):
             print(f"  [DEBUG open_position] DUPLICATE: symbol={config.symbol} bar_key={bar_key} signal={config.signal}")
             signal_id = self.audit_logger.log_signal(
@@ -1732,7 +2037,9 @@ class MT5Executor:
             }
 
             # Register position risk with risk manager for aggregate tracking
-            risk_at_stop = abs(fill.price - config.stop_price) * fill.volume * 100
+            spec = self.symbol_resolver.get_spec(config.symbol, SpecificationResolver.SpecResolutionMode.LIVE)
+            contract_size = spec.contract_size
+            risk_at_stop = abs(fill.price - config.stop_price) * fill.volume * contract_size
             is_min_lot_override = (fill.volume <= 0.01)
             self.risk_manager.register_position_risk(config.symbol, risk_at_stop, is_min_lot_override)
 
@@ -1762,6 +2069,10 @@ class MT5Executor:
         stop_price = pos["stop_price"]
         take_profit = pos.get("take_profit")
         position_size = pos["position_size"]
+        
+        # Get instrument spec for contract size
+        spec = self.symbol_resolver.get_spec(symbol, SpecificationResolver.SpecResolutionMode.LIVE)
+        contract_size = spec.contract_size
         entry_time = pos["entry_time"]
         mt5_ticket = pos.get("mt5_ticket")
         
@@ -1775,11 +2086,11 @@ class MT5Executor:
         
         # Calculate PnL
         if position_size > 0:  # Long
-            pnl = (current_price - entry_price) * 100 * position_size
+            pnl = (current_price - entry_price) * contract_size * position_size
             hit_stop = current_bid <= stop_price
             hit_tp = take_profit and current_ask >= take_profit
         else:  # Short
-            pnl = (entry_price - current_price) * 100 * abs(position_size)
+            pnl = (entry_price - current_price) * contract_size * abs(position_size)
             hit_stop = current_ask >= stop_price
             hit_tp = take_profit and current_bid <= take_profit
         

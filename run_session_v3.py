@@ -123,31 +123,33 @@ class MockMT5ConnectionManager:
         mock_mt5.account_info.return_value = mock_account
         
         # Mock symbol info for all enabled symbols
+        class MockSymbolInfo:
+            def __init__(self, symbol):
+                self.name = symbol
+                self.trade_contract_size = 100.0 if 'XAU' in symbol else 100000.0
+                self.volume_min = 0.01
+                self.volume_max = 200.0
+                self.volume_step = 0.01
+                self.digits = 3 if 'JPY' in symbol or 'XAU' in symbol else 5
+                self.point = 0.001 if 'JPY' in symbol or 'XAU' in symbol else 0.00001
+                self.spread = 260 if 'XAU' in symbol else 15
+                self.visible = True
+                self.trade_tick_size = self.point
+                self.trade_tick_value = 1.0
+                self.swap_long = -1.5
+                self.swap_short = -0.5
+                self.margin_initial = 1000.0
+                self.margin_maintenance = 500.0
+                self.session_deals = 0
+                self.session_buy_orders = 0
+                self.session_sell_orders = 0
+                self.time = int(time.time())
+                self.filling_mode = 3
+                self.order_mode = 127
+                self.trade_mode = 4
+        
         def make_symbol_info(symbol):
-            s = Mock()
-            s.name = symbol
-            s.trade_contract_size = 100.0 if 'XAU' in symbol else 100000.0
-            s.volume_min = 0.01
-            s.volume_max = 200.0
-            s.volume_step = 0.01
-            s.digits = 3 if 'JPY' in symbol or 'XAU' in symbol else 5
-            s.point = 0.001 if 'JPY' in symbol or 'XAU' in symbol else 0.00001
-            s.spread = 260 if 'XAU' in symbol else 15
-            s.visible = True
-            s.trade_tick_size = s.point
-            s.trade_tick_value = 1.0
-            s.swap_long = -1.5
-            s.swap_short = -0.5
-            s.margin_initial = 1000.0
-            s.margin_maintenance = 500.0
-            s.session_deals = 0
-            s.session_buy_orders = 0
-            s.session_sell_orders = 0
-            s.time = int(time.time())
-            s.filling_mode = 3
-            s.order_mode = 127
-            s.trade_mode = 4
-            return s
+            return MockSymbolInfo(symbol)
         
         def make_tick(symbol):
             t = Mock()

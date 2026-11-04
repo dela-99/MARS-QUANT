@@ -357,6 +357,18 @@ class RiskManager:
 
         # Aggregate concurrent risk tracking
         self.total_open_risk = 0.0  # Sum of risk_at_stop for all open positions
+        
+        # Symbol-specific contract sizes for risk calculations (symbol -> contract_size)
+        # Defaults to 100.0 (XAUUSD) for backward compatibility
+        self._contract_sizes: dict[str, float] = {}
+    
+    def set_contract_size(self, symbol: str, contract_size: float) -> None:
+        """Set contract size for a symbol (used for risk calculations)."""
+        self._contract_sizes[symbol] = float(contract_size)
+    
+    def get_contract_size(self, symbol: str) -> float:
+        """Get contract size for a symbol, defaulting to 100.0."""
+        return self._contract_sizes.get(symbol, 100.0)
 
         # Load persisted state on init (includes peak_equity)
         self._load_kill_switch_state()
@@ -633,7 +645,12 @@ class RiskManager:
         max_total_risk = equity * tier_risk_pct
 
         stop_distance = abs(config.entry_price - config.stop_price)
-        risk_per_contract = stop_distance * 100  # XAUUSD: 1 pip = $1 per oz, 100 oz per lot
+        # Use contract size from config if available, otherwise default to 100 for backward compat
+        contract_size = getattr(config, 'contract_size', None)
+        if contract_size is None:
+            # Try to get from symbol-specific config
+            contract_size = self._contract_sizes.get(config.symbol, 100.0)
+        risk_per_contract = stop_distance * contract_size
         new_trade_risk = config.position_size * risk_per_contract
         
         actual_risk_pct = new_trade_risk / equity
@@ -675,7 +692,12 @@ class RiskManager:
         max_risk = equity * tier_risk_pct
 
         stop_distance = abs(config.entry_price - config.stop_price)
-        risk_per_contract = stop_distance * 100  # XAUUSD: 1 pip = $1 per oz, 100 oz per lot
+        # Use contract size from config if available, otherwise default to 100 for backward compat
+        contract_size = getattr(config, 'contract_size', None)
+        if contract_size is None:
+            # Try to get from symbol-specific config
+            contract_size = self._contract_sizes.get(config.symbol, 100.0)
+        risk_per_contract = stop_distance * contract_size
         total_risk = config.position_size * risk_per_contract
 
         # First check aggregate risk cap
@@ -828,6 +850,8 @@ class TradeConfig:
     movement_detected_at: Optional[str] = None
     signal_generated_at: Optional[str] = None
     latency_trace_id: Optional[int] = None
+    # Instrument-specific contract size (units per lot) for risk calculations
+    contract_size: Optional[float] = None
 
 
 class TradeExecutor:

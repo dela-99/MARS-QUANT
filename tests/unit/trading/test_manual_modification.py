@@ -91,6 +91,9 @@ class TestManualModificationDetection:
             margin_initial=1000.0,
             margin_maintenance=500.0,
             session_volume_limit=0,
+            trade_contract_size=100.0,
+            swap_long=-1.5,
+            swap_short=-0.5,
         )
         
         # Mock symbol_info_tick
