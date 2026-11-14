@@ -1,0 +1,64 @@
+{
+  "experiment_id": "a42e928f498e",
+  "hypothesis_id": "CSM-001",
+  "name": "XAUUSD Cross-Session Momentum (VectorBT)",
+  "description": "Previous-session return predicts next-session return (Asia->Europe, Europe->US, US->Asia) — VectorBT revalidation",
+  "dataset_ids": [
+    "C:\\Users\\RIDGE\\MARS-QUANT\\data\\processed\\xauusd\\m5\\v1.0.0\\data.parquet"
+  ],
+  "feature_versions": [],
+  "parameters": {
+    "config": {
+      "symbol": "XAUUSD",
+      "timeframe": "m5",
+      "data_path": null,
+      "sessions": [
+        "asia",
+        "europe",
+        "us"
+      ],
+      "signal_mode": "direction",
+      "position_size_pct": 1.0,
+      "max_leverage": 1.0,
+      "cost_model": {
+        "spread_pips": 0.5,
+        "commission_per_lot": 0.5,
+        "slippage_pips": 0.2,
+        "swap_per_lot_per_session": 0.0
+      },
+      "train_ratio": 0.7,
+      "val_ratio": 0.15,
+      "test_ratio": 0.15,
+      "seed": 42
+    },
+    "signal_mode": "direction",
+    "sessions": [
+      "asia",
+      "europe",
+      "us"
+    ]
+  },
+  "metrics": {
+    "error": "No trades executed",
+    "train_metrics": {
+      "error": "No trades executed"
+    },
+    "val_metrics": {
+      "error": "No trades executed"
+    },
+    "test_metrics": {
+      "error": "No trades executed"
+    }
+  },
+  "artifacts": [
+    "C:\\Users\\RIDGE\\MARS-QUANT\\artifacts\\csm_vbt_trades_20261114_172904.parquet",
+    "C:\\Users\\RIDGE\\MARS-QUANT\\artifacts\\csm_vbt_sessions_20261114_172904.parquet",
+    "C:\\Users\\RIDGE\\MARS-QUANT\\artifacts\\csm_vbt_equity_20261114_172904.parquet",
+    "C:\\Users\\RIDGE\\MARS-QUANT\\research\\experiment_logs\\a42e928f498e.json"
+  ],
+  "status": "completed",
+  "seed": 42,
+  "created_at": "2026-11-14T17:29:04.612188Z",
+  "completed_at": "2026-11-14T17:29:06.483200Z",
+  "notes": ""
+}

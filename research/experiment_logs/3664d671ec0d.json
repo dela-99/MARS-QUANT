@@ -1,0 +1,48 @@
+{
+  "experiment_id": "3664d671ec0d",
+  "hypothesis_id": "CSM-001",
+  "name": "XAUUSD Cross-Session Momentum",
+  "description": "Previous-session return predicts next-session return (Asia->Europe, Europe->US, US->Asia)",
+  "dataset_ids": [
+    "C:\\Users\\RIDGE\\MARS-QUANT\\data\\processed\\xauusd\\m5\\v1.0.0\\data.parquet"
+  ],
+  "feature_versions": [],
+  "parameters": {
+    "config": {
+      "symbol": "XAUUSD",
+      "timeframe": "m5",
+      "data_path": null,
+      "sessions": [
+        "asia",
+        "europe",
+        "us"
+      ],
+      "signal_mode": "direction",
+      "position_size_pct": 1.0,
+      "max_leverage": 1.0,
+      "cost_model": {
+        "spread_pips": 0.0,
+        "commission_per_lot": 0.0,
+        "slippage_pips": 0.0,
+        "swap_per_lot_per_session": 0.0
+      },
+      "train_ratio": 0.7,
+      "val_ratio": 0.15,
+      "test_ratio": 0.15,
+      "seed": 42
+    },
+    "signal_mode": "direction",
+    "sessions": [
+      "asia",
+      "europe",
+      "us"
+    ]
+  },
+  "metrics": {},
+  "artifacts": [],
+  "status": "created",
+  "seed": 42,
+  "created_at": "2026-11-14T16:49:26.336794Z",
+  "completed_at": null,
+  "notes": ""
+}

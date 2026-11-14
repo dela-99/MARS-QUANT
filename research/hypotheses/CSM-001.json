@@ -1,0 +1,30 @@
+{
+  "hypothesis_id": "CSM-001",
+  "title": "XAUUSD Cross-Session Momentum",
+  "problem_statement": "Previous-session gold returns may predict returns during the following trading session (Asia->Europe, Europe->US, US->Asia). Based on \"Who Moves the Price? Trading-Session Return Decomposition and Cross-Session Momentum in Gold and Silver Markets.\"",
+  "mathematical_formulation": "TODO: formal math",
+  "required_datasets": [],
+  "required_features": [],
+  "experiments": [],
+  "statistical_validation": [
+    "sharpe",
+    "sortino",
+    "calmar",
+    "max_drawdown",
+    "bootstrap_ci",
+    "information_coefficient",
+    "purged_cv",
+    "walk_forward",
+    "out_of_sample"
+  ],
+  "status": "draft",
+  "author": "Hermes Agent",
+  "created_at": "2026-11-14T16:47:27.133659Z",
+  "updated_at": "2026-11-14T16:49:03.495660Z",
+  "tags": [],
+  "notes": "",
+  "related_literature": [],
+  "test_set_locked": true,
+  "test_set_locked_at": "2026-11-14T16:49:03.495343Z",
+  "test_set_locked_by_experiment": "7bb104e985ff"
+}
