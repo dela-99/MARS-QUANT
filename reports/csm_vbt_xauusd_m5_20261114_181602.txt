@@ -1,0 +1,152 @@
+=== M.A.R.S. Cross-Session Momentum Experiment — VectorBT ===
+Generated: 2026-11-14 18:16:52
+
+Experiment: XAUUSD Cross-Session Momentum (CSM-001) — VectorBT Revalidation
+
+Timestamp: 2026-11-14 18:16:52 UTC
+
+Config: {'symbol': 'XAUUSD', 'timeframe': 'm5', 'data_path': None, 'sessions': ('asia', 'europe', 'us'), 'signal_mode': 'direction', 'position_size_pct': 1.0, 'max_leverage': 1.0, 'cost_model': CostModel(spread_pips=0.5, commission_per_lot=0.5, slippage_pips=0.2, swap_per_lot_per_session=0.0), 'train_ratio': 0.7, 'val_ratio': 0.15, 'test_ratio': 0.15, 'seed': 42}
+
+
+
+DATA
+
+Source: C:\Users\RIDGE\MARS-QUANT\data\processed\xauusd\m5\v1.0.0\data.parquet
+
+Bars: 2400599 | Sessions: 25007 | Range: 2003-05-05 00:00:00+00:00 → 2026-04-29 08:00:00+00:00
+
+Sessions: asia, europe, us (UTC, fixed, no DST)
+
+
+
+SPLITS
+
+Train: 0 → 17503 (n=17504)
+Val:   17504 → 21254 (n=3751)
+Test:  21255 → 25006 (n=3752)
+
+
+
+SIGNALS
+
+Mode: direction | Long signals: 9870/25007 (39.5%)
+
+
+
+PERFORMANCE (NET, ALL DATA)
+
+Trades: 9870
+
+Win Rate: 43.94%
+
+Expectancy: $-9.35/trade
+
+Profit Factor: 0.88
+
+Total Return: -61.64%
+
+Ann. Return: -2.86% | Ann. Vol: 7.37%
+
+Sharpe: -0.39
+
+Sortino: -0.46
+
+Calmar: -0.05
+
+Max Drawdown: -61.89%
+
+Exposure: 39.47% | Turnover: 9870.00
+
+
+
+PERFORMANCE (GROSS, ALL DATA)
+
+Win Rate: 47.42%
+
+Expectancy: $0.15/trade
+
+Profit Factor: 1.00
+
+Total Return: -2.03%
+
+Ann. Return: -0.06% | Sharpe: -0.01
+
+Max Drawdown: -32.57%
+
+
+
+BENCHMARKS
+
+Buy-and-Hold: 1237.88% (ann. 8.16%)
+
+Flat: 0.00%
+
+
+
+BY SESSION (NET)
+
+         n_trades  win_rate  avg_pnl   total_pnl
+session                                         
+asia         3725    0.3981  -4.5842 -17075.9765
+europe       3140    0.4611 -20.5984 -64679.0942
+us           3005    0.4679  -3.4996 -10516.2982
+
+
+
+BY YEAR (NET)
+
+      n_trades  win_rate  avg_pnl   total_pnl
+year                                         
+2003       285    0.4632  -8.1579  -2325.0000
+2004       437    0.4645  -2.1325   -931.9000
+2005       441    0.4286 -12.6494  -5578.4000
+2006       424    0.4434 -32.3066 -13698.0000
+2007       438    0.4315  -1.3601   -595.7396
+2008       446    0.4350 -54.9603 -24512.3037
+2009       417    0.4604  -8.6216  -3595.2186
+2010       461    0.4599  -0.8851   -408.0120
+2011       444    0.4775   5.7776   2565.2640
+2012       431    0.4687  -3.5396  -1525.5563
+2013       398    0.4447 -17.3007  -6885.6779
+2014       408    0.4093  -2.4458   -997.8829
+2015       407    0.3882 -18.4738  -7518.8255
+2016       399    0.4261  -4.5146  -1801.3124
+2017       440    0.4409  -8.6688  -3814.2674
+2018       401    0.4015 -12.0175  -4819.0294
+2019       430    0.4233  -7.3416  -3156.8818
+2020       473    0.4989  -1.6814   -795.3229
+2021       423    0.4468  -5.0173  -2122.3196
+2022       402    0.4080  -7.2919  -2931.3335
+2023       411    0.3625  -9.8330  -4041.3540
+2024       458    0.4607  -3.1920  -1461.9407
+2025       469    0.4542  -1.5410   -722.7230
+2026       127    0.4173  -4.7058   -597.6316
+
+
+
+SPLIT-SPECIFIC METRICS
+
+Train: {'n_trades': 6882, 'win_rate_gross': 0.46439988375472246, 'win_rate_net': 0.43998837547224645, 'expectancy_gross_usd': -1.5926827571140527, 'expectancy_net_usd': -11.092682757114053, 'profit_factor_gross': 0.9830835345235971, 'profit_factor_net': 0.8883468380525792, 'total_return_gross': -0.1342147641901399, 'total_return_net': -0.5497518610610883, 'annualized_return_gross': -0.006205159980843922, 'annualized_return_net': -0.03387672617354642, 'annualized_vol_gross': 0.08703868098024684, 'annualized_vol_net': 0.08703868098024684, 'sharpe_gross': -0.07129198088666078, 'sharpe_net': -0.3892146088614859, 'sortino_gross': -0.08328082965230255, 'sortino_net': -0.4758386126231876, 'calmar_gross': -0.01905455179797354, 'calmar_net': -0.0606067398947755, 'max_drawdown_gross': -0.32565237149812376, 'max_drawdown_net': -0.5589597168955578, 'avg_holding_period': '0 days 00:00:00', 'exposure': 0.3931672760511883, 'turnover': 6882.0, 'gross_profit_usd': 636978.4534352086, 'gross_loss_usd': 647939.2961696676, 'net_profit_usd': 607383.2279154211, 'net_loss_usd': 683723.07064988}
+
+Val: {'n_trades': 1481, 'win_rate_gross': 0.4949358541525996, 'win_rate_net': 0.48818365968939903, 'expectancy_gross_usd': 17.264193132220136, 'expectancy_net_usd': 7.764193132220135, 'profit_factor_gross': 1.0981527636282917, 'profit_factor_net': 1.0429627887107307, 'total_return_gross': 0.26494073526431694, 'total_return_net': 0.09893766525572323, 'annualized_return_gross': 0.04850827456617113, 'annualized_return_net': 0.01919660074165508, 'annualized_vol_gross': 0.14513620230319982, 'annualized_vol_net': 0.14513620230319982, 'sharpe_gross': 0.33422587746118576, 'sharpe_net': 0.1322661089171399, 'sortino_gross': 0.4560954059862565, 'sortino_net': 0.18153681261191817, 'calmar_gross': 0.39080508317941665, 'calmar_net': 0.13185712277884218, 'max_drawdown_gross': -0.12412396013769664, 'max_drawdown_net': -0.14558637665598578, 'avg_holding_period': '0 days 00:00:00', 'exposure': 0.3948280458544388, 'turnover': 1481.0, 'gross_profit_usd': 286062.92227973195, 'gross_loss_usd': 260494.65225091396, 'net_profit_usd': 279143.64071538986, 'net_loss_usd': 267644.87068657187}
+
+Test: {'n_trades': 1507, 'win_rate_gross': 0.49834107498341074, 'win_rate_net': 0.4930325149303251, 'expectancy_gross_usd': 78.29492545871355, 'expectancy_net_usd': 68.79492545871355, 'profit_factor_gross': 1.3445269911859445, 'profit_factor_net': 1.2964753250941765, 'total_return_gross': 2.085641477638712, 'total_return_net': 1.6743056327318007, 'annualized_return_gross': 0.2548720870639378, 'annualized_return_net': 0.21921370602733736, 'annualized_vol_gross': 0.22992126824140302, 'annualized_vol_net': 0.22992126824140302, 'sharpe_gross': 1.1085189683119614, 'sharpe_net': 0.9534294400167305, 'sortino_gross': 1.430226659273761, 'sortino_net': 1.2676032673688284, 'calmar_gross': 1.0287491083721518, 'calmar_net': 0.871702319120331, 'max_drawdown_gross': -0.24774950956432557, 'max_drawdown_net': -0.25147771345676184, 'avg_holding_period': '0 days 00:00:00', 'exposure': 0.40165245202558636, 'turnover': 1507.0, 'gross_profit_usd': 460461.3059951596, 'gross_loss_usd': 342470.85332887823, 'net_profit_usd': 453362.2534830491, 'net_loss_usd': 349688.30081676773}
+
+
+
+ASSUMPTIONS & LIMITATIONS
+-------------------------
+- Data: XAUUSD m5 OHLCV from 2003-05-05 to 2026-04-29 (no bid/ask, no historical spreads)
+- Session definitions: Fixed UTC (Asia 00-08, Europe 08-14:30, US 14:30-24) — NO DST adjustment
+  -> Seasonal distortion: Europe/US local market hours shift relative to UTC in summer
+- Signal: direction of previous session; observable at next session open (no look-ahead)
+- Entry: session open price (first bar); Exit: session close price (last bar)
+- Position sizing: Fixed fractional (100% equity, max leverage 1.0x)
+- Cost model: spread=0.5 pips, commission=$0.5/lot, slippage=0.2 pips/side
+  -> Total round-trip cost: $9.50 per lot
+- No swap costs (intraday session holds only)
+- Missing bars: sessions with < 2 bars excluded implicitly via groupby
+- No optimization; single configuration tested
+- Walk-forward, Monte Carlo, regime segmentation NOT applied (future validation stages)
+- Benchmarks: Buy-and-hold (first open to last close), Flat (zero)
+- VectorBT version: 1.2.1
