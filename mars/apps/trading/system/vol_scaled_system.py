@@ -72,7 +72,6 @@ def calculate_equity_floor(
     return equity_floor
 
 
-
 class VolScaledSizer:
     """
     Volatility-scaled position sizer using CARR/GARCH vol forecasts.
@@ -279,8 +278,9 @@ class RiskManager:
     - Max position size per symbol — from current tier
     - Max correlation exposure — from current tier
     - Daily loss limit — FIXED across all tiers
-    - Per-trade risk % — from current tier (now a CEILING on total concurrent risk)
-    - Min-lot override handling with hard ceiling
+    - Per-trade risk % — from current tier (max risk per single trade)
+    - Aggregate risk % — from current tier (max total risk across ALL concurrent positions)
+    - Min-lot override handling with hard ceiling (15%)
     - Consecutive loss circuit breaker — halts new signals after N consecutive losses
     """
 
@@ -290,10 +290,10 @@ class RiskManager:
     # Risk tiers: (min_equity, max_equity, max_concurrent_trades, risk_pct_per_trade, aggregate_risk_pct, reward_risk_ratio)
     # Tier is selected at session start based on equity and locked for the session
     # risk_pct_per_trade = max risk per single trade
-    # aggregate_risk_pct = max total risk across ALL concurrent positions (shared cap = per-trade cap for $100-1000)
+    # aggregate_risk_pct = max total risk across ALL concurrent positions
     RISK_TIERS = [
         (0,      100,    1, 0.07,  0.07,  3.0),      # $0-100: 7% per-trade, 7% aggregate, 1 trade max
-        (100,    1000,   2, 0.03,  0.03,  3.0),      # $100-1k: 3% per-trade, 3% aggregate (shared), 2 trades max
+        (100,    1000,   2, 0.03,  0.06,  3.0),      # $100-1k: 3% per-trade, 6% aggregate, 2 trades max
         (1000,   10000,  4, 0.015, 0.06,  2.0),      # $1k-10k: 1.5% per-trade, 6% aggregate, 4 trades max
         (10000,  float('inf'), 6, 0.01,  0.06,  2.0), # $10k+: 1% per-trade, 6% aggregate, 6 trades max
     ]
@@ -338,7 +338,7 @@ class RiskManager:
         self.monthly_pnl = 0.0
         self.peak_equity = 0.0
         self.current_equity = 0.0
-        self.current_positions = {}
+        self.current_positions = {}  # symbol -> dict with risk_at_stop, entry_time, is_min_lot_override, stop_price, position_size, contract_size
         self.trades_today = 0
 
         # Kill-switch state (persisted)
@@ -357,21 +357,57 @@ class RiskManager:
 
         # Aggregate concurrent risk tracking
         self.total_open_risk = 0.0  # Sum of risk_at_stop for all open positions
-        
+
         # Symbol-specific contract sizes for risk calculations (symbol -> contract_size)
         # Defaults to 100.0 (XAUUSD) for backward compatibility
         self._contract_sizes: dict[str, float] = {}
-    
-    def set_contract_size(self, symbol: str, contract_size: float) -> None:
-        """Set contract size for a symbol (used for risk calculations)."""
-        self._contract_sizes[symbol] = float(contract_size)
-    
-    def get_contract_size(self, symbol: str) -> float:
-        """Get contract size for a symbol, defaulting to 100.0."""
-        return self._contract_sizes.get(symbol, 100.0)
+
+        # Symbol-specific min lot sizes (symbol -> min_lot)
+        self._min_lots: dict[str, float] = {}
+
+        # Estimated transaction costs per symbol (symbol -> cost per lot in quote currency)
+        self._estimated_costs_per_lot: dict[str, float] = {}
 
         # Load persisted state on init (includes peak_equity)
         self._load_kill_switch_state()
+
+    def set_contract_size(self, symbol: str, contract_size: float) -> None:
+        """Set contract size for a symbol (used for risk calculations)."""
+        self._contract_sizes[symbol] = float(contract_size)
+
+    def get_contract_size(self, symbol: str) -> float:
+        """Get contract size for a symbol. Fails if not explicitly configured."""
+        if symbol not in self._contract_sizes:
+            raise ValueError(
+                f"Contract size not configured for symbol '{symbol}'. "
+                f"Call set_contract_size() before using this symbol in risk calculations. "
+                f"Configured symbols: {list(self._contract_sizes.keys())}"
+            )
+        return self._contract_sizes[symbol]
+
+    def set_min_lot(self, symbol: str, min_lot: float) -> None:
+        """Set minimum lot size for a symbol (used for min-lot override logic)."""
+        self._min_lots[symbol] = float(min_lot)
+
+    def get_min_lot(self, symbol: str) -> float:
+        """Get minimum lot size for a symbol, defaulting to 0.01."""
+        return self._min_lots.get(symbol, 0.01)
+
+    def set_estimated_costs_per_lot(self, symbol: str, commission_per_lot: float = 0.0, spread_per_lot: float = 0.0, swap_per_lot_per_day: float = 0.0) -> None:
+        """Set estimated transaction costs per lot for a symbol (in quote currency)."""
+        self._estimated_costs_per_lot[symbol] = {
+            "commission_per_lot": commission_per_lot,
+            "spread_per_lot": spread_per_lot,
+            "swap_per_lot_per_day": swap_per_lot_per_day,
+        }
+
+    def get_estimated_costs_per_lot(self, symbol: str) -> dict:
+        """Get estimated transaction costs per lot for a symbol."""
+        return self._estimated_costs_per_lot.get(symbol, {
+            "commission_per_lot": 0.0,
+            "spread_per_lot": 0.0,
+            "swap_per_lot_per_day": 0.0,
+        })
 
     def select_tier_for_equity(self, equity: float) -> dict:
         """
@@ -383,20 +419,20 @@ class RiskManager:
             return self._current_tier
 
         for min_eq, max_eq, max_trades, risk_pct, agg_risk_pct, rr_ratio in self.RISK_TIERS:
-                    if min_eq <= equity < max_eq:
-                        tier = {
-                            "min_equity": min_eq,
-                            "max_equity": max_eq,
-                            "max_concurrent_trades": max_trades,
-                            "risk_pct_per_trade": risk_pct,
-                            "aggregate_risk_pct": agg_risk_pct,
-                            "reward_risk_ratio": rr_ratio,
-                        }
-                        self._current_tier = tier
-                        self._tier_locked = True
-                        self._tier_locked_at_equity = equity
-                        self._tier_locked_at = datetime.now()
-                        return tier
+            if min_eq <= equity < max_eq:
+                tier = {
+                    "min_equity": min_eq,
+                    "max_equity": max_eq,
+                    "max_concurrent_trades": max_trades,
+                    "risk_pct_per_trade": risk_pct,
+                    "aggregate_risk_pct": agg_risk_pct,
+                    "reward_risk_ratio": rr_ratio,
+                }
+                self._current_tier = tier
+                self._tier_locked = True
+                self._tier_locked_at_equity = equity
+                self._tier_locked_at = datetime.now()
+                return tier
 
         # Should never reach here if tiers cover all ranges
         raise ValueError(f"No tier found for equity ${equity:.2f}")
@@ -419,12 +455,58 @@ class RiskManager:
         self._current_tier = None
         return self.select_tier_for_equity(equity)
 
+    def handle_tier_reduction(self, new_equity: float) -> tuple[bool, list[str]]:
+        """
+        Handle a tier reduction due to equity decline.
+        Recalculates aggregate limit and checks if existing exposure exceeds new limit.
+
+        Returns (can_continue, violations_list).
+        Existing positions are preserved; new trades are blocked if exposure exceeds new limit.
+        """
+        if self._current_tier is None:
+            return True, []  # No tier selected yet
+
+        old_tier = self._current_tier
+        new_tier = self.select_tier_for_equity(new_equity)
+
+        # If tier didn't actually change, no action needed
+        if new_tier == old_tier:
+            return True, []
+
+        # Tier reduced - check aggregate exposure against new limit
+        violations = []
+        new_aggregate_limit = new_equity * new_tier["aggregate_risk_pct"]
+
+        if self.total_open_risk > new_aggregate_limit:
+            violations.append(
+                f"TIER REDUCTION BREACH: Existing aggregate risk ${self.total_open_risk:.2f} "
+                f"exceeds new tier aggregate limit ${new_aggregate_limit:.2f} "
+                f"({new_tier['aggregate_risk_pct']:.1%} of ${new_equity:.2f}). "
+                f"New trades blocked until exposure reduced."
+            )
+            self._log_risk_event(
+                "TIER_REDUCTION_BREACH",
+                f"Tier reduced from {old_tier['risk_pct_per_trade']:.1%}/{old_tier['aggregate_risk_pct']:.1%} "
+                f"to {new_tier['risk_pct_per_trade']:.1%}/{new_tier['aggregate_risk_pct']:.1%}. "
+                f"Existing exposure ${self.total_open_risk:.2f} exceeds new limit ${new_aggregate_limit:.2f}.",
+                new_equity, 0.0, self.daily_pnl, self.kill_switch_halted
+            )
+
+        return len(violations) == 0, violations
+
     @property
     def max_risk_per_trade_pct(self) -> float:
-        """Current tier's per-trade risk percentage (now a ceiling on total concurrent risk)."""
+        """Current tier's per-trade risk percentage (max risk per single trade)."""
         if self._current_tier is None:
             raise RuntimeError("Tier not selected")
         return self._current_tier["risk_pct_per_trade"]
+
+    @property
+    def aggregate_risk_pct(self) -> float:
+        """Current tier's aggregate risk percentage (max total risk across all concurrent positions)."""
+        if self._current_tier is None:
+            raise RuntimeError("Tier not selected")
+        return self._current_tier["aggregate_risk_pct"]
 
     @property
     def max_concurrent_trades(self) -> int:
@@ -625,141 +707,196 @@ class RiskManager:
 
         return True, "OK"
 
+    def _calculate_trade_risk(self, config: "TradeConfig", equity: float) -> tuple[float, float, dict]:
+        """
+        Calculate trade risk in USD including estimated transaction costs.
+
+        Returns: (risk_at_stop_usd, actual_risk_pct, cost_breakdown)
+        """
+        stop_distance = abs(config.entry_price - config.stop_price)
+        contract_size = getattr(config, 'contract_size', None)
+        if contract_size is None:
+            contract_size = self.get_contract_size(config.symbol)
+
+        # Gross risk at stop (before costs)
+        gross_risk_per_contract = stop_distance * contract_size
+        gross_risk = config.position_size * gross_risk_per_contract
+
+        # Estimated transaction costs (one-way entry)
+        costs = self._estimated_costs_per_lot.get(config.symbol, {})
+        commission = costs.get("commission_per_lot", 0.0) * config.position_size
+        spread = costs.get("spread_per_lot", 0.0) * config.position_size
+        # Swap estimated for max hold hours
+        swap_daily = costs.get("swap_per_lot_per_day", 0.0) * config.position_size
+        swap = swap_daily * (config.max_hold_hours / 24.0)
+
+        total_estimated_costs = commission + spread + swap
+
+        # Total risk = gross risk + estimated costs (costs increase effective risk)
+        total_risk = gross_risk + total_estimated_costs
+
+        actual_risk_pct = total_risk / equity if equity > 0 else 0.0
+
+        cost_breakdown = {
+        "gross_risk": gross_risk,
+        "commission": commission,
+        "spread": spread,
+        "swap": swap,
+        "total_estimated_costs": total_estimated_costs,
+        }
+
+        return total_risk, actual_risk_pct, cost_breakdown
+
     def check_aggregate_risk(self, config: "TradeConfig", equity: float) -> tuple[bool, str]:
         """
         Check if adding this trade would exceed the tier's TOTAL concurrent risk ceiling.
         This is the AGGREGATE risk cap - the sum of all open position risks plus this
-        new trade's risk must not exceed tier_risk_pct * equity.
-        
-        Logic:
-        - Min-lot trades that exceed tier budget are exceptions handled by per-trade check
-          (MIN_LOT_OVERRIDE if under 15% ceiling, REJECT if over ceiling)
-        - ALL trades that exceed tier budget (min-lot or not) pass through to per-trade check
-          which handles ceiling logic
-        - Trades within tier budget are subject to aggregate cap
+        new trade's risk must not exceed aggregate_risk_pct * equity.
+
+        Uses aggregate_risk_pct (not risk_pct_per_trade) for the portfolio cap.
+        ALL trades (including min-lot overrides) consume the aggregate budget.
         """
         if self._current_tier is None:
             return False, "Tier not selected — cannot check aggregate risk"
 
-        tier_risk_pct = self._current_tier["risk_pct_per_trade"]
-        max_total_risk = equity * tier_risk_pct
+        agg_risk_pct = self._current_tier["aggregate_risk_pct"]
+        max_total_risk = equity * agg_risk_pct
 
-        stop_distance = abs(config.entry_price - config.stop_price)
-        # Use contract size from config if available, otherwise default to 100 for backward compat
-        contract_size = getattr(config, 'contract_size', None)
-        if contract_size is None:
-            # Try to get from symbol-specific config
-            contract_size = self._contract_sizes.get(config.symbol, 100.0)
-        risk_per_contract = stop_distance * contract_size
-        new_trade_risk = config.position_size * risk_per_contract
-        
-        actual_risk_pct = new_trade_risk / equity
-        is_min_lot = config.position_size <= 0.01
-        exceeds_tier = actual_risk_pct > tier_risk_pct
+        # Calculate this trade's total risk including estimated costs
+        new_trade_risk, actual_risk_pct, cost_breakdown = self._calculate_trade_risk(config, equity)
 
-        # ALL trades exceeding tier budget pass through to per-trade check
-        # (min-lot gets MIN_LOT_OVERRIDE if under 15%, non-min-lot gets ceiling rejection)
-        if exceeds_tier:
-            return True, "OK (exceeds tier -> per-trade handles override/ceiling)"
-
-        # For trades within tier budget, enforce aggregate cap
+        # ALL trades are subject to aggregate cap (no exceptions for min-lot)
         projected_total_risk = self.total_open_risk + new_trade_risk
         if projected_total_risk > max_total_risk:
             if self.total_open_risk >= max_total_risk:
                 return False, (
-                    f"Aggregate risk cap reached: current open risk ${self.total_open_risk:.2f} "
-                    f"equals/exceeds limit ${max_total_risk:.2f}. New trade risk ${new_trade_risk:.2f} rejected."
+                    f"AGGREGATE RISK CAP: current open risk ${self.total_open_risk:.2f} "
+                    f"equals/exceeds limit ${max_total_risk:.2f}. "
+                    f"New trade risk ${new_trade_risk:.2f} rejected. "
+                    f"(gross=${cost_breakdown['gross_risk']:.2f}, est_costs=${cost_breakdown['total_estimated_costs']:.2f})"
                 )
             else:
                 remaining_risk_budget = max_total_risk - self.total_open_risk
                 return False, (
-                    f"Aggregate risk cap would be exceeded: current ${self.total_open_risk:.2f} + "
+                    f"AGGREGATE RISK CAP: current ${self.total_open_risk:.2f} + "
                     f"new ${new_trade_risk:.2f} = ${projected_total_risk:.2f} > limit ${max_total_risk:.2f}. "
                     f"Remaining budget: ${remaining_risk_budget:.2f}"
                 )
 
-        return True, "OK"
+        return True, f"OK (gross=${cost_breakdown['gross_risk']:.2f}, est_costs=${cost_breakdown['total_estimated_costs']:.2f}, total=${new_trade_risk:.2f})"
 
     def check_per_trade_risk(self, config: "TradeConfig", equity: float) -> tuple[bool, str]:
         """
         Check if trade risk exceeds current tier's per-trade risk limit with min-lot override handling.
-        This now also includes the aggregate risk check.
+        This check is INDEPENDENT of aggregate risk - both must pass.
         """
         if self._current_tier is None:
-            return False, "Tier not selected — cannot check trade risk"
+            return False, "Tier not selected -- cannot check trade risk"
 
         tier_risk_pct = self._current_tier["risk_pct_per_trade"]
         max_risk = equity * tier_risk_pct
 
-        stop_distance = abs(config.entry_price - config.stop_price)
-        # Use contract size from config if available, otherwise default to 100 for backward compat
-        contract_size = getattr(config, 'contract_size', None)
-        if contract_size is None:
-            # Try to get from symbol-specific config
-            contract_size = self._contract_sizes.get(config.symbol, 100.0)
-        risk_per_contract = stop_distance * contract_size
-        total_risk = config.position_size * risk_per_contract
+        # Calculate this trade's total risk including estimated costs
+        total_risk, actual_risk_pct, cost_breakdown = self._calculate_trade_risk(config, equity)
 
-        # First check aggregate risk cap
-        aggregate_ok, aggregate_reason = self.check_aggregate_risk(config, equity)
-        if not aggregate_ok:
-            return False, f"AGGREGATE_RISK_CAP: {aggregate_reason}"
-
-        # Then check per-trade risk (with min-lot override)
+        # Per-trade limit check (with min-lot override)
         if total_risk > max_risk:
-            # MIN-LOT OVERRIDE CHECK
-            # If the trade uses min lot and risk exceeds tier target but is under ceiling
-            min_lot = 0.01  # XAUUSDm min lot
-            min_lot_risk = min_lot * risk_per_contract
-            actual_risk_pct = total_risk / equity
-            ceiling_pct = self.MIN_LOT_OVERRIDE_CEILING_PCT
-
+            # HARD CEILING CHECK (15%) -- applies to ALL trades, not just min-lot
             if actual_risk_pct > self.MIN_LOT_OVERRIDE_CEILING_PCT:
-                # Hard ceiling exceeded — REJECT
+                # Hard ceiling exceeded -- REJECT regardless of position size
                 self._log_min_lot_override_event(
                     config, equity, tier_risk_pct, actual_risk_pct,
-                    min_lot_risk, "REJECTED_CEILING_EXCEEDED"
+                    0.0, "REJECTED_CEILING_EXCEEDED"
                 )
                 return False, (
                     f"Trade risk ${total_risk:.2f} ({actual_risk_pct:.2%}) exceeds "
-                    f"hard ceiling {ceiling_pct:.0%} — trade REJECTED"
+                    f"hard ceiling {self.MIN_LOT_OVERRIDE_CEILING_PCT:.0%} -- trade REJECTED"
                 )
 
-            # Log min-lot override but allow
-            self._log_min_lot_override_event(
-                config, equity, tier_risk_pct, actual_risk_pct,
-                min_lot_risk, "ALLOWED_MIN_LOT_OVERRIDE"
-            )
-            return True, f"OK (MIN_LOT_OVERRIDE: intended {tier_risk_pct:.1%}, actual {actual_risk_pct:.2%})"
+            min_lot = self.get_min_lot(config.symbol)
+            # MIN-LOT OVERRIDE CHECK
+            # Only allow override if position is at minimum lot size
+            if config.position_size <= min_lot + 1e-8:  # Allow small floating point tolerance
+                min_lot_risk, _, _ = self._calculate_trade_risk(
+                    type(config)(
+                        symbol=config.symbol, signal=config.signal, entry_price=config.entry_price,
+                        stop_price=config.stop_price, position_size=min_lot,
+                        take_profit=config.take_profit, max_hold_hours=config.max_hold_hours,
+                        risk_pct=config.risk_pct, entry_time=config.entry_time,
+                        contract_size=config.contract_size
+                    ), equity
+                )
 
-        return True, "OK"
+                # Hard ceiling already checked above, so min-lot risk must be under ceiling
+                # Log min-lot override but allow (still subject to aggregate check)
+                self._log_min_lot_override_event(
+                    config, equity, tier_risk_pct, actual_risk_pct,
+                    min_lot_risk, "ALLOWED_MIN_LOT_OVERRIDE"
+                )
+                return True, f"OK (MIN_LOT_OVERRIDE: intended {tier_risk_pct:.1%}, actual {actual_risk_pct:.2%}, gross=${cost_breakdown['gross_risk']:.2f}, est_costs=${cost_breakdown['total_estimated_costs']:.2f})"
+            else:
+                # Position is above min lot but exceeds per-trade limit - reject
+                return False, (
+                    f"Trade risk ${total_risk:.2f} ({actual_risk_pct:.2%}) exceeds "
+                    f"tier per-trade limit {tier_risk_pct:.1%} -- trade REJECTED "
+                    f"(not a min-lot position, override not applicable)"
+                )
 
-    def register_position_risk(self, symbol: str, risk_at_stop: float, is_min_lot_override: bool = False) -> None:
-        """Register a new position's risk-at-stop for aggregate tracking."""
-        if is_min_lot_override:
-            # Min-lot override trades don't consume the aggregate risk budget
-            # They are tracked separately for monitoring but don't consume the tier budget
-            self.current_positions[symbol] = {
-                "risk_at_stop": risk_at_stop,
-                "entry_time": datetime.now(),
-                "is_min_lot_override": True,
-            }
-        else:
-            self.total_open_risk += risk_at_stop
-            self.current_positions[symbol] = {
-                "risk_at_stop": risk_at_stop,
-                "entry_time": datetime.now(),
-                "is_min_lot_override": False,
-            }
+        return True, f"OK (gross=${cost_breakdown['gross_risk']:.2f}, est_costs=${cost_breakdown['total_estimated_costs']:.2f})"
+
+
+
+    def register_position_risk(
+        self,
+        symbol: str,
+        risk_at_stop: float,
+        stop_price: float = 0.0,
+        position_size: float = 0.0,
+        contract_size: float | None = None,
+        is_min_lot_override: bool = False,
+        entry_price: float = 0.0,
+    ) -> None:
+        """
+        Register a new position's risk-at-stop for aggregate tracking.
+
+        ALL positions (including min-lot overrides) consume the aggregate risk budget.
+
+        Backward compatible: stop_price, position_size, contract_size, entry_price are optional
+        for existing callers.
+        """
+        # Use the actual risk_at_stop (which should include estimated costs if provided)
+        # If risk_at_stop doesn't include costs, we still add it - the aggregate check uses gross risk
+        self.total_open_risk += risk_at_stop
+        self.current_positions[symbol] = {
+            "risk_at_stop": risk_at_stop,
+            "stop_price": stop_price,
+            "position_size": position_size,
+            "contract_size": contract_size,
+            "entry_price": entry_price,
+            "entry_time": datetime.now(),
+            "is_min_lot_override": is_min_lot_override,
+        }
 
     def unregister_position_risk(self, symbol: str) -> None:
         """Remove a position's risk-at-stop from aggregate tracking when closed."""
         if symbol in self.current_positions:
             risk_at_stop = self.current_positions[symbol].get("risk_at_stop", 0.0)
-            is_min_lot_override = self.current_positions[symbol].get("is_min_lot_override", False)
-            if not is_min_lot_override:
-                self.total_open_risk = max(0.0, self.total_open_risk - risk_at_stop)
+            # ALL positions contribute to aggregate risk, regardless of override status
+            self.total_open_risk = max(0.0, self.total_open_risk - risk_at_stop)
             del self.current_positions[symbol]
+
+    def recalculate_aggregate_risk(self) -> float:
+        """
+        Recalculate aggregate risk from current positions using current stops and sizes.
+        Useful after tier reduction or position modifications.
+        """
+        total = 0.0
+        for symbol, pos in self.current_positions.items():
+            # Use stored risk_at_stop, or recalculate if we have the data
+            risk = pos.get("risk_at_stop", 0.0)
+            total += risk
+        self.total_open_risk = total
+        return total
 
     def _log_min_lot_override_event(self, config: "TradeConfig", equity: float,
                                      intended_risk_pct: float, actual_risk_pct: float,
@@ -890,14 +1027,21 @@ class TradeExecutor:
         if not can_open:
             return False
 
+        # Check aggregate risk limit (delegated to risk_manager)
+        can_open, reason = self.risk_manager.check_aggregate_risk(config, self.equity)
+        if not can_open:
+            return False
+
         # Determine if this is a min-lot override trade
         stop_distance = abs(config.entry_price - config.stop_price)
-        risk_per_contract = stop_distance * 100  # XAUUSD: 1 pip = $1 per oz, 100 oz per lot
+        contract_size = config.contract_size or self.risk_manager.get_contract_size(config.symbol)
+        risk_per_contract = stop_distance * contract_size
         total_risk = config.position_size * risk_per_contract
         actual_risk_pct = total_risk / self.equity
         tier_risk_pct = self.risk_manager.max_risk_per_trade_pct
+        min_lot = self.risk_manager.get_min_lot(config.symbol)
         is_min_lot_override = (
-            config.position_size <= 0.01 and
+            config.position_size <= min_lot + 1e-8 and
             actual_risk_pct > tier_risk_pct and
             actual_risk_pct <= self.risk_manager.MIN_LOT_OVERRIDE_CEILING_PCT
         )
@@ -913,9 +1057,17 @@ class TradeExecutor:
             "entry_equity": self.equity,
         }
 
-        # Register risk for aggregate tracking
+        # Register risk for aggregate tracking (ALL positions consume aggregate budget)
         risk_at_stop = config.position_size * risk_per_contract
-        self.risk_manager.register_position_risk(config.symbol, risk_at_stop, is_min_lot_override)
+        self.risk_manager.register_position_risk(
+            config.symbol,
+            risk_at_stop,
+            config.stop_price,
+            config.position_size,
+            contract_size,
+            is_min_lot_override,
+            config.entry_price
+        )
 
         return True
 

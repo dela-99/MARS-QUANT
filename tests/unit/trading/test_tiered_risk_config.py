@@ -15,7 +15,11 @@ from mars.apps.trading.system.vol_scaled_system import (
 def make_risk_manager(equity, tmpdir=None):
     """Create isolated RiskManager with unique kill-switch file."""
     kill_switch_file = os.path.join(tmpdir, "risk_kill_switch.json") if tmpdir else None
-    return RiskManager(kill_switch_file=kill_switch_file)
+    risk_manager = RiskManager(kill_switch_file=kill_switch_file)
+    # Configure contract sizes for test symbols
+    risk_manager.set_contract_size('XAUUSD', 100.0)
+    risk_manager.set_min_lot('XAUUSD', 0.01)
+    return risk_manager
 
 
 class TestTieredRiskConfigAcceptance:
@@ -268,10 +272,10 @@ class TestTieredRiskConfigAcceptance:
 
         # Check TradeExecutor - should NOT have hardcoded risk percentages
         executor_source = inspect.getsource(TradeExecutor)
-        
+
         # Should delegate to risk_manager for per-trade risk
         assert "risk_manager.check_per_trade_risk" in executor_source
-        
+
         # Should delegate to risk_manager for concurrent position check
         assert "risk_manager.can_open_position" in executor_source
 

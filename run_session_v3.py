@@ -42,22 +42,23 @@ from mars.apps.trading.system.vol_scaled_system import RiskManager, SizingConfig
 from mars.apps.trading.system.pair_config import (
     get_pair_config, get_enabled_symbols, get_data_path, get_contract_specs, PAIR_CONFIG,
 )
+from mars.apps.trading.risk_metrics import quote_to_usd_at_entry
 from mars.apps.trading.signals.trend_breakout import DonchianBreakoutSignal
 from mars.apps.trading.signals.mtf_gate import MTFGate, create_mtf_gate
 
 
 class MockMT5ConnectionManager:
     """Mock MT5 connection manager for dry-run testing without real terminal."""
-    
+
     def __init__(self, mt5_config: MT5Config):
         self.mt5_config = mt5_config
         self.mock_mt5 = self._create_mock_mt5()
         self.connected = False
-    
+
     def _create_mock_mt5(self):
         """Create a mocked MT5 module with demo account data."""
         mock_mt5 = Mock()
-        
+
         # Order types and constants
         mock_mt5.ORDER_TYPE_BUY = 0
         mock_mt5.ORDER_TYPE_SELL = 1
@@ -80,7 +81,7 @@ class MockMT5ConnectionManager:
             # Generate synthetic OHLCV data appropriate for the timeframe
             np.random.seed(42)
             base_price = 2000.0 if 'XAU' in symbol else (150.0 if 'JPY' in symbol else 1.1)
-            
+
             # Map MT5 timeframe constants to pandas freq
             tf_map = {
                 16385: 'h',     # TIMEFRAME_H1
@@ -90,7 +91,7 @@ class MockMT5ConnectionManager:
                 1: '1min',      # TIMEFRAME_M1
             }
             freq = tf_map.get(timeframe, '5min')
-            
+
             # Use end time as now, generate count bars going backwards
             times = pd.date_range(end=pd.Timestamp.now(tz='UTC'), periods=count, freq=freq)
             data = []
@@ -121,15 +122,17 @@ class MockMT5ConnectionManager:
         mock_account.currency = "USD"
         mock_account.leverage = 2000
         mock_mt5.account_info.return_value = mock_account
-        
+
         # Mock symbol info for all enabled symbols
         class MockSymbolInfo:
             def __init__(self, symbol):
                 self.name = symbol
-                self.trade_contract_size = 100.0 if 'XAU' in symbol else 100000.0
-                self.volume_min = 0.01
+                # Get contract size from SYMBOL_CONFIGS (OFFLINE mode)
+                contract_specs = get_contract_specs(symbol)
+                self.trade_contract_size = float(contract_specs.get("contract_size", 100.0))
+                self.volume_min = float(contract_specs.get("min_lot", 0.01))
                 self.volume_max = 200.0
-                self.volume_step = 0.01
+                self.volume_step = float(contract_specs.get("min_lot", 0.01))
                 self.digits = 3 if 'JPY' in symbol or 'XAU' in symbol else 5
                 self.point = 0.001 if 'JPY' in symbol or 'XAU' in symbol else 0.00001
                 self.spread = 260 if 'XAU' in symbol else 15
@@ -146,11 +149,11 @@ class MockMT5ConnectionManager:
                 self.time = int(time.time())
                 self.filling_mode = 3
                 self.order_mode = 127
-                self.trade_mode = 4
-        
+
+
         def make_symbol_info(symbol):
             return MockSymbolInfo(symbol)
-        
+
         def make_tick(symbol):
             t = Mock()
             if 'XAU' in symbol:
@@ -163,16 +166,16 @@ class MockMT5ConnectionManager:
             t.flags = 0
             t.volume = 1
             return t
-        
+
         def mock_symbol_info(symbol):
             return make_symbol_info(symbol)
-        
+
         def mock_symbol_info_tick(symbol):
             return make_tick(symbol)
-        
+
         # Mock order_send to return success
         from dataclasses import dataclass
-        
+
         @dataclass
         class MockOrderFill:
             retcode: int  # Main return code (TRADE_RETCODE_DONE = 10009)
@@ -187,7 +190,7 @@ class MockMT5ConnectionManager:
             deal: int = 123456789
             request_id: int = 1
             external_id: str = ""
-            
+
             # Additional fields needed by audit logger
             slippage: float = 0.0
             size_slippage: float = 0.0
@@ -198,7 +201,7 @@ class MockMT5ConnectionManager:
             tp: float = 0.0
             ticket: int = None  # alias for order
             order_id: int = None  # alias for order
-            
+
             def __post_init__(self):
                 from datetime import datetime
                 if self.ticket is None:
@@ -222,7 +225,7 @@ class MockMT5ConnectionManager:
                 tp=request.get('tp', 2030.0),
                 comment=request.get('comment', '')
             )
-        
+
         mock_mt5.symbol_info.side_effect = mock_symbol_info
         mock_mt5.symbol_info_tick.side_effect = mock_symbol_info_tick
         mock_mt5.order_send.side_effect = mock_order_send
@@ -233,21 +236,21 @@ class MockMT5ConnectionManager:
         mock_mt5.orders_get.return_value = []
         mock_mt5.history_deals_get.return_value = []
         mock_mt5.history_orders_get.return_value = []
-        
+
         return mock_mt5
-    
+
     def connect(self):
         """Mock connection - always succeeds."""
         self.connected = True
         print(f"[MOCK] MT5 connected to demo account #{self.mock_mt5.account_info().login}")
         return True
-    
+
     def disconnect(self):
         self.connected = False
-    
+
     def shutdown(self):
         self.disconnect()
-    
+
     @property
     def mt5(self):
         return self.mock_mt5
@@ -494,7 +497,7 @@ class MultiSymbolSession:
                                 # If the per-cycle vol forecast path itself errors, fall back
                                 # to the safe 1% / correct-contract-size formula below.
                                 # VISIBLE LOG: a silently-degraded trade is unacceptable.
-                                print(f"  [WARN] *** FALLBACK SIZING *** {symbol}: vol forecast error → "
+                                print(f"  [WARN] *** FALLBACK SIZING *** {symbol}: vol forecast error -> "
                                       f"using fixed-fractional fallback. error={sizing_e!r}")
                                 contract_specs = get_contract_specs(symbol)
                                 stop_distance = abs(signal['entry_price'] - signal['stop_price'])
@@ -503,30 +506,51 @@ class MultiSymbolSession:
                                 # risk_per_lot in USD = stop_distance_in_pips * pip_value_per_pip_per_lot
                                 # For XAUUSD: pip_size=0.01, contract_size=100 -> $1/pip/lot
                                 # For EURUSDm: pip_size=0.0001, contract_size=100000 -> $10/pip/lot
+                                # For USDJPYm: pip_size=0.01, contract_size=100000 -> 1000 JPY/pip/lot
+                                #   Need to convert JPY to USD using entry price: 1 JPY = 1/USDJPY USD
                                 pip_value_per_lot = pip_size * contract_size
+                                # Convert pip value from quote currency to USD
+                                try:
+                                    quote_to_usd = quote_to_usd_at_entry(symbol, signal['entry_price'])
+                                except ValueError as e:
+                                    # Fail safely: no audited conversion available for this quote currency
+                                    print(f"  [ERROR] *** FALLBACK SIZING ABORTED *** {symbol}: {e}")
+                                    position_size = 0.01
+                                    continue
+                                pip_value_per_lot_usd = pip_value_per_lot * quote_to_usd
                                 stop_distance_pips = stop_distance / pip_size if pip_size > 0 else stop_distance
-                                risk_per_lot = stop_distance_pips * pip_value_per_lot
+                                risk_per_lot = stop_distance_pips * pip_value_per_lot_usd
                                 target_risk = self.equity * 0.01
                                 position_size = max(0.01, round(target_risk / risk_per_lot, 2))
                         else:
                             # Sizer never fitted (fit_sizers failed). Use the SAME
                             # fixed-fractional formula but with the SYMBOL'S ACTUAL
-                            # contract_size / pip_size from SYMBOL_CONFIGS — NOT a
+                            # contract_size / pip_size from SYMBOL_CONFIGS -- NOT a
                             # hardcoded 100 (which assumed XAUUSD's contract size and
                             # was wrong by ~1000x for FX pairs like USDJPYm/EURUSDm).
                             # VISIBLE LOG: a silently-degraded trade is unacceptable.
-                            print(f"  [WARN] *** FALLBACK SIZING *** {symbol}: no fitted sizer → "
+                            print(f"  [WARN] *** FALLBACK SIZING *** {symbol}: no fitted sizer -> "
                                   f"using fixed-fractional fallback (sizer.fit() never succeeded)")
                             contract_specs = get_contract_specs(symbol)
                             stop_distance = abs(signal['entry_price'] - signal['stop_price'])
                             pip_size = float(contract_specs.get("pip_size", 0.0001))
                             contract_size = float(contract_specs.get("contract_size", 100000.0))
                             pip_value_per_lot = pip_size * contract_size
+                            # Convert pip value from quote currency to USD
+                            try:
+                                quote_to_usd = quote_to_usd_at_entry(symbol, signal['entry_price'])
+                            except ValueError as e:
+                                # Fail safely: no audited conversion available for this quote currency
+                                print(f"  [ERROR] *** FALLBACK SIZING ABORTED *** {symbol}: {e}")
+                                position_size = 0.01
+                                continue
+                            pip_value_per_lot_usd = pip_value_per_lot * quote_to_usd
                             stop_distance_pips = stop_distance / pip_size if pip_size > 0 else stop_distance
-                            risk_per_lot = stop_distance_pips * pip_value_per_lot
+                            risk_per_lot = stop_distance_pips * pip_value_per_lot_usd
                             target_risk = self.equity * 0.01
                             position_size = max(0.01, round(target_risk / risk_per_lot, 2))
-                        
+
+
                         # Create TradeConfig
                         trade_config = TradeConfig(
                             symbol=symbol,
@@ -543,7 +567,7 @@ class MultiSymbolSession:
                             signal_generated_at=latency_trace['signal_generated_at'],
                             latency_trace_id=latency_trace['trace_id'],
                         )
-                        
+
                         success = self.executor.open_position(trade_config)
                         print(f"[{datetime.now()}] {symbol} signal={signal['signal']} entry={signal['entry_price']:.2f} stop={signal['stop_price']:.2f} tp={signal['take_profit']:.2f} size={position_size} -> {'PLACED' if success else 'REJECTED'}")
                         if success:
@@ -643,6 +667,19 @@ def main():
     risk_manager = RiskManager(
         kill_switch_file=kill_switch_path,
     )
+
+    # Configure contract sizes for all session symbols from SYMBOL_CONFIGS (OFFLINE mode)
+    # This must be done before any risk calculations use the RiskManager
+    for symbol in symbols:
+        contract_specs = get_contract_specs(symbol)
+        contract_size = float(contract_specs.get("contract_size"))
+        if contract_size <= 0:
+            raise ValueError(f"Invalid contract_size for {symbol}: {contract_size}")
+        risk_manager.set_contract_size(symbol, contract_size)
+        # Also set min_lot for min-lot override logic
+        min_lot = float(contract_specs.get("min_lot", 0.01))
+        risk_manager.set_min_lot(symbol, min_lot)
+        print(f"  Configured {symbol}: contract_size={contract_size}, min_lot={min_lot}")
 
     # --- Connect to MT5 to get LIVE equity for tier selection ---
     print("=== DRY RUN: Connecting to MT5 for live equity ===")

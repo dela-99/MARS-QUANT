@@ -131,7 +131,7 @@ class MT5SymbolInfo:
 class InstrumentSpec:
     """
     Immutable instrument specification for calculations.
-    
+
     Combines live broker metadata (MT5) with static config (SYMBOL_CONFIGS).
     Live values take precedence when available; static config serves as
     documented offline/backtesting fallback.
@@ -151,23 +151,23 @@ class InstrumentSpec:
     margin_initial: float         # Initial margin per lot
     margin_maintenance: float     # Maintenance margin per lot
     quote_currency: str           # Quote currency (USD, JPY, etc.)
-    
+
     # Derived properties
     @property
     def pip_value_per_lot(self) -> float:
         """Monetary value of 1 pip per lot in quote currency."""
         return self.pip_size * self.contract_size
-    
+
     @property
     def tick_value_per_lot(self) -> float:
         """Monetary value of 1 tick per lot (alias for tick_value)."""
         return self.tick_value
-    
+
     @property
     def contract_multiplier(self) -> float:
         """Alias for contract_size used in position sizing."""
         return self.contract_size
-    
+
     def risk_per_contract(self, stop_distance: float) -> float:
         """Risk per lot for a given stop distance in price units."""
         return stop_distance * self.contract_size
@@ -175,30 +175,30 @@ class InstrumentSpec:
 
 class SpecificationResolver:
     """Unified instrument specification source with explicit LIVE/OFFLINE modes.
-    
+
     LIVE MODE:
     - Require successfully retrieved MT5 symbol metadata
     - Validate all mandatory specification fields
     - Reject missing, zero, negative or invalid metadata
     - Never silently fall back to static or built-in specifications
     - Cache live lookups with TTL (5 min)
-    
+
     OFFLINE MODE:
     - Use explicitly configured static SYMBOL_CONFIGS only
     - Require documented provenance and versioning
     - Reject unknown symbols (no built-in defaults)
     - Clearly identify the source and mode of every resolved specification
     """
-    
+
     def __init__(self, mt5_module, symbol_configs: dict):
         self.mt5 = mt5_module
         self.symbol_configs = symbol_configs  # SYMBOL_CONFIGS from run_multi_pair_backtest
         self._live_cache: Dict[str, Tuple[InstrumentSpec, float]] = {}  # symbol -> (spec, timestamp)
         self._cache_ttl = 300.0  # 5 minutes
-    
+
     def _validate_mt5_metadata(self, symbol: str, info) -> None:
         """Validate MT5 symbol metadata for live execution.
-        
+
         Raises:
             ValueError: If any mandatory field is missing, invalid, or contradictory.
         """
@@ -213,7 +213,7 @@ class SpecificationResolver:
             ("trade_tick_size", "tick size"),
             ("trade_tick_value", "tick value"),
         ]
-        
+
         for attr, name in required_fields:
             value = getattr(info, attr, None)
             if value is None:
@@ -229,41 +229,41 @@ class SpecificationResolver:
                 if "must be positive" in str(e) or "not finite" in str(e):
                     raise
                 raise ValueError(f"Symbol {symbol}: {name} ({attr}) is not a valid number: {value}")
-        
+
         # Validate volume constraints
         volume_min = float(info.volume_min)
         volume_max = float(info.volume_max)
         volume_step = float(info.volume_step)
-        
+
         if volume_min > volume_max:
             raise ValueError(f"Symbol {symbol}: volume_min ({volume_min}) exceeds volume_max ({volume_max})")
         if volume_step <= 0:
             raise ValueError(f"Symbol {symbol}: volume_step must be positive: {volume_step}")
         if volume_step > volume_max:
             raise ValueError(f"Symbol {symbol}: volume_step ({volume_step}) exceeds volume_max ({volume_max})")
-        
+
         # Validate digits is non-negative integer
         digits = int(info.digits)
         if digits < 0:
             raise ValueError(f"Symbol {symbol}: digits must be non-negative: {digits}")
-        
+
         # Validate point size is reasonable
         point = float(info.point)
         if point <= 0:
             raise ValueError(f"Symbol {symbol}: point size must be positive: {point}")
-    
+
     def _mt5_to_instrument_spec(self, symbol: str, info) -> InstrumentSpec:
         """Convert MT5 symbol_info to InstrumentSpec with full validation."""
         # Validate metadata first
         self._validate_mt5_metadata(symbol, info)
-        
+
         # Get static config for pip_size and quote_currency
         config_key = self._mt5_symbol_to_config_key(symbol)
         static = self.symbol_configs.get(config_key, {})
-        
+
         pip_size = static.get("pip_size", info.point * 10)  # Fallback: 10 points = 1 pip
         quote_currency = static.get("quote_currency", "USD")
-        
+
         return InstrumentSpec(
             symbol=symbol,
             contract_size=float(info.trade_contract_size),
@@ -281,28 +281,25 @@ class SpecificationResolver:
             margin_maintenance=float(info.margin_maintenance),
             quote_currency=quote_currency,
         )
-    
+
     def _static_to_instrument_spec(self, symbol: str, strict: bool = True) -> InstrumentSpec:
         """Build InstrumentSpec from static SYMBOL_CONFIGS only (offline/backtesting mode).
-        
+
         Args:
             symbol: MT5 symbol (e.g., "XAUUSDm")
             strict: If True, raise ValueError for missing config. If False, return minimal spec for testing only.
-            
+
         Raises:
             ValueError: If symbol not found in static config and strict=True.
         """
         config_key = self._mt5_symbol_to_config_key(symbol)
         static = self.symbol_configs.get(config_key)
-        
+
         if static is None:
-            if strict:
-                raise ValueError(f"No static config for symbol {symbol} (config_key={config_key}). "
-                                 f"Available: {list(self.symbol_configs.keys())}")
-            # Non-strict mode: return minimal spec for testing only
-            static = {"contract_size": 1.0, "pip_size": 0.01, "quote_currency": "USD", 
-                     "digits": 2, "point": 0.01, "volume_min": 0.01, "volume_max": 10.0, "volume_step": 0.01}
-        
+            # No fallback - unknown instrument specifications must fail safely
+            raise ValueError(f"No static config for symbol {symbol} (config_key={config_key}). "
+                             f"Available: {list(self.symbol_configs.keys())}")
+
         # Build spec from static config
         # Note: live values (tick_size, tick_value, swap, margin) unavailable offline
         return InstrumentSpec(
@@ -322,23 +319,23 @@ class SpecificationResolver:
             margin_maintenance=0.0,
             quote_currency=static.get("quote_currency", "USD"),
         )
-    
+
     class SpecResolutionMode(Enum):
         """Specification resolution mode."""
         LIVE = "live"           # Require live MT5 metadata, no fallback
         OFFLINE = "offline"     # Use static SYMBOL_CONFIGS only
-    
+
     def get_spec(self, symbol: str, mode: SpecResolutionMode = SpecResolutionMode.LIVE) -> InstrumentSpec:
         """
         Get instrument specification for a symbol.
-        
+
         Args:
             symbol: MT5 symbol (e.g., "XAUUSDm")
             mode: Resolution mode - LIVE (require MT5) or OFFLINE (static config only)
-            
+
         Returns:
             InstrumentSpec with all required fields
-            
+
         Raises:
             ValueError: If symbol not found in MT5 (LIVE mode) or static config (OFFLINE mode)
             RuntimeError: If MT5 module not available in LIVE mode
@@ -351,36 +348,36 @@ class SpecificationResolver:
                 spec, cached_at = self._live_cache[symbol]
                 if now - cached_at < self._cache_ttl:
                     return spec
-            
+
             # Must have live MT5
             if self.mt5 is None:
                 raise RuntimeError(f"LIVE mode: MT5 module not available for {symbol}")
-            
+
             # Get live metadata - must succeed
             info = self.mt5.symbol_info(symbol)
             if info is None:
                 raise ValueError(f"LIVE mode: Symbol {symbol} not found in MT5")
-            
+
             # Validate and convert
             spec = self._mt5_to_instrument_spec(symbol, info)
             self._live_cache[symbol] = (spec, now)
             return spec
-        
+
         else:  # OFFLINE mode
             # OFFLINE MODE: Use static SYMBOL_CONFIGS only
             return self._static_to_instrument_spec(symbol, strict=True)
-    
+
     def invalidate_cache(self, symbol: str = None) -> None:
         """Invalidate cached specs. If symbol=None, clear all."""
         if symbol is None:
             self._live_cache.clear()
         else:
             self._live_cache.pop(symbol, None)
-    
+
     def get_pip_value(self, symbol: str, mode: SpecResolutionMode = SpecResolutionMode.LIVE) -> float:
         """Get pip value per lot in quote currency."""
         return self.get_spec(symbol, mode).pip_value_per_lot
-    
+
     def get_tick_value(self, symbol: str, mode: SpecResolutionMode = SpecResolutionMode.LIVE) -> float:
         """Get tick value per lot."""
         return self.get_spec(symbol, mode).tick_value_per_lot
@@ -476,29 +473,29 @@ class FillResult:
 
 class MT5ConnectionManager:
     """Manages MT5 connection lifecycle with auto-reconnect."""
-    
+
     def __init__(self, config: MT5Config):
         self.config = config
         self.mt5 = None
         self._connected = False
         self._last_connect_time = 0
         self._reconnect_cooldown = 30  # seconds
-    
+
     def connect(self) -> bool:
         """Establish MT5 connection."""
         if mt5 is None:
             raise RuntimeError("MetaTrader5 package not installed. Run: pip install MetaTrader5")
-        
+
         if self._connected and self.mt5 is not None:
             return True
-        
+
         # Check cooldown
         now = time.time()
         if now - self._last_connect_time < self._reconnect_cooldown:
             return self._connected
-        
+
         self._last_connect_time = now
-        
+
         try:
             if self.config.path:
                 result = mt5.initialize(
@@ -517,7 +514,7 @@ class MT5ConnectionManager:
                     timeout=self.config.timeout,
                     portable=self.config.portable,
                 )
-            
+
             if result:
                 self.mt5 = mt5
                 self._connected = True
@@ -532,7 +529,7 @@ class MT5ConnectionManager:
             print(f"❌ MT5 connection error: {e}")
             self._connected = False
             return False
-    
+
     def ensure_connected(self) -> bool:
         """Ensure connection is alive, reconnect if needed."""
         if self._connected and self.mt5 is not None:
@@ -542,9 +539,9 @@ class MT5ConnectionManager:
                 return True
             except Exception:
                 self._connected = False
-        
+
         return self.connect()
-    
+
     def disconnect(self):
         """Clean disconnect."""
         if self.mt5:
@@ -555,12 +552,12 @@ class MT5ConnectionManager:
 
 class MT5SymbolResolver:
     """Resolves symbol names and provides trading specifications."""
-    
+
     def __init__(self, mt5_module, symbol_configs: dict = None):
         self.mt5 = mt5_module
         self._symbol_cache: Dict[str, Any] = {}
         self._spec_resolver = SpecificationResolver(mt5_module, symbol_configs or {})
-    
+
     def get_symbol_info(self, symbol: str):
         """Get MT5 symbol info with caching."""
         if symbol not in self._symbol_cache:
@@ -572,19 +569,19 @@ class MT5SymbolResolver:
                 info = self.mt5.symbol_info(symbol)
             self._symbol_cache[symbol] = info
         return self._symbol_cache[symbol]
-    
+
     def get_spec(self, symbol: str, mode: SpecificationResolver.SpecResolutionMode = SpecificationResolver.SpecResolutionMode.LIVE) -> InstrumentSpec:
         """Get full instrument specification."""
         return self._spec_resolver.get_spec(symbol, mode)
-    
+
     def get_pip_value(self, symbol: str, mode: SpecificationResolver.SpecResolutionMode = SpecificationResolver.SpecResolutionMode.LIVE) -> float:
         """Get pip value per lot in quote currency."""
         return self._spec_resolver.get_pip_value(symbol, mode)
-    
+
     def get_tick_value(self, symbol: str, mode: SpecificationResolver.SpecResolutionMode = SpecificationResolver.SpecResolutionMode.LIVE) -> float:
         """Get tick value per lot."""
         return self._spec_resolver.get_tick_value(symbol, mode)
-    
+
     def invalidate_spec_cache(self, symbol: str = None) -> None:
         """Invalidate cached specifications."""
         self._spec_resolver.invalidate_cache(symbol)
@@ -596,18 +593,18 @@ class MT5SymbolResolver:
 
 class MT5OrderRouter:
     """Routes orders to MT5 with proper fill handling."""
-    
+
     def __init__(self, mt5_module, symbol_resolver: MT5SymbolResolver):
         self.mt5 = mt5_module
         self.symbol_resolver = symbol_resolver
-    
+
     def _lookup_entry_deal(self, deal_ticket: int) -> tuple[float, float, float, float, int, str]:
                 """
                 Look up the entry deal by deal ticket to get commission, swap, profit, executed_volume, and position_id.
-            
+
                 Always aggregates ALL entry deals for the position to handle partial fills correctly.
                 Avoids double-counting the initially retrieved deal.
-            
+
                 Returns: (commission, swap, profit, executed_volume, position_id, status)
                 status: "confirmed" | "not_found" | "lookup_failed" | "invalid_ticket" | "no_entry_deal"
                 """
@@ -617,17 +614,17 @@ class MT5OrderRouter:
                 executed_volume = 0.0
                 position_id = None
                 status = "not_found"
-        
+
                 if deal_ticket == 0:
                     return commission, swap, profit, executed_volume, position_id, "invalid_ticket"
-        
+
                 try:
                     # Get the deal by ticket to find its position_id
                     deals = self.mt5.history_deals_get(ticket=deal_ticket)
                     if deals and len(deals) > 0:
                         deal = deals[0]
                         position_id = getattr(deal, 'position_id', None)
-                    
+
                         # Always look up all entry deals for this position to aggregate
                         if position_id:
                             all_deals = self.mt5.history_deals_get(position=position_id)
@@ -654,17 +651,17 @@ class MT5OrderRouter:
                         status = "not_found"
                 except Exception:
                     status = "lookup_failed"
-        
+
                 return commission, swap, profit, executed_volume, position_id, status
-    
+
     def send_order(self, config: TradeConfig, spec) -> "FillResult":
         """Send order to MT5 and return fill result with actual deal data."""
         from dataclasses import dataclass
         from datetime import datetime
-        
+
         # Determine order type
         order_type = self.mt5.ORDER_TYPE_BUY if config.signal > 0 else self.mt5.ORDER_TYPE_SELL
-        
+
         # Get current prices
         tick = self.mt5.symbol_info_tick(config.symbol)
         if tick is None:
@@ -675,11 +672,11 @@ class MT5OrderRouter:
                 result_code=-1, retcode_external=-1,
                 timestamp=datetime.now(),
             )
-        
+
         price = tick.ask if config.signal > 0 else tick.bid
         sl = config.stop_price
         tp = config.take_profit
-        
+
         # Normalize to symbol precision
         info = self.symbol_resolver.get_symbol_info(config.symbol)
         digits = info.digits
@@ -687,7 +684,7 @@ class MT5OrderRouter:
         sl = round(sl, digits)
         tp = round(tp, digits)
         volume = round(config.position_size, 2)
-        
+
         # Build request
         request = {
             "action": self.mt5.TRADE_ACTION_DEAL,
@@ -703,10 +700,10 @@ class MT5OrderRouter:
             "type_time": self.mt5.ORDER_TIME_GTC,
             "type_filling": self.mt5.ORDER_FILLING_IOC,
         }
-        
+
         # Send order
         result = self.mt5.order_send(request)
-        
+
         if result is None:
                     error = self.mt5.last_error()
                     return FillResult(
@@ -718,22 +715,22 @@ class MT5OrderRouter:
                         comment=f"order_send returned None: {error}", request=config,
                         timestamp=datetime.now(),
                     )
-        
+
         # Calculate slippage
         expected_price = price
         actual_price = result.price
         slippage = abs(actual_price - expected_price) * 10000  # in pips
-        
+
         if result.retcode == self.mt5.TRADE_RETCODE_DONE:
                         # Get actual deal data from MT5 history
                         deal_ticket = getattr(result, 'deal', 0)
                         commission, swap, profit, executed_volume, position_id, status = self._lookup_entry_deal(deal_ticket)
-        
+
                         # Use broker-reported executed volume from entry deals for accurate accounting
                         # Fall back to result.volume if lookup failed
                         filled_volume = executed_volume if executed_volume > 0 else result.volume
                         size_slippage = filled_volume - volume
-        
+
                         return FillResult(
                                         success=True,
                                         ticket=result.order,
@@ -808,7 +805,7 @@ class MT5AuditLogger:
                 "to enable history_deals_get lookups (close-fill reconciliation)."
             )
         return self._mt5
-    
+
     def _init_db(self):
         """Initialize database schema with WAL mode."""
         import sqlite3
@@ -818,9 +815,9 @@ class MT5AuditLogger:
             conn.execute("PRAGMA synchronous=NORMAL")
             conn.execute("PRAGMA cache_size=10000")
             conn.execute("PRAGMA temp_store=MEMORY")
-            
+
             cursor = conn.cursor()
-            
+
             # Signals table
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS signals (
@@ -840,7 +837,7 @@ class MT5AuditLogger:
                     max_hold_hours REAL
                 )
             """)
-            
+
             # Fills table (every order_send result)
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS fills (
@@ -957,7 +954,7 @@ class MT5AuditLogger:
                     order_filled_at TEXT
                 )
             """)
-            
+
             # Risk decisions table
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS risk_decisions (
@@ -974,7 +971,7 @@ class MT5AuditLogger:
                     aggregate_risk_pct REAL NOT NULL
                 )
             """)
-            
+
             # Risk events table (daily loss, kill-switch, manual modifications)
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS risk_events (
@@ -988,7 +985,7 @@ class MT5AuditLogger:
                     kill_switch_active INTEGER NOT NULL
                 )
             """)
-            
+
             # Manual modifications table (NEW)
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS manual_modifications (
@@ -1015,7 +1012,7 @@ class MT5AuditLogger:
                     kill_switch_active INTEGER NOT NULL
                 )
             """)
-            
+
             # Evaluations table (NEW) - MTF gate decisions
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS evaluations (
@@ -1046,7 +1043,7 @@ class MT5AuditLogger:
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_evaluations_timestamp ON evaluations(timestamp)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_evaluations_symbol ON evaluations(symbol)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_evaluations_gate_result ON evaluations(gate_result)")
-            
+
             # Create indexes for common queries
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_signals_timestamp ON signals(timestamp)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_signals_symbol ON signals(symbol)")
@@ -1060,7 +1057,7 @@ class MT5AuditLogger:
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_risk_events_type ON risk_events(event_type)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_manual_mods_timestamp ON manual_modifications(timestamp)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_manual_mods_ticket ON manual_modifications(ticket)")
-            
+
             # Rebuild the purely analytical system-exit audit from persisted fills.
             # It is best-effort so analytical recovery never blocks live startup.
             try:
@@ -1068,7 +1065,7 @@ class MT5AuditLogger:
             except Exception as exc:
                 print(f"Loss-audit historical backfill unavailable: {exc}")
             conn.commit()
-    
+
     def log_signal(self, config: TradeConfig, fill_price: float,
                    risk_check_passed: bool, rejection_reason: Optional[str],
                    risk_at_stop: float, risk_pct: float):
@@ -1201,7 +1198,7 @@ class MT5AuditLogger:
                 "NEUTRAL", 0.0, 0.0,  # m15
             ))
             conn.commit()
-   
+
     def log_fill(self, fill, config: TradeConfig, expected_price: float):
             """Log order fill with slippage calculation.
 
@@ -1257,7 +1254,7 @@ class MT5AuditLogger:
                             ))
                 conn.commit()
                 return int(cursor.lastrowid)
-    
+
     def log_close_fill(self, open_fill_rowid: int) -> bool:
             """Look up the exit deal(s) in MT5 history and update the open fill row.
 
@@ -1453,7 +1450,7 @@ class MT5AuditLogger:
                 tier_risk_cap_pct, aggregate_risk_pct
             ))
             conn.commit()
-    
+
     def log_risk_event(self, event_type: str, details: str,
                        equity: float, drawdown_pct: float,
                        daily_pnl: float, kill_switch_active: bool):
@@ -1559,14 +1556,14 @@ class MT5Executor:
     """
     Live MT5 executor implementing TradeExecutor interface.
     Replaces backtest TradeExecutor for live demo trading.
-    
+
     Key fixes:
     - Idempotent order placement (prevents duplicate orders per bar/signal)
     - Live MT5 position checking for concurrent risk
     - Every order_send() call is logged (success or failure)
     - Manual SL/TP modification detection and reconciliation
     """
-    
+
     def __init__(
         self,
         equity: float,
@@ -1611,15 +1608,15 @@ class MT5Executor:
         # Connect and initialize
         if auto_initialize:
             self._initialize()
-    
+
     def _initialize(self):
         """Initialize MT5 connection and components."""
         self.conn_manager.connect()
         self.mt5 = self.conn_manager.mt5
-        
+
         # Create specification resolver (live + static fallback)
         self.spec_resolver = SpecificationResolver(self.mt5, self.symbol_configs)
-        
+
         # Create symbol resolver with spec resolver
         self.symbol_resolver = MT5SymbolResolver(self.mt5, self.symbol_configs)
         self.order_router = MT5OrderRouter(self.mt5, self.symbol_resolver)
@@ -1632,7 +1629,7 @@ class MT5Executor:
 
         # Sync positions from MT5 on startup
         self._sync_positions_from_mt5()
-    
+
     def _load_idempotency_state(self) -> None:
         """Load processed signals from disk to survive restart."""
         try:
@@ -1644,7 +1641,7 @@ class MT5Executor:
         except Exception as e:
             print(f"Warning: failed to load idempotency state: {e}")
             self._processed_signals = set()
-    
+
     def _save_idempotency_state(self) -> None:
         """Save processed signals to disk."""
         try:
@@ -1656,12 +1653,12 @@ class MT5Executor:
                 signals_list.sort(key=lambda k: k.split('_')[1], reverse=True)
                 self._processed_signals = set(signals_list[:self._MAX_PROCESSED_SIGNALS // 2])
                 print(f"Pruned idempotency set to {len(self._processed_signals)} entries")
-            
+
             with open(self._IDEMPOTENCY_FILE, 'w') as f:
                 json.dump({'processed_signals': list(self._processed_signals)}, f)
         except Exception as e:
             print(f"Warning: failed to save idempotency state: {e}")
-    
+
     def _get_bar_key(self, timestamp: datetime) -> str:
         """Get normalized bar key (5-minute boundary)."""
         bar_time = timestamp.replace(second=0, microsecond=0)
@@ -1669,7 +1666,7 @@ class MT5Executor:
         if bar_minute % 5 != 0:
             bar_time = bar_time.replace(minute=(bar_minute // 5) * 5)
         return bar_time.isoformat()
-    
+
     def _is_duplicate_signal(self, symbol: str, bar_key: str, signal: int) -> bool:
         """Check if this signal for this bar has already been acted upon."""
         signal_key = f"{symbol}_{bar_key}_{signal}"
@@ -1678,33 +1675,35 @@ class MT5Executor:
         self._processed_signals.add(signal_key)
         self._save_idempotency_state()  # Persist after every addition
         return False
-    
+
     def _get_live_open_positions_value(self, symbol: str) -> float:
             """Get current open position value for a symbol from LIVE MT5."""
             self._ensure_connection()
             positions = self.mt5.positions_get(symbol=symbol)
             if not positions:
                 return 0.0
-        
+
             # Get instrument spec for contract size
             spec = self.symbol_resolver.get_spec(symbol, SpecificationResolver.SpecResolutionMode.LIVE)
             contract_size = spec.contract_size
-        
+
             total_value = 0.0
             for pos in positions:
                 if pos.magic == 123456:
                     total_value += pos.volume * pos.price_open * contract_size
             return total_value
-    
+
     def _sync_positions_from_mt5(self) -> None:
         """Sync internal position tracking with live MT5 positions."""
         self._ensure_connection()
-        positions = self.mt5.positions_get(symbol="XAUUSDm")
+        positions = self.mt5.positions_get()  # Global query, filter by magic
         if positions:
             self.open_positions = {}
             for pos in positions:
                 if pos.magic == 123456:  # Only our positions
-                    self.open_positions[pos.symbol] = {
+                    key = f"{pos.symbol}_{pos.ticket}"
+                    self.open_positions[key] = {
+                        "symbol": pos.symbol,
                         "entry_price": pos.price_open,
                         "stop_price": pos.sl,
                         "take_profit": pos.tp,
@@ -1715,91 +1714,102 @@ class MT5Executor:
                     }
         else:
             self.open_positions = {}
-    
+
+
+    def _get_positions_for_symbol(self, symbol: str) -> list:
+        """Get all open positions for a given symbol."""
+        return [pos for key, pos in self.open_positions.items() if pos.get("symbol") == symbol]
+
+    def _get_position_by_ticket(self, symbol: str, ticket: int) -> dict | None:
+        """Get a specific position by symbol and ticket."""
+        key = f"{symbol}_{ticket}"
+        return self.open_positions.get(key)
+
     def _detect_manual_sl_tp_changes(self) -> list[dict]:
         """
         Detect manual SL/TP modifications on open positions.
         Compares broker's live SL/TP against system's tracked values.
-        
+
         Returns list of detected modifications with reconciliation details.
         """
         self._ensure_connection()
         modifications = []
-        
-        # Get all our positions from MT5
-        positions = self.mt5.positions_get(symbol="XAUUSDm")
+
+        # Get all our positions from MT5 (global query, filter by magic)
+        positions = self.mt5.positions_get()
         if not positions:
             return modifications
-        
+
         for pos in positions:
             if pos.magic != 123456:
                 continue
-            
+
             symbol = pos.symbol
             ticket = pos.ticket
-            
+            key = f"{symbol}_{ticket}"
+
             # Find matching internal position
-            if symbol not in self.open_positions:
+            if key not in self.open_positions:
                 continue
-            
-            internal_pos = self.open_positions[symbol]
+
+            internal_pos = self.open_positions[key]
             tracked_sl = internal_pos.get("stop_price", 0)
             tracked_tp = internal_pos.get("take_profit", 0)
-            
+
             # Live SL/TP from broker
             live_sl = pos.sl
             live_tp = pos.tp
-            
+
             # Check for differences (with small epsilon for float comparison)
             sl_changed = abs(live_sl - tracked_sl) > 1e-8 if tracked_sl > 0 and live_sl > 0 else False
             tp_changed = abs(live_tp - tracked_tp) > 1e-8 if tracked_tp > 0 and live_tp > 0 else False
-            
+
             if not sl_changed and not tp_changed:
                 continue
-            
+
             # Manual modification detected - reconcile
             entry_price = internal_pos["entry_price"]
             position_size = internal_pos["position_size"]
-            
+
             # Get instrument spec for contract size
             spec = self.symbol_resolver.get_spec(symbol, SpecificationResolver.SpecResolutionMode.LIVE)
             contract_size = spec.contract_size
-            
+
             # Calculate risk with OLD stop
             old_stop_distance = abs(entry_price - tracked_sl) if tracked_sl > 0 else 0
             old_risk_usd = old_stop_distance * abs(position_size) * contract_size
             old_risk_pct = old_risk_usd / self.equity if self.equity > 0 else 0
-            
+
             # Calculate risk with NEW stop
             new_stop_distance = abs(entry_price - live_sl) if live_sl > 0 else 0
             new_risk_usd = new_stop_distance * abs(position_size) * contract_size
             new_risk_pct = new_risk_usd / self.equity if self.equity > 0 else 0
-            
+
             # Get tier and aggregate risk caps
             tier = self.risk_manager.get_current_tier() if self.risk_manager._current_tier else {"risk_pct_per_trade": 0.01, "aggregate_risk_pct": 0.01}
             tier_risk_cap_pct = tier.get("risk_pct_per_trade", 0.01)
             aggregate_cap_pct = tier.get("aggregate_risk_pct", tier_risk_cap_pct)
-            
+
             # Calculate total open risk before and after
             total_open_risk_before = self.risk_manager.total_open_risk
-            
+
             # Adjust total open risk: remove old risk, add new risk for this position
             is_min_lot_override = internal_pos.get("is_min_lot_override", False)
-            
+
             if not is_min_lot_override:
                 total_open_risk_after = total_open_risk_before - old_risk_usd + new_risk_usd
             else:
                 total_open_risk_after = total_open_risk_before  # Min-lot override doesn't count in aggregate
-            
+
             # Check if new risk exceeds caps
             exceeds_per_trade_cap = new_risk_pct > tier_risk_cap_pct
             exceeds_aggregate_cap = total_open_risk_after > self.equity * aggregate_cap_pct
-            
+
             # Determine action taken
             action_taken = "ALERT_ONLY"
             if exceeds_per_trade_cap or exceeds_aggregate_cap:
                 action_taken = "AUTO_CLOSE_POSITION"
-            
+
             # Build modification record
             mod = {
                 "ticket": ticket,
@@ -1823,7 +1833,7 @@ class MT5Executor:
                 "position_size": position_size,
             }
             modifications.append(mod)
-        
+
         return modifications
 
     def _reconcile_manual_modifications(self, modifications: list[dict]) -> None:
@@ -1836,7 +1846,7 @@ class MT5Executor:
         for mod in modifications:
             ticket = mod["ticket"]
             symbol = mod["symbol"]
-            
+
             # Log the manual modification event
             self.audit_logger.log_manual_modification(
                 ticket=ticket,
@@ -1859,7 +1869,7 @@ class MT5Executor:
                 equity=self.equity,
                 kill_switch_active=self.risk_manager.kill_switch_halted,
             )
-            
+
             # Also log as risk event for visibility
             details = (
                 f"MANUAL_MODIFICATION_DETECTED: ticket={ticket} symbol={symbol} "
@@ -1879,14 +1889,15 @@ class MT5Executor:
                 self.risk_manager.daily_pnl,
                 self.risk_manager.kill_switch_halted,
             )
-            
+
             print(f"⚠️  MANUAL SL/TP MODIFICATION DETECTED: {details}")
-            
+
             # Update internal tracking to new SL/TP
-            if symbol in self.open_positions:
-                self.open_positions[symbol]["stop_price"] = mod["new_sl"]
-                self.open_positions[symbol]["take_profit"] = mod["new_tp"]
-            
+            key = f"{symbol}_{ticket}"
+            if key in self.open_positions:
+                self.open_positions[key]["stop_price"] = mod["new_sl"]
+                self.open_positions[key]["take_profit"] = mod["new_tp"]
+
             # Update risk manager's aggregate tracking
             if symbol in self.risk_manager.current_positions:
                 is_min_lot_override = self.risk_manager.current_positions[symbol].get("is_min_lot_override", False)
@@ -1895,11 +1906,11 @@ class MT5Executor:
                     old_risk = self.risk_manager.current_positions[symbol].get("risk_at_stop", 0)
                     self.risk_manager.total_open_risk = max(0.0, self.risk_manager.total_open_risk - old_risk + mod["new_risk_usd"])
                     self.risk_manager.current_positions[symbol]["risk_at_stop"] = mod["new_risk_usd"]
-            
+
             # If exceeds caps, auto-close the position
             if mod["action_taken"] == "AUTO_CLOSE_POSITION":
                 print(f"🚨 RISK CAP EXCEEDED - Auto-closing position {symbol} (ticket={ticket})")
-                
+
                 # Close the position
                 tick = self.mt5.symbol_info_tick(symbol)
                 if tick:
@@ -1911,7 +1922,7 @@ class MT5Executor:
         if not self.conn_manager.ensure_connected():
             raise RuntimeError("MT5 connection lost and reconnection failed")
         self.mt5 = self.conn_manager.mt5
-    
+
     def open_position(self, config: TradeConfig) -> bool:
         """
         Open live position on MT5 demo account.
@@ -1925,14 +1936,14 @@ class MT5Executor:
 
         spec = self.symbol_resolver.get_spec(config.symbol, SpecificationResolver.SpecResolutionMode.LIVE)
         contract_size = spec.contract_size
-        
+
         # Set contract size on config for risk calculations
         config.contract_size = contract_size
-        
+
         self.risk_manager.set_contract_size(config.symbol, contract_size)
-        
+
         risk_at_stop = abs(config.entry_price - config.stop_price) * config.position_size * contract_size
-        
+
         risk_pct = risk_at_stop / self.equity * 100 if self.equity > 0 else 0
         trace_id = config.latency_trace_id or self.audit_logger.begin_latency_trace(config)
         config.latency_trace_id = trace_id
@@ -1954,7 +1965,7 @@ class MT5Executor:
             return False
         else:
             print(f"  [DEBUG open_position] NOT DUPLICATE: symbol={config.symbol} bar_key={bar_key} signal={config.signal}")
-        
+
         # 1. Concurrent exposure cap - check LIVE MT5 positions
         live_position_value = self._get_live_open_positions_value(config.symbol)
         can_open, reason = self.risk_manager.can_open_position(
@@ -1997,21 +2008,21 @@ class MT5Executor:
             )
             self.audit_logger.link_latency_signal(trace_id, signal_id)
             return False
-        
+
         # All risk checks passed - log approval
         self.audit_logger.log_risk_decision(
             config, "APPROVED", "All risk checks passed",
             config.position_size * config.entry_price, self.equity,
             risk_pct, 50.0, 0.0
         )
-        
+
         signal_id = self.audit_logger.log_signal(
             config, config.entry_price,
             risk_check_passed=True, rejection_reason=None,
             risk_at_stop=risk_at_stop, risk_pct=risk_pct
         )
         self.audit_logger.link_latency_signal(trace_id, signal_id)
-        
+
         # Route order to MT5
         spec = self.symbol_resolver.get_symbol_info(config.symbol)
         self.audit_logger.mark_latency_order_submitted(trace_id)
@@ -2022,7 +2033,9 @@ class MT5Executor:
             # Open position tracking
             audit_row_id = self.audit_logger.log_fill(fill, config, config.entry_price)
             self.audit_logger.mark_latency_order_filled(trace_id, audit_row_id)
-            self.open_positions[config.symbol] = {
+            key = f"{config.symbol}_{fill.ticket}"
+            self.open_positions[key] = {
+                "symbol": config.symbol,
                 "entry_price": fill.price,
                 "stop_price": config.stop_price,
                 "take_profit": config.take_profit,
@@ -2033,7 +2046,7 @@ class MT5Executor:
                 "mt5_ticket": fill.ticket,
                 "mt5_order_id": fill.order_id,
                 "audit_row_id": audit_row_id,
-                "position_id": getattr(fill, 'mt5_ticket', None) or fill.ticket,
+                "position_id": fill.position_id,
             }
 
             # Register position risk with risk manager for aggregate tracking
@@ -2051,39 +2064,43 @@ class MT5Executor:
                 self.risk_manager.kill_switch_halted
             )
             return False
-    
+
     def update_position(self, symbol: str, current_price: float, current_time: datetime) -> dict:
         """Update live position - check stops/TP/time exit."""
         self._ensure_connection()
-        
+
         # First, detect and reconcile any manual SL/TP changes
         modifications = self._detect_manual_sl_tp_changes()
         if modifications:
             self._reconcile_manual_modifications(modifications)
-        
-        if symbol not in self.open_positions:
+
+        # Find position for this symbol (may have multiple)
+        positions = self._get_positions_for_symbol(symbol)
+        if not positions:
             return {"action": "none", "reason": "no_position"}
-        
-        pos = self.open_positions[symbol]
+
+        # For now, use the first position (netting mode assumption)
+        # TODO: Handle multiple positions per symbol properly
+        pos = positions[0]
         entry_price = pos["entry_price"]
         stop_price = pos["stop_price"]
         take_profit = pos.get("take_profit")
         position_size = pos["position_size"]
-        
+
         # Get instrument spec for contract size
         spec = self.symbol_resolver.get_spec(symbol, SpecificationResolver.SpecResolutionMode.LIVE)
         contract_size = spec.contract_size
         entry_time = pos["entry_time"]
         mt5_ticket = pos.get("mt5_ticket")
-        
+
         # Get current tick for accurate pricing
         tick = self.mt5.symbol_info_tick(symbol)
         if tick is None:
             return {"action": "hold", "reason": "no_tick_data"}
-        
+
         current_bid = tick.bid
         current_ask = tick.ask
-        
+
         # Calculate PnL
         if position_size > 0:  # Long
             pnl = (current_price - entry_price) * contract_size * position_size
@@ -2093,51 +2110,67 @@ class MT5Executor:
             pnl = (entry_price - current_price) * contract_size * abs(position_size)
             hit_stop = current_ask >= stop_price
             hit_tp = take_profit and current_bid <= take_profit
-        
+
         # Time-based exit
         hours_held = (datetime.now() - entry_time).total_seconds() / 3600
         max_hold = pos.get("max_hold_hours", 4)
         time_exit = hours_held >= max_hold
-        
+
         if hit_stop:
             close_price = tick.bid if position_size > 0 else tick.ask
             self._close_live_position(symbol, close_price, "stop_loss", pnl)
             return {"action": "close", "reason": "stop_loss", "pnl": pnl}
-        
+
         if hit_tp:
             close_price = tick.ask if position_size > 0 else tick.bid
             self._close_live_position(symbol, close_price, "take_profit", pnl)
             return {"action": "close", "reason": "take_profit", "pnl": pnl}
-        
+
         if time_exit:
             close_price = tick.bid if position_size > 0 else tick.ask
             self._close_live_position(symbol, close_price, "time_exit", pnl)
             return {"action": "close", "reason": "time_exit", "pnl": pnl}
-        
+
         return {"action": "hold", "reason": "none", "pnl": pnl}
-    
+
     def _close_live_position(self, symbol: str, close_price: float, reason: str, pnl: float) -> bool:
         """Close a live position on MT5."""
-        if symbol not in self.open_positions:
+        # Find position for this symbol
+        positions = self._get_positions_for_symbol(symbol)
+        if not positions:
             return False
-        
-        pos = self.open_positions[symbol]
+
+        # Account mode check: reject if multiple positions exist (hedging not supported)
+        if len(positions) > 1:
+            print(f"❌ Multiple positions on {symbol} detected. Hedging mode not supported. Cannot determine which position to close.")
+            return False
+
+        # Single position (netting mode)
+        pos = positions[0]
+        key = f"{symbol}_{pos['mt5_ticket']}"
         mt5_ticket = pos.get("mt5_ticket")
+        position_id = pos.get("mt5_position_id") or pos.get("position_id")
         position_size = pos["position_size"]
-        
+
         if mt5_ticket is None:
             print(f"⚠️  No MT5 ticket for {symbol}, cannot close")
             return False
-        
+
+        if position_id is None:
+            print(f"⚠️  No position lifecycle identifier for {symbol}, cannot log exit deals")
+            # Don't fail the close, but log the issue
+            # The close will proceed but exit deal reconciliation will be skipped
+
         # Determine close order type
         order_type = self.mt5.ORDER_TYPE_SELL if position_size > 0 else self.mt5.ORDER_TYPE_BUY
-        
+
+        # Close request MUST use mt5_ticket (current position ticket), NOT position_id
         request = {
             "action": self.mt5.TRADE_ACTION_DEAL,
             "symbol": symbol,
             "volume": abs(position_size),
             "type": order_type,
-            "position": mt5_ticket,
+            "position": mt5_ticket,  # Current position ticket
             "price": close_price,
             "deviation": 20,
             "magic": 123456,
@@ -2145,7 +2178,7 @@ class MT5Executor:
             "type_time": self.mt5.ORDER_TIME_GTC,
             "type_filling": self.mt5.ORDER_FILLING_IOC,
         }
-        
+
         result = self.mt5.order_send(request)
 
         if result is not None and result.retcode == self.mt5.TRADE_RETCODE_DONE:
@@ -2171,8 +2204,12 @@ class MT5Executor:
             # deal via the broker's history. This is the broker-authoritative
             # realized P&L (commission + swap + price-delta), not the estimate.
             try:
-                deals = self.mt5.history_deals_get(position=mt5_ticket)
-                exit_deals = [d for d in deals if getattr(d, 'entry', None) == 1]
+                # Use position_id (MT5 position lifecycle identifier) for deal lookup
+                if position_id is not None:
+                    deals = self.mt5.history_deals_get(position=position_id)
+                    exit_deals = [d for d in deals if getattr(d, 'entry', None) == 1]
+                else:
+                    exit_deals = []
                 if exit_deals:
                     ex = exit_deals[0]
                     audit_row_id = pos.get("audit_row_id")
@@ -2196,7 +2233,7 @@ class MT5Executor:
                 self._last_close_log_error = str(e)
 
             # Remove from tracking
-            del self.open_positions[symbol]
+            del self.open_positions[key]
 
             # Update risk manager
             self.risk_manager.unregister_position_risk(symbol)
@@ -2207,24 +2244,28 @@ class MT5Executor:
             error = self.mt5.last_error() if result is None else f"retcode={result.retcode}"
             print(f"❌ Failed to close {symbol}: {error}")
             return False
-    
+
     def modify_position_sltp(self, symbol: str, new_sl: float, new_tp: float) -> bool:
         """Modify SL/TP of an open position (system-initiated)."""
-        if symbol not in self.open_positions:
+        # Find position for this symbol
+        positions = self._get_positions_for_symbol(symbol)
+        if not positions:
             return False
-        
-        pos = self.open_positions[symbol]
+
+        # Use the first position (netting mode assumption)
+        pos = positions[0]
+        key = f"{symbol}_{pos['mt5_ticket']}"
         mt5_ticket = pos.get("mt5_ticket")
-        
+
         if mt5_ticket is None:
             return False
-        
+
         # Get current prices for normalization
         spec = self.symbol_resolver.get_symbol_info(symbol)
         digits = spec.digits
         new_sl = round(new_sl, digits)
         new_tp = round(new_tp, digits)
-        
+
         request = {
             "action": self.mt5.TRADE_ACTION_SLTP,
             "symbol": symbol,
@@ -2233,25 +2274,31 @@ class MT5Executor:
             "tp": new_tp,
             "magic": 123456,
         }
-        
+
         result = self.mt5.order_send(request)
-        
+
         if result is not None and result.retcode == self.mt5.TRADE_RETCODE_DONE:
             # Update internal tracking
-            self.open_positions[symbol]["stop_price"] = new_sl
-            self.open_positions[symbol]["take_profit"] = new_tp
+            self.open_positions[key]["stop_price"] = new_sl
+            self.open_positions[key]["take_profit"] = new_tp
             print(f"✅ SL/TP modified: {symbol} | SL={new_sl} TP={new_tp}")
             return True
         else:
             error = self.mt5.last_error() if result is None else f"retcode={result.retcode}"
             print(f"❌ Failed to modify SL/TP for {symbol}: {error}")
             return False
-    
+
     def get_open_positions(self) -> Dict[str, Dict]:
         """Get current open positions (synced with MT5)."""
         self._sync_positions_from_mt5()
-        return self.open_positions.copy()
-    
+        # Return with symbol keys for backward compatibility (netting mode)
+        result = {}
+        for key, pos in self.open_positions.items():
+            symbol = pos.get("symbol", key.split('_')[0])
+            if symbol not in result:
+                result[symbol] = pos
+        return result
+
     def get_equity(self) -> float:
         """Get current equity (synced with MT5)."""
         self._ensure_connection()
@@ -2259,20 +2306,20 @@ class MT5Executor:
         if account_info:
             self.equity = account_info.equity
         return self.equity
-    
+
     def get_closed_trades(self) -> List[Dict]:
         """Get closed trades."""
         return self.closed_trades.copy()
-    
+
     def get_equity_curve(self) -> List[float]:
         """Get equity curve."""
         return self.equity_curve.copy()
-    
+
     def shutdown(self):
         """Clean shutdown."""
         # Backup audit database
         self.audit_logger.backup()
-        
+
         # Close MT5 connection
         self.conn_manager.disconnect()
         print("MT5Executor shutdown complete")
@@ -2298,7 +2345,7 @@ def create_live_trading_system(
     """
     from mars.apps.trading.signals.trend_breakout import TrendSignalFactory
     from mars.apps.trading.system.vol_scaled_system import VolScaledSizer, SizingConfig, RiskManager
-    
+
     # Signal generator
     if signal_type == "donchian":
         signal_generator = TrendSignalFactory.donchian_trend(
@@ -2315,17 +2362,17 @@ def create_live_trading_system(
             ma_slow=ma_slow,
             session=session
         )
-    
+
     # Sizing
     sizer = VolScaledSizer(SizingConfig(target_vol=0.15, max_leverage=3.0))
-    
+
     # Risk manager
     risk_manager = RiskManager(
         kill_switch_file="risk_kill_switch.json",
         max_consecutive_losses=2,
         consecutive_loss_cooldown_hours=24
     )
-    
+
     # Create executor
     executor = MT5Executor(
         equity=equity,
@@ -2333,8 +2380,8 @@ def create_live_trading_system(
         mt5_config=mt5_config,
         audit_db_path=audit_db_path,
     )
-    
+
     # Note: signal_generator and sizer are available for use by the caller
     # The executor handles position management internally
-    
+
     return executor
