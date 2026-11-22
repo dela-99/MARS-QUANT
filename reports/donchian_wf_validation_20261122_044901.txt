@@ -1,0 +1,296 @@
+=== DONCHIAN-001 Walk-Forward Validation ===
+Generated: 2026-11-22 04:49:01
+
+DONCHIAN-001 Walk-Forward Validation Report
+
+Generated: 2026-11-22 04:49:01 UTC
+
+Experiment ID: WF_DONCHIAN_001_20261122_044901
+
+VectorBT Version: 1.2.1
+
+
+
+METHODOLOGY
+
+Baseline: Donchian entry=55, exit=20
+
+Initial Training: 4 years
+
+OOS Window: 1 year(s)
+
+Step: 1 year(s) (expanding window)
+
+Warmup bars: 55 (max lookback)
+
+Cost Model: spread=1.0 pips, commission=$0.5/lot, slippage=0.5 pips/side
+
+Round-trip cost: $20.50/lot
+
+
+
+WINDOW RESULTS
+
+
+
+--- Window 1 ---
+
+Train: 2015-01-02 to 2019-01-02 (23469 bars)
+
+OOS:   2019-01-02 to 2020-01-02 (5871 bars)
+
+Trades: 39
+
+Net Return: 13.92% | Ann. Return: 14.37%
+
+Sharpe: 0.11 | Sortino: 0.33
+
+Max DD: -5.58% | Calmar: 2.57
+
+Profit Factor: 1.92 | Win Rate: 46.2%
+
+Expectancy: $349.15/trade
+
+Exposure: 0.00% | Turnover: 39.00
+
+Buy-and-Hold (OOS): 18.28%
+
+
+
+--- Window 2 ---
+
+Train: 2015-01-02 to 2020-01-02 (29340 bars)
+
+OOS:   2020-01-02 to 2021-01-02 (5901 bars)
+
+Trades: 34
+
+Net Return: 38.65% | Ann. Return: 39.78%
+
+Sharpe: 0.15 | Sortino: 0.41
+
+Max DD: -6.35% | Calmar: 6.27
+
+Profit Factor: 2.38 | Win Rate: 50.0%
+
+Expectancy: $1025.01/trade
+
+Exposure: 0.00% | Turnover: 34.00
+
+Buy-and-Hold (OOS): 24.51%
+
+
+
+--- Window 3 ---
+
+Train: 2015-01-02 to 2021-01-02 (35241 bars)
+
+OOS:   2021-01-02 to 2022-01-02 (5900 bars)
+
+Trades: 41
+
+Net Return: -5.80% | Ann. Return: -5.95%
+
+Sharpe: -0.05 | Sortino: -0.12
+
+Max DD: -12.59% | Calmar: -0.47
+
+Profit Factor: 0.83 | Win Rate: 46.3%
+
+Expectancy: $-131.47/trade
+
+Exposure: 0.00% | Turnover: 41.00
+
+Buy-and-Hold (OOS): -4.23%
+
+
+
+--- Window 4 ---
+
+Train: 2015-01-02 to 2022-01-02 (41141 bars)
+
+OOS:   2022-01-02 to 2023-01-02 (5917 bars)
+
+Trades: 42
+
+Net Return: -10.14% | Ann. Return: -10.35%
+
+Sharpe: -0.06 | Sortino: -0.16
+
+Max DD: -22.81% | Calmar: -0.45
+
+Profit Factor: 0.78 | Win Rate: 26.2%
+
+Expectancy: $-226.79/trade
+
+Exposure: 0.00% | Turnover: 42.00
+
+Buy-and-Hold (OOS): -0.39%
+
+
+
+--- Window 5 ---
+
+Train: 2015-01-02 to 2023-01-02 (47058 bars)
+
+OOS:   2023-01-02 to 2024-01-02 (5902 bars)
+
+Trades: 36
+
+Net Return: 15.15% | Ann. Return: 15.55%
+
+Sharpe: 0.08 | Sortino: 0.22
+
+Max DD: -10.77% | Calmar: 1.44
+
+Profit Factor: 1.59 | Win Rate: 52.8%
+
+Expectancy: $420.89/trade
+
+Exposure: 0.00% | Turnover: 36.00
+
+Buy-and-Hold (OOS): 13.55%
+
+
+
+--- Window 6 ---
+
+Train: 2015-01-02 to 2024-01-02 (52960 bars)
+
+OOS:   2024-01-02 to 2025-01-02 (5938 bars)
+
+Trades: 39
+
+Net Return: 27.77% | Ann. Return: 28.36%
+
+Sharpe: 0.11 | Sortino: 0.39
+
+Max DD: -7.61% | Calmar: 3.73
+
+Profit Factor: 1.76 | Win Rate: 51.3%
+
+Expectancy: $684.94/trade
+
+Exposure: 0.00% | Turnover: 39.00
+
+Buy-and-Hold (OOS): 27.00%
+
+
+
+--- Window 7 ---
+
+Train: 2015-01-02 to 2025-01-02 (58898 bars)
+
+OOS:   2025-01-02 to 2026-01-02 (6693 bars)
+
+Trades: 43
+
+Net Return: 127.31% | Ann. Return: 110.02%
+
+Sharpe: 0.17 | Sortino: 0.38
+
+Max DD: -15.98% | Calmar: 6.89
+
+Profit Factor: 2.31 | Win Rate: 60.5%
+
+Expectancy: $2254.36/trade
+
+Exposure: 0.00% | Turnover: 43.00
+
+Buy-and-Hold (OOS): 66.53%
+
+
+
+--- Window 8 ---
+
+Train: 2015-01-02 to 2026-01-02 (65591 bars)
+
+OOS:   2026-01-02 to 2027-01-02 (2809 bars)
+
+Trades: 11
+
+Net Return: 4.63% | Ann. Return: 10.23%
+
+Sharpe: 0.01 | Sortino: 0.06
+
+Max DD: -32.11% | Calmar: 0.32
+
+Profit Factor: 1.33 | Win Rate: 45.5%
+
+Expectancy: $1604.62/trade
+
+Exposure: 0.00% | Turnover: 11.00
+
+Buy-and-Hold (OOS): 3.85%
+
+
+
+AGGREGATE OOS PERFORMANCE
+
+Windows evaluated: 8
+
+Profitable windows: 6/8 (75%)
+
+Aggregate Net Return: 367.83%
+
+Mean OOS Net Return: 26.44% (±41.02%)
+
+Median OOS Net Return: 14.54%
+
+Mean OOS Sharpe: 0.07 (±0.08)
+
+Mean OOS Sortino: 0.19
+
+Mean OOS Profit Factor: 1.61
+
+Mean OOS Win Rate: 47.3%
+
+Worst Window Return: -10.14%
+
+Best Window Return: 127.31%
+
+Worst Window Max DD: -32.11%
+
+
+
+COMPARISON WITH FULL-HISTORY BACKTEST (ASSIGNMENT 06)
+
+Full-history (2015-2026) net return: 541.41%
+
+Full-history (2015-2026) net Sharpe: 0.05
+
+Full-history (2015-2026) max DD: -32.11%
+
+Full-history (2015-2026) profit factor: 1.60
+
+
+
+Walk-forward OOS aggregate provides more realistic expectation
+
+by evaluating on unseen data sequentially rather than single in-sample fit.
+
+
+
+ROBUSTNESS ASSESSMENT
+
+Top 2 windows contribution to positive returns: 73%
+
+Negative return windows: 2/8
+
+Max DD across windows: -32.11% (worst), -5.58% (best)
+
+
+
+RECOMMENDATION
+
+Decision: RESEARCH FURTHER
+
+
+
+Rationale:
+
+- Some positive OOS windows but inconsistent
+
+- Risk-adjusted metrics below threshold for live deployment
+
+- Requires regime filtering or position sizing improvements
