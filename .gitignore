@@ -210,6 +210,11 @@ __marimo__/
 data/raw/*.csv
 data/processed/**/*.parquet
 
+# Generated artifacts (reproducible from code)
+artifacts/
+MARS_TIERED_RISK_VERIFICATION/
+apply_fixes.py
+
 # risk/kill-switch state files
 risk_kill_switch*.json
 risk_kill_switch*.db
