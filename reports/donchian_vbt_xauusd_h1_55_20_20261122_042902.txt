@@ -1,0 +1,163 @@
+=== M.A.R.S. Donchian Trend-Following Experiment — VectorBT ===
+Generated: 2026-11-22 04:29:14
+
+Experiment: XAUUSD Donchian Trend-Following (DONCHIAN-001) — VectorBT
+
+Timestamp: 2026-11-22 04:29:13 UTC
+
+Config: {'symbol': 'XAUUSD', 'timeframe': 'h1', 'data_path': None, 'entry_lookback': 55, 'exit_lookback': 20, 'position_size_pct': 1.0, 'max_leverage': 1.0, 'cost_model': CostModel(spread_pips=1.0, commission_per_lot=0.5, slippage_pips=0.5), 'train_ratio': 0.7, 'val_ratio': 0.15, 'test_ratio': 0.15, 'seed': 42}
+
+
+
+DATA
+
+Source: C:\Users\RIDGE\MARS-QUANT\data\processed\xauusd\h1\v1.0.0\data.parquet
+
+Bars: 68400 | Range: 2015-01-02 09:00:00+00:00 → 2026-04-29 09:00:00+00:00
+
+
+
+SPLITS
+
+Train: 2015-01-02 09:00:00+00:00 → 2023-02-21 21:00:00+00:00 (n=47880)
+Val:   2023-02-21 22:00:00+00:00 → 2024-11-14 02:00:00+00:00 (n=10260)
+Test:  2024-11-14 03:00:00+00:00 → 2026-04-29 09:00:00+00:00 (n=10260)
+
+
+
+SIGNALS
+
+Entry lookback: 55 | Exit lookback: 20
+
+Entry events: 443 | Exit events: 443
+
+
+
+PERFORMANCE (NET, ALL DATA)
+
+Trades: 442
+
+Win Rate: 45.93%
+
+Expectancy: $505.94/trade
+
+Profit Factor: 1.60
+
+Total Return: 541.41%
+
+Ann. Return: 17.86% | Ann. Vol: 339.96%
+
+Sharpe: 0.05
+
+Sortino: 0.14
+
+Calmar: 0.56
+
+Max Drawdown: -32.11%
+
+Exposure: 0.00% | Turnover: 442.00
+
+Avg Holding: 0 days 00:00:00
+
+
+
+PERFORMANCE (GROSS, ALL DATA)
+
+Win Rate: 45.93%
+
+Expectancy: $526.44/trade
+
+Profit Factor: 1.63
+
+Total Return: 602.02%
+
+Ann. Return: 18.81% | Sharpe: 0.06
+
+Max Drawdown: -31.98%
+
+
+
+BENCHMARKS
+
+Buy-and-Hold: 283.81% (ann. 12.63%)
+
+Flat: 0.00%
+
+
+
+BY YEAR (NET)
+
+      n_trades  win_rate    avg_pnl  total_pnl
+year                                          
+2015        34    0.3824  -203.5000    -6919.0
+2016        34    0.5588   240.5882     8180.0
+2017        44    0.4318    49.3864     2173.0
+2018        38    0.3421   -93.0263    -3535.0
+2019        40    0.4500   410.1500    16406.0
+2020        35    0.5143  1058.6143    37051.5
+2021        42    0.4524  -223.7619    -9398.0
+2022        43    0.2558  -278.8256   -11989.5
+2023        37    0.5405   450.2838    16660.5
+2024        39    0.5128   645.6538    25180.5
+2025        44    0.6136  2558.5864   112577.8
+2026        12    0.5000  3103.1583    37237.9
+
+
+
+BY MONTH (NET, first 24 months)
+
+            n_trades  win_rate    avg_pnl  total_pnl
+year_month                                          
+2015-01            3    0.3333  1143.5000     3430.5
+2015-02            1    0.0000  -603.5000     -603.5
+2015-03            2    0.5000  1065.5000     2131.0
+2015-04            4    0.0000  -646.2500    -2585.0
+2015-05            4    0.2500  -612.7500    -2451.0
+2015-06            5    0.4000  -735.1000    -3675.5
+2015-08            3    0.6667   481.5000     1444.5
+2015-09            3    0.6667   256.1667      768.5
+2015-10            6    0.3333  -691.6667    -4150.0
+2015-11            1    0.0000 -1327.5000    -1327.5
+2015-12            2    1.0000    49.5000       99.0
+2016-01            2    1.0000  1777.0000     3554.0
+2016-02            5    0.6000   702.1000     3510.5
+2016-03            5    0.2000 -1197.3000    -5986.5
+2016-04            5    0.6000   349.3000     1746.5
+2016-05            2    0.0000 -1532.5000    -3065.0
+2016-06            4    0.7500  1074.2500     4297.0
+2016-07            2    1.0000  2898.5000     5797.0
+2016-08            1    0.0000  -816.5000     -816.5
+2016-09            2    1.0000  1486.0000     2972.0
+2016-10            3    0.6667   370.8333     1112.5
+2016-11            1    0.0000 -5373.5000    -5373.5
+2016-12            2    0.5000   216.0000      432.0
+2017-01            6    0.3333  -176.1667    -1057.0
+
+
+
+SPLIT-SPECIFIC METRICS
+
+Train: {'n_trades': 317, 'win_rate_gross': 0.416403785488959, 'win_rate_net': 0.416403785488959, 'expectancy_gross_usd': 106.75394321766635, 'expectancy_net_usd': 86.25394321766635, 'profit_factor_gross': 1.1645098878021285, 'profit_factor_net': 1.130512815005216, 'total_return_gross': 0.3148000460844256, 'total_return_net': 0.23211976507707344, 'annualized_return_gross': 0.03517519823097248, 'annualized_return_net': 0.026717337455767654, 'annualized_vol_gross': 1.5878400123863472, 'annualized_vol_net': 1.5878400123863472, 'sharpe_gross': 0.022152860462376224, 'sharpe_net': 0.01682621501369931, 'sortino_gross': 0.0548571240605772, 'sortino_net': 0.04166675297052995, 'calmar_gross': 0.14350500683437967, 'calmar_net': 0.10611164367853589, 'max_drawdown_gross': -0.24511478036141607, 'max_drawdown_net': -0.2517851625850557, 'avg_holding_period': '0 days 00:00:00', 'exposure': 0.0, 'turnover': 317.0, 'gross_profit_usd': 239549.0, 'gross_loss_usd': 205707.9999999998, 'net_profit_usd': 236843.0, 'net_loss_usd': 209500.4999999998}
+
+Val: {'n_trades': 63, 'win_rate_gross': 0.5555555555555556, 'win_rate_net': 0.5555555555555556, 'expectancy_gross_usd': 660.6825396825387, 'expectancy_net_usd': 640.1825396825387, 'profit_factor_gross': 1.9009892417256513, 'profit_factor_net': 1.8623185307134744, 'total_return_gross': 0.4757710384531013, 'total_return_net': 0.4569405360689276, 'annualized_return_gross': 0.2578598145401627, 'annualized_return_net': 0.24837382971500732, 'annualized_vol_gross': 2.264295861200037, 'annualized_vol_net': 2.264295861200037, 'sharpe_gross': 0.11388079577352651, 'sharpe_net': 0.10969142061822856, 'sortino_gross': 0.35747491994285124, 'sortino_net': 0.34432435721558546, 'calmar_gross': 3.5505536964096067, 'calmar_net': 3.2656576721128987, 'max_drawdown_gross': -0.07262524005788615, 'max_drawdown_net': -0.07605629697074405, 'avg_holding_period': '0 days 00:00:00', 'exposure': 0.0, 'turnover': 63.0, 'gross_profit_usd': 87819.99999999997, 'gross_loss_usd': 46197.00000000003, 'net_profit_usd': 87102.49999999997, 'net_loss_usd': 46771.00000000003}
+
+Test: {'n_trades': 60, 'win_rate_gross': 0.5833333333333334, 'win_rate_net': 0.5833333333333334, 'expectancy_gross_usd': 2627.51166666667, 'expectancy_net_usd': 2607.01166666667, 'profit_factor_gross': 2.3474234540382386, 'profit_factor_net': 2.331080270367559, 'total_return_gross': 2.633669558223142, 'total_return_net': 2.590010529604069, 'annualized_return_gross': 1.1394832234732943, 'annualized_return_net': 1.1242925233091983, 'annualized_vol_gross': 7.948287712264831, 'annualized_vol_net': 7.948287712264831, 'sharpe_gross': 0.1433621007094374, 'sharpe_net': 0.14145090917812736, 'sortino_gross': 0.45763411751649025, 'sortino_net': 0.4515332969683265, 'calmar_gross': 3.5634570500177656, 'calmar_net': 3.5015795878910545, 'max_drawdown_gross': -0.31976903537187673, 'max_drawdown_net': -0.32108152766173215, 'avg_holding_period': '0 days 00:00:00', 'exposure': 0.0, 'turnover': 60.0, 'gross_profit_usd': 274652.30000000005, 'gross_loss_usd': 117001.59999999986, 'net_profit_usd': 273934.80000000005, 'net_loss_usd': 117514.09999999986}
+
+
+
+ASSUMPTIONS & LIMITATIONS
+-------------------------
+- Data: XAUUSD h1 OHLCV from 2015-01-02 to 2026-04-29 (no bid/ask, no historical spreads)
+- Channel calculation: Donchian upper (max high, 55 bars) / lower (min low, 20 bars) using PRIOR bars only (shifted by 1)
+- Signal: Entry on close > upper channel; Exit on close < lower channel
+- Execution: Next bar open after signal (no retroactive fill at signal bar close)
+- Position sizing: Fixed fractional (100% equity, max leverage 1.0x) = 1 lot (100 oz)
+- Cost model: spread=1.0 pips, commission=$0.5/lot, slippage=0.5 pips/side
+  -> Total round-trip cost: $20.50 per lot
+- Long-only strategy (no shorts)
+- No swap costs (not modeled for trend-following)
+- Missing bars: sessions with insufficient bars excluded implicitly
+- No parameter optimization; single baseline configuration tested
+- Walk-forward, Monte Carlo, regime segmentation NOT applied (future validation stages)
+- Benchmarks: Buy-and-hold (first open to last close), Flat (zero)
+- VectorBT version: 1.2.1
