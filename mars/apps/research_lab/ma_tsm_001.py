@@ -229,7 +229,8 @@ def run_vectorbt_portfolio(
 
     # Entries at NEXT bar's open
     for idx in entry_indices:
-        next_idx = df.index.get_loc(idx) + 1
+        loc = df.index.get_indexer([idx])[0]
+        next_idx = loc + 1
         if next_idx < len(df):
             entry_price = df.iloc[next_idx]["open"]
             order_sizes.append(position_oz)
@@ -238,7 +239,8 @@ def run_vectorbt_portfolio(
 
     # Exits at NEXT bar's open
     for idx in exit_indices:
-        next_idx = df.index.get_loc(idx) + 1
+        loc = df.index.get_indexer([idx])[0]
+        next_idx = loc + 1
         if next_idx < len(df):
             exit_price = df.iloc[next_idx]["open"]
             order_sizes.append(-position_oz)
@@ -285,9 +287,11 @@ def compute_metrics(pf: vbt.Portfolio, config: MATSMConfig, df: pd.DataFrame) ->
     if len(trades) == 0:
         return {"error": "No trades executed"}
 
-    equity = 100000.0  # Reference equity for return calculations
+    # Get bar-level equity curve from VectorBT portfolio (correct approach)
+    equity_curve = pf.value()
+    equity_rets = equity_curve.pct_change().dropna()
 
-    # Net P&L from VectorBT (includes fees)
+    # Net P&L from VectorBT (includes fees) - for trade-level stats only
     net_pnls = trades["PnL"].values
     # Gross P&L (before fees)
     entry_fees = trades["Entry Fees"].values
@@ -312,60 +316,53 @@ def compute_metrics(pf: vbt.Portfolio, config: MATSMConfig, df: pd.DataFrame) ->
     net_loss = -net_pnls[net_pnls < 0].sum()
     profit_factor_net = net_profit / net_loss if net_loss > 0 else np.inf
 
-    # Returns relative to initial equity
-    returns_gross = gross_pnls / equity
-    returns_net = net_pnls / equity
-
-    cum_gross = (1 + returns_gross).prod() - 1
-    cum_net = (1 + returns_net).prod() - 1
-
-    # Annualized (based on bars per year)
+    # === CORRECT: Metrics from bar-level equity curve returns ===
     bars_per_year = 252 * (24 * 12 if config.timeframe == "m5" else 24)  # approximate
-    n_bars = len(df)
+    
+    # Total return from equity curve
+    total_return = float((1 + equity_rets).prod() - 1)
+    
+    # Annualized return
+    n_bars = len(equity_rets)
     years = n_bars / bars_per_year
-    ann_return_gross = (1 + cum_gross) ** (1 / years) - 1 if years > 0 else 0
-    ann_return_net = (1 + cum_net) ** (1 / years) - 1 if years > 0 else 0
-
-    ann_vol_gross = returns_gross.std() * np.sqrt(bars_per_year)
-    ann_vol_net = returns_net.std() * np.sqrt(bars_per_year)
-
-    sharpe_gross = ann_return_gross / ann_vol_gross if ann_vol_gross > 0 else 0
-    sharpe_net = ann_return_net / ann_vol_net if ann_vol_net > 0 else 0
+    ann_return = (1 + total_return) ** (1 / years) - 1 if years > 0 else 0
+    
+    # Annualized volatility and Sharpe
+    ann_vol = float(equity_rets.std() * np.sqrt(bars_per_year))
+    sharpe = float(ann_return / ann_vol) if ann_vol > 0 else 0.0
 
     # Sortino (downside deviation)
-    downside_gross = returns_gross[returns_gross < 0]
-    downside_net = returns_net[returns_net < 0]
-    sortino_gross = ann_return_gross / (downside_gross.std() * np.sqrt(bars_per_year)) if len(downside_gross) > 0 and downside_gross.std() > 0 else 0
-    sortino_net = ann_return_net / (downside_net.std() * np.sqrt(bars_per_year)) if len(downside_net) > 0 and downside_net.std() > 0 else 0
+    downside = equity_rets[equity_rets < 0]
+    sortino = float(ann_return / (downside.std() * np.sqrt(bars_per_year))) if len(downside) > 0 and downside.std() > 0 else 0.0
 
-    # Max drawdown
-    cum_curve_gross = np.cumprod(1 + returns_gross)
-    cum_curve_net = np.cumprod(1 + returns_net)
-    peak_gross = np.maximum.accumulate(cum_curve_gross)
-    peak_net = np.maximum.accumulate(cum_curve_net)
-    dd_gross = (cum_curve_gross - peak_gross) / peak_gross
-    dd_net = (cum_curve_net - peak_net) / peak_net
-    max_dd_gross = dd_gross.min()
-    max_dd_net = dd_net.min()
+    # Max drawdown from equity curve
+    cum = (1 + equity_rets).cumprod()
+    peak = cum.cummax()
+    dd = (cum - peak) / peak
+    max_dd = float(dd.min())
 
     # Calmar
-    calmar_gross = ann_return_gross / abs(max_dd_gross) if max_dd_gross != 0 else 0
-    calmar_net = ann_return_net / abs(max_dd_net) if max_dd_net != 0 else 0
+    calmar = float(ann_return / abs(max_dd)) if max_dd != 0 else 0.0
 
-    # Average holding period (compute from Entry/Exit timestamps)
+    # Trade-level returns for reference (not used for Sharpe/DD)
+    equity_ref = 100000.0
+    returns_gross = gross_pnls / equity_ref
+    returns_net = net_pnls / equity_ref
+    cum_gross = (1 + returns_gross).prod() - 1
+    cum_net = (1 + returns_net).prod() - 1
+    avg_trade_return_bps = float(returns_net.mean() * 10000)
+
+    # Average holding period
     durations = trades["Exit Timestamp"] - trades["Entry Timestamp"]
     avg_holding = durations.mean()
 
-    # Exposure (fraction of bars in market) - based on time in market
+    # Exposure (fraction of bars in market)
     total_hours_in_market = durations.sum().total_seconds() / 3600.0
     total_hours_in_data = (df.index[-1] - df.index[0]).total_seconds() / 3600.0
-    exposure = total_hours_in_market / total_hours_in_data if total_hours_in_data > 0 else 0.0
+    exposure = float(total_hours_in_market / total_hours_in_data) if total_hours_in_data > 0 else 0.0
 
     # Turnover
-    turnover = n_trades * config.position_size_pct
-
-    # Average trade return (in basis points)
-    avg_trade_return_bps = (net_pnls / equity).mean() * 10000
+    turnover = float(n_trades * config.position_size_pct)
 
     return {
         "n_trades": int(n_trades),
@@ -377,22 +374,22 @@ def compute_metrics(pf: vbt.Portfolio, config: MATSMConfig, df: pd.DataFrame) ->
         "profit_factor_net": float(profit_factor_net),
         "total_return_gross": float(cum_gross),
         "total_return_net": float(cum_net),
-        "annualized_return_gross": float(ann_return_gross),
-        "annualized_return_net": float(ann_return_net),
-        "annualized_vol_gross": float(ann_vol_gross),
-        "annualized_vol_net": float(ann_vol_net),
-        "sharpe_gross": float(sharpe_gross),
-        "sharpe_net": float(sharpe_net),
-        "sortino_gross": float(sortino_gross),
-        "sortino_net": float(sortino_net),
-        "calmar_gross": float(calmar_gross),
-        "calmar_net": float(calmar_net),
-        "max_drawdown_gross": float(max_dd_gross),
-        "max_drawdown_net": float(max_dd_net),
+        "annualized_return_gross": float(ann_return),  # Now from equity curve
+        "annualized_return_net": float(ann_return),   # Now from equity curve
+        "annualized_vol_gross": ann_vol,
+        "annualized_vol_net": ann_vol,
+        "sharpe_gross": sharpe,
+        "sharpe_net": sharpe,
+        "sortino_gross": sortino,
+        "sortino_net": sortino,
+        "calmar_gross": calmar,
+        "calmar_net": calmar,
+        "max_drawdown_gross": max_dd,
+        "max_drawdown_net": max_dd,
         "avg_holding_period": str(avg_holding),
-        "exposure": float(exposure),
-        "turnover": float(turnover),
-        "avg_trade_return_bps": float(avg_trade_return_bps),
+        "exposure": exposure,
+        "turnover": turnover,
+        "avg_trade_return_bps": avg_trade_return_bps,
         "gross_profit_usd": float(gross_profit),
         "gross_loss_usd": float(gross_loss),
         "net_profit_usd": float(net_profit),

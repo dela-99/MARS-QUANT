@@ -1,0 +1,21 @@
+{
+  "n_windows": 19,
+  "profitable_windows": 15,
+  "profitable_pct": 78.94736842105263,
+  "mean_oos_return": 0.11838281216432951,
+  "median_oos_return": 0.06241237613376449,
+  "std_oos_return": 0.1807087061105243,
+  "mean_oos_sharpe": 0.8443822794876287,
+  "median_oos_sharpe": 0.9865872492963682,
+  "aggregate_oos_return": 0.024373710314573582,
+  "aggregate_oos_sharpe": 0.7892641797227742,
+  "worst_oos_drawdown": -0.007803324767002641,
+  "mean_oos_drawdown": 0.0019444657115200163,
+  "mean_profit_factor": 1.7384275674647982,
+  "mean_win_rate": 0.16851281246757716,
+  "total_trades": 914,
+  "return_dispersion": 0.1807087061105243,
+  "top_25pct_contribution": 0.6839064669185935,
+  "min_return": -0.1065106893085257,
+  "max_return": 0.7151102249902586
+}

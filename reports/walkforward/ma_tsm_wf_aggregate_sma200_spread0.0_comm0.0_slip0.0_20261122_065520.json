@@ -1,0 +1,21 @@
+{
+  "n_windows": 19,
+  "profitable_windows": 0,
+  "profitable_pct": 0.0,
+  "mean_oos_return": 0.0,
+  "median_oos_return": 0.0,
+  "std_oos_return": 0.0,
+  "mean_oos_sharpe": 0.06707921281816592,
+  "median_oos_sharpe": 0.12314074394535507,
+  "aggregate_oos_return": 0.0,
+  "aggregate_oos_sharpe": 0.0,
+  "worst_oos_drawdown": 0.0,
+  "mean_oos_drawdown": 0.0,
+  "mean_profit_factor": 0.0,
+  "mean_win_rate": 0.0,
+  "total_trades": 914,
+  "return_dispersion": 0.0,
+  "top_25pct_contribution": 0,
+  "min_return": 0.0,
+  "max_return": 0.0
+}

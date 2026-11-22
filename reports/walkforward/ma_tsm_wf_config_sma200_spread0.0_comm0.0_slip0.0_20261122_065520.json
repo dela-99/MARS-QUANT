@@ -1,0 +1,14 @@
+{
+  "sma_period": 200,
+  "initial_train_years": 2,
+  "oos_window_months": 6,
+  "step_months": 6,
+  "cost_model": {
+    "spread_pips": 0.0,
+    "commission_per_lot": 0.0,
+    "slippage_pips": 0.0
+  },
+  "position_size_pct": 1.0,
+  "max_leverage": 1.0,
+  "seed": 42
+}
