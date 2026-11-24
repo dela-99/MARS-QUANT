@@ -652,7 +652,7 @@ def main():
 
     # --- MT5 Config & Demo Account Safety Gate ---
     mt5_config = MT5Config(
-        login=int(os.getenv("DEMO_ACCOUNT_NUMBER", "476944496")),
+        login=int(os.getenv("DEMO_ACCOUNT_NUMBER")),
         password=os.getenv("PASSWORD", ""),
         server=os.getenv("SERVER", ""),
         path=os.getenv("MT5_PATH", r"C:\Program Files\MetaTrader 5\terminal64.exe"),

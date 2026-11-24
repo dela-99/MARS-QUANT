@@ -419,7 +419,7 @@ class MT5Config:
 
 
 DEFAULT_MT5_CONFIG = MT5Config(
-    login=int(os.getenv("DEMO_ACCOUNT_NUMBER", "476944496")),
+    login=int(os.getenv("DEMO_ACCOUNT_NUMBER")) if os.getenv("DEMO_ACCOUNT_NUMBER") else 0,
     password=os.getenv("PASSWORD", ""),
     server=os.getenv("SERVER", ""),
     path="C:\\Program Files\\MetaTrader 5\\terminal64.exe",
@@ -1613,6 +1613,9 @@ class MT5Executor:
         """Initialize MT5 connection and components."""
         self.conn_manager.connect()
         self.mt5 = self.conn_manager.mt5
+
+        # MANDATORY: Verify demo account gate
+        DemoAccountGate.verify_demo_account(self.mt5)
 
         # Create specification resolver (live + static fallback)
         self.spec_resolver = SpecificationResolver(self.mt5, self.symbol_configs)

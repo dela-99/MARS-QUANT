@@ -38,6 +38,8 @@ class TestMT5DemoIntegration:
         risk_manager.select_tier_for_equity(equity)
         risk_manager.peak_equity = equity
         risk_manager.current_equity = equity
+        # Configure contract size for XAUUSDm (100 per lot per Exness spec)
+        risk_manager.set_contract_size("XAUUSDm", 100.0)
 
         sizing_config = SizingConfig(target_vol=0.15, max_leverage=3.0, min_leverage=0.01, kelly_fraction=0.5)
         sizer = VolScaledSizer(sizing_config, garch_variant="garch")
