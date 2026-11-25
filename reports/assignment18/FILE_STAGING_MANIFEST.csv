@@ -1,0 +1,111 @@
+path,status,size_bytes,category,decision,rationale,dependencies,contains_sensitive
+mars/apps/trading/signals/mtf_gate.py,modified,18433,Source Code,COMMIT,Bug fix: 15M fallback resample,None,No
+mt5_audit_backup.db,modified,122880,Generated Artifact,EXCLUDE,Empty audit schema (regeneratable),None,No
+run_session_v3.py,modified,38767,Source Code,COMMIT,Refactor: symbol validation moved earlier,None,No
+CLOUD_AUDIT_REPORT.md,untracked,46216,Research Documentation,COMMIT,Cloud audit findings,None,No
+LOCAL_CONFIG_GUIDE.md,untracked,3530,Research Documentation,COMMIT,Local config documentation,None,No
+PHASE_2_DATA_AUDIT_REPORT.md,untracked,13672,Research Documentation,COMMIT,Phase 2 data audit,None,No
+PHASE_A_PREFLIGHT_REPORT.md,untracked,10091,Research Documentation,COMMIT,Phase A preflight,None,No
+PHASE_B_DRYRUN_REPORT.md,untracked,6451,Research Documentation,COMMIT,Phase B dry-run,None,No
+SECURITY_REMEDIATION_REPORT.md,untracked,15157,Research Documentation,COMMIT,Security remediation docs,None,No
+audit_aggregate.py,untracked,5249,Tests/Utility,COMMIT,Audit aggregation utility,None,No
+audit_all_scenarios.py,untracked,5410,Tests/Utility,COMMIT,Multi-scenario audit script,None,No
+audit_correct_metrics_all_scenarios.json,untracked,10962,Research Results,COMMIT,Audit metrics output,None,No
+audit_correct_metrics_scenario1.json,untracked,5635,Research Results,COMMIT,Audit metrics output,None,No
+audit_monte_carlo.py,untracked,28127,Tests/Utility,COMMIT,Monte Carlo audit script,None,No
+audit_quick.py,untracked,4399,Tests/Utility,COMMIT,Quick audit script,None,No
+audit_walkforward.py,untracked,6316,Tests/Utility,COMMIT,Walkforward audit script,None,No
+check_viz_data.py,untracked,3193,Tests/Utility,COMMIT,Visualization data check,None,No
+configs/instrument_spec_xauusdm.yaml,untracked,3520,Configuration,COMMIT,Frozen instrument spec XAUUSDm,None,No
+configs/session_momentum_001.yaml,untracked,13138,Configuration,COMMIT,Frozen strategy config XAU-SESSION-MOM-001,None,No
+data/catalog.yaml,untracked,16559,Configuration,COMMIT,Data version catalog with checksums,None,No
+data/processed/xauusdm/d1/v1.0.0/_manifest.json,untracked,2104,Generated Artifact,COMMIT,Dataset manifest v1.0.0 D1,None,No
+data/processed/xauusdm/h1/v1.1.0/_manifest.json,untracked,1015,Generated Artifact,COMMIT,Dataset manifest v1.1.0 H1,None,No
+data/processed/xauusdm/h1/v1.2.0/_manifest.json,untracked,2492,Generated Artifact,COMMIT,Dataset manifest v1.2.0 H1,None,No
+data/processed/xauusdm/m15/v1.0.0/_manifest.json,untracked,775,Generated Artifact,COMMIT,Dataset manifest v1.0.0 M15,None,No
+data/processed/xauusdm/m30/v1.0.0/_manifest.json,untracked,802,Generated Artifact,COMMIT,Dataset manifest v1.0.0 M30,None,No
+data/processed/xauusdm/m5/v1.1.0/_manifest.json,untracked,966,Generated Artifact,COMMIT,Dataset manifest v1.1.0 M5,None,No
+data/processed/xauusdm/m5/v1.2.0/_manifest.json,untracked,6579,Generated Artifact,COMMIT,Dataset manifest v1.2.0 M5,None,No
+data/raw/xauusdm/h1/exness/XAUUSDm_H1_2015_2025_raw.parquet,untracked,2137105,Historical Dataset,GIT_LFS,Raw H1 data 10+ years (2.1 MB),manifest: _manifest.json,No
+data/raw/xauusdm/h1/exness/_manifest.json,untracked,905,Generated Artifact,COMMIT,Manifest for raw H1,None,No
+data/raw/xauusdm/m5/exness/XAUUSDm_M5_2020_2026_raw.csv,untracked,32125100,Historical Dataset,GIT_LFS,Raw M5 CSV 6 years (32 MB),manifest: _manifest.json,No
+data/raw/xauusdm/m5/exness/_manifest.json,untracked,1940,Generated Artifact,COMMIT,Manifest for raw M5,None,No
+mars/apps/backtester/mtf_donchian_backtest.py,untracked,19849,Source Code,COMMIT,Donchian backtester A14,None,No
+mars/apps/backtester/session_momentum_backtest.py,untracked,17584,Source Code,COMMIT,Session momentum backtester A16,None,No
+mars/apps/research_lab/session_momentum_montecarlo.py,untracked,21690,Source Code,COMMIT,MC validation engine A16,None,No
+mars/apps/research_lab/session_momentum_research.py,untracked,28961,Source Code,COMMIT,IS research pipeline A16,None,No
+mars/apps/research_lab/xau_mtf_donchian_001.py,untracked,26472,Source Code,COMMIT,Donchian research A14,None,No
+mars/apps/research_lab/xau_mtf_donchian_montecarlo.py,untracked,12369,Source Code,COMMIT,Donchian MC A14,None,No
+mars/libs/data/xauusdm_exness.py,untracked,27383,Source Code,COMMIT,XAUUSDm data loader,None,No
+mars/libs/risk/contract_aware.py,untracked,8747,Source Code,COMMIT,Contract-aware risk engine,None,No
+mars/libs/strategies/xau_mtf_donchian.py,untracked,11779,Source Code,COMMIT,Donchian strategy A14,None,No
+mars/libs/strategies/xau_session_momentum.py,untracked,13931,Source Code,COMMIT,Session momentum strategy A16,None,No
+reports/assignment14/ACCOUNT_SCALE_AUDIT_30USD.md,untracked,12451,Research Documentation,COMMIT,$30 feasibility audit,None,No
+reports/assignment14/ASSIGNMENT_14B_RECONCILIATION_REPORT.md,untracked,12826,Research Documentation,COMMIT,Reconciliation report,None,No
+reports/assignment14/assignment14_results.json,untracked,23690,Research Results,COMMIT,Machine-readable results,None,No
+reports/assignment14/assignment14b_reconciliation.json,untracked,7309,Research Results,COMMIT,Machine-readable reconciliation,None,No
+reports/assignment14/ledger/cost_sensitivity_out_of_sample.csv,untracked,1263,Research Results,COMMIT,Trade ledger,None,No
+reports/assignment14/ledger/equity_curve_in_sample.csv,untracked,11040290,Research Results,GIT_LFS,Large equity curve (11 MB),None,No
+reports/assignment14/ledger/equity_curve_out_of_sample.csv,untracked,5667850,Research Results,GIT_LFS,Large equity curve (5.7 MB),None,No
+reports/assignment14/ledger/exit_reasons_in_sample.csv,untracked,183,Research Results,COMMIT,Trade ledger,None,No
+reports/assignment14/ledger/exit_reasons_out_of_sample.csv,untracked,178,Research Results,COMMIT,Trade ledger,None,No
+reports/assignment14/ledger/parameter_comparison_in_sample.csv,untracked,2214,Research Results,COMMIT,Trade ledger,None,No
+reports/assignment14/ledger/session_in_sample.csv,untracked,507,Research Results,COMMIT,Trade ledger,None,No
+reports/assignment14/ledger/session_out_of_sample.csv,untracked,497,Research Results,COMMIT,Trade ledger,None,No
+reports/assignment14/ledger/trades_in_sample.csv,untracked,649902,Research Results,COMMIT,Trade ledger,None,No
+reports/assignment14/ledger/trades_out_of_sample.csv,untracked,698247,Research Results,COMMIT,Trade ledger,None,No
+reports/assignment14/ledger/yearly_in_sample.csv,untracked,553,Research Results,COMMIT,Trade ledger,None,No
+reports/assignment14/ledger/yearly_out_of_sample.csv,untracked,328,Research Results,COMMIT,Trade ledger,None,No
+reports/assignment14/monte_carlo_distributions.png,untracked,72641,Research Documentation,COMMIT,MC visualization,None,No
+reports/assignment14/monte_carlo_equity_fan.png,untracked,244797,Research Documentation,COMMIT,MC visualization,None,No
+reports/assignment17/ASSIGNMENT_17_FINAL_AUDIT_REPORT.md,untracked,17703,Research Documentation,COMMIT,Final audit report A17,None,No
+reports/assignment17/ASSIGNMENT_17_TEST_REPORT.md,untracked,18900,Research Documentation,COMMIT,Test verification report A17,None,No
+reports/assignment17/DECISION_LOG_UPDATE.md,untracked,6003,Research Documentation,COMMIT,Decision log update A17,None,No
+reports/assignment17/EVIDENCE_MANIFEST.md,untracked,6966,Research Documentation,COMMIT,Evidence manifest A17,None,No
+reports/assignment17/ROADMAP_UPDATE.md,untracked,6078,Research Documentation,COMMIT,Roadmap update A17,None,No
+reports/assignment17/assignment17_audit.json,untracked,8333,Research Results,COMMIT,Machine-readable audit A17,None,No
+reports/donchian_mc_analysis_20261122_053057.txt,untracked,8964,Logs/Temporary,EXCLUDE,Intermediate analysis log,None,No
+reports/donchian_mc_analysis_20261122_053755.txt,untracked,9578,Logs/Temporary,EXCLUDE,Intermediate analysis log,None,No
+reports/donchian_mc_analysis_20261122_053949.txt,untracked,9567,Logs/Temporary,EXCLUDE,Intermediate analysis log,None,No
+reports/donchian_mc_analysis_20261122_054334.txt,untracked,9567,Logs/Temporary,EXCLUDE,Intermediate analysis log,None,No
+reports/donchian_mc_analysis_20261124_120649.txt,untracked,9567,Logs/Temporary,EXCLUDE,Intermediate analysis log,None,No
+reports/donchian_mc_analysis_20261124_123830.txt,untracked,9567,Logs/Temporary,EXCLUDE,Intermediate analysis log,None,No
+reports/donchian_mc_analysis_20261124_125316.txt,untracked,9567,Logs/Temporary,EXCLUDE,Intermediate analysis log,None,No
+reports/donchian_mc_analysis_20261124_131514.txt,untracked,9567,Logs/Temporary,EXCLUDE,Intermediate analysis log,None,No
+reports/donchian_mc_analysis_20261124_132102.txt,untracked,9567,Logs/Temporary,EXCLUDE,Intermediate analysis log,None,No
+reports/donchian_mc_analysis_20261124_140652.txt,untracked,9567,Logs/Temporary,EXCLUDE,Intermediate analysis log,None,No
+reports/donchian_mc_analysis_20261125_003629.txt,untracked,9567,Logs/Temporary,EXCLUDE,Intermediate analysis log,None,No
+reports/paper_trading/ma_tsm_001/PAPER_TRADING_READINESS_REPORT.md,untracked,25770,Research Documentation,COMMIT,Paper trading readiness,None,No
+reports/paper_trading/ma_tsm_001/capital_constraint_analysis_20261122_190710.json,untracked,3017,Research Results,COMMIT,Capital constraint analysis,None,No
+reports/paper_trading/ma_tsm_001/forward_test_protocol_20261122_190729.json,untracked,1110,Research Results,COMMIT,Forward test protocol,None,No
+reports/programme_01/session_momentum_001/is/is_report.md,untracked,3094,Research Documentation,COMMIT,IS human report,None,No
+reports/programme_01/session_momentum_001/is/is_results.json,untracked,14528,Research Results,COMMIT,IS machine results,None,No
+reports/programme_01/session_momentum_001/mc/mc_report.md,untracked,1656,Research Documentation,COMMIT,MC human report,None,No
+reports/programme_01/session_momentum_001/mc/mc_results.json,untracked,818081,Research Results,GIT_LFS,Large MC results (818 KB - borderline),None,No
+reports/programme_01/session_momentum_001/oos/oos_trades.csv,untracked,73811,Research Results,COMMIT,Test trade ledger,None,No
+research/assignment14/audit_gaps.py,untracked,3667,Tests/Utility,COMMIT,Research utility script,None,No
+research/assignment14/build_datasets.py,untracked,4008,Tests/Utility,COMMIT,Research utility script,None,No
+research/assignment14/compare_h1_values.py,untracked,4327,Tests/Utility,COMMIT,Research utility script,None,No
+research/assignment14/fit_h1_offset.py,untracked,4000,Tests/Utility,COMMIT,Research utility script,None,No
+research/assignment14/inspect_boundaries_h1.py,untracked,5620,Tests/Utility,COMMIT,Research utility script,None,No
+research/assignment14/inspect_raw_sources.py,untracked,5914,Tests/Utility,COMMIT,Research utility script,None,No
+research/assignment14/inspect_sessions.py,untracked,6133,Tests/Utility,COMMIT,Research utility script,None,No
+research/assignment14/inspect_sessions2.py,untracked,4435,Tests/Utility,COMMIT,Research utility script,None,No
+research/assignment14/measure_h1_offset.py,untracked,3686,Tests/Utility,COMMIT,Research utility script,None,No
+research/assignment14/probe_processed_and_h1.py,untracked,4615,Tests/Utility,COMMIT,Research utility script,None,No
+research/assignment14/quick_is.py,untracked,1755,Tests/Utility,COMMIT,Research utility script,None,No
+research/assignment14/run_assignment14.py,untracked,14997,Tests/Utility,COMMIT,Research utility script,None,No
+research/assignment14/smoke_run.py,untracked,3584,Tests/Utility,COMMIT,Research utility script,None,No
+research/assignment14/validate_engine.py,untracked,4691,Tests/Utility,COMMIT,Research utility script,None,No
+research/experiment_logs/0cdafc4e76ce.json,untracked,10520,Logs/Temporary,EXCLUDE,Experiment log,None,No
+research/programme_01/codebase_reuse_assessment.md,untracked,16361,Research Documentation,COMMIT,Codebase assessment,None,No
+research/programme_01/data_eligibility_report.md,untracked,9732,Research Documentation,COMMIT,Data eligibility report,None,No
+research/programme_01/literature_evidence_register.json,untracked,27681,Research Results,COMMIT,Literature register,None,No
+research/programme_01/literature_evidence_register.md,untracked,33545,Research Documentation,COMMIT,Literature register,None,No
+research/programme_01/mechanism_synthesis.md,untracked,23198,Research Documentation,COMMIT,Mechanism synthesis,None,No
+research/programme_01/strategy_hypothesis_register.json,untracked,8828,Research Results,COMMIT,Hypothesis register,None,No
+research/programme_01/strategy_hypothesis_register.md,untracked,18739,Research Documentation,COMMIT,Hypothesis register,None,No
+research/programme_01/strategy_spec_XAU_SESSION_MOM_001.md,untracked,14730,Strategy Specification,COMMIT,Frozen strategy spec,None,No
+tests/unit/data/test_phase2_data_preparation.py,untracked,25542,Tests,COMMIT,Data preparation tests,None,No
+tests/unit/data/test_xauusdm_dataset_v120.py,untracked,12044,Tests,COMMIT,Dataset v1.2.0 tests,None,No
+tests/unit/research/test_xau_mtf_donchian_001.py,untracked,34458,Tests,COMMIT,Donchian strategy tests,None,No
