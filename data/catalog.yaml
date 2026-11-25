@@ -1,0 +1,369 @@
+# M.A.R.S. Quant — Data Catalogue
+# Version: 1.0
+# Generated: 2026-11-24
+# Scope: XAUUSD / Exness XAUUSDm only (FX pairs archived)
+
+catalog_version: "1.0"
+generated_at: "2026-11-24T00:00:00Z"
+active_instrument: "XAUUSDm"
+archived_instruments: ["EURUSD", "USDJPY", "EURGBP"]
+
+datasets:
+  # ============================================================
+  # RAW DATA (immutable, as-received from source)
+  # ============================================================
+  - id: "xauusdm_m5_exness_raw"
+    instrument: "XAUUSDm"
+    timeframe: "M5"
+    source: "Exness MT5 CSV export"
+    version: "raw"
+    path: "data/raw/xauusdm/m5/exness/XAUUSDm_M5_2020_2026_raw.csv"
+    format: "CSV (tab-separated)"
+    checksum_sha256: "2175c0fcf6fc119a6700efe73fb8caec4ba2a4c839ec05895d6ec388b5a4dc4e"
+    rows: 370450
+    date_range:
+      start: "2020-01-02T00:00:00Z"
+      end: "2026-10-09T20:55:00Z"
+    columns: ["<DATE>", "<TIME>", "<OPEN>", "<HIGH>", "<LOW>", "<CLOSE>", "<TICKVOL>", "<VOL>", "<SPREAD>"]
+    source_files:
+      - "C:/Users/RIDGE/trading-data/XAUUSDm_M5_2020_1_12.csv"
+      - "C:/Users/RIDGE/trading-data/XAUUSDm_M5_2021 jan to dec.csv"
+      - "C:/Users/RIDGE/trading-data/XAUUSDm_M5_2022 jan to dec.csv"
+      - "C:/Users/RIDGE/trading-data/XAUUSDm_M5_2023 jan to dec.csv"
+      - "C:/Users/RIDGE/trading-data/XAUUSDm_M5_2024 jan to feb.csv"
+      - "C:/Users/RIDGE/trading-data/XAUUSDm_M5_2025 jan to dec.csv"
+      - "C:/Users/RIDGE/trading-data/XAUUSDm_M5_2026 jan to oct.csv"
+    source_checksums:
+      "XAUUSDm_M5_2020_1_12.csv": "d4cf24bcc9939e74043d1b22f79ff4f9bdda37e03ca15342103ac79f713d915c"
+      "XAUUSDm_M5_2021 jan to dec.csv": "3a8cf30a2414aa8ddfef447539e608d3525f341d851341380b429313e81f868e"
+      "XAUUSDm_M5_2022 jan to dec.csv": "b6df6a993b11e8a146ce1ca2cf4699c405328d54306990f572c37b4573eee67f"
+      "XAUUSDm_M5_2023 jan to dec.csv": "680c52bb643d2bea3cdd56b2c702b9b97902f12ef0d234718a27f19ae0c437de"
+      "XAUUSDm_M5_2024 jan to feb.csv": "b9643df616478c69ecf27c727b1010b95c5834aded3a2ed2a847383a5ea5a5a7"
+      "XAUUSDm_M5_2025 jan to dec.csv": "e6c3db4f50f3580ccbf2a23c7291ad88cbd1563ee781966d2f4df56abb2c85f9"
+      "XAUUSDm_M5_2026 jan to oct.csv": "a036c2759011a40959119fff7e56f3f75a74705f4151fcf89455181e045783f6"
+    data_quality:
+      duplicate_timestamps: 0
+      non_standard_intervals: 1862
+      interval_details:
+        "300s (5min)": 368587
+        "3900s (65min session break)": 1032
+        "86400s (daily - 2020 only)": 397
+        "172800s (weekend)": 76
+        "177000s (weekend+session)": 191
+        "176700s (weekend+session)": 47
+      ohlc_violations: 0
+      zero_negative_prices: 0
+      missing_values: 0
+    known_issues:
+      - "Contains a daily-interval block (2020-01-02 -> 2021-07-16, 478 rows) inside the M5 series"
+      - "Source file 'XAUUSDm_M5_2020_1_12.csv' is entirely daily bars (311 rows, spread=0)"
+      - "Source file 'XAUUSDm_M5_2021 jan to dec.csv' is daily bars until 2021-07-16 13:00, M5 after"
+      - "Source file 'XAUUSDm_M5_2024 jan to feb.csv' actually contains the FULL 2024 calendar year (filename mislabelled)"
+      - "<VOL> (real volume) is all zeros in Exness export"
+      - "Weekend gaps and session breaks create non-standard intervals"
+    lineage: "consolidated from 7 yearly Exness MT5 exports"
+
+  - id: "xauusdm_h1_exness_raw"
+    instrument: "XAUUSDm"
+    timeframe: "H1"
+    source: "Exness MT5 parquet export (xauusd_h1_2015_present.parquet)"
+    version: "raw"
+    path: "data/raw/xauusdm/h1/exness/XAUUSDm_H1_2015_2025_raw.parquet"
+    format: "Parquet"
+    checksum_sha256: "9a3f659bd05911d278474ebfee61abc5b1616181950ddb5f6c61c4023018d2c8"
+    rows: 63239
+    date_range:
+      start: "2015-01-02T09:00:00Z"
+      end: "2025-09-26T08:00:00Z"
+    columns: ["time", "open", "high", "low", "close", "tick_volume", "spread", "real_volume"]
+    source_files:
+      - "data/raw/xauusd_h1_2015_present.parquet (base, longest coverage)"
+      - "data/raw/xauusd_h1_2018_present.parquet (overlapping subset, removed)"
+      - "data/raw/xauusd_h1_2020_present.parquet (overlapping subset, removed)"
+      - "data/raw/xauusd_h1_2025_present.parquet (overlapping subset, removed)"
+    data_quality:
+      duplicate_timestamps_removed: 83751
+      ohlc_violations: 0
+      zero_negative_prices: 0
+      missing_values: 0
+    known_issues:
+      - "4 overlapping raw files with 83,751 duplicate timestamps"
+      - "Coverage ends 2025-09-26 (vs processed H1 v1.0.0 extending to 2026-04-29)"
+      - "HOUR-GRID OFFSET vs the M5 CSV export: the raw H1 bar labelled t aggregates the M5 window [t-D, t-D+1h) with D = +2h in Nov-Mar and D = +3h in Apr-Oct (European DST). At the fitted offset median |close difference| falls from ~$2.90 to ~$0.06, so both series are the same price path on shifted grids."
+      - "Consequence: the raw H1 must NOT be aligned to the M5 frame without a DST-aware shift. All H1 context in Assignment 14 is resampled from the M5 dataset instead."
+    lineage: "deduplicated from 4 overlapping Exness MT5 exports; 2015 file selected as base"
+
+  # ============================================================
+  # PROCESSED DATA (normalized, validated, research-ready)
+  # ============================================================
+  - id: "xauusdm_m5_v1.1.0"
+    instrument: "XAUUSDm"
+    timeframe: "M5"
+    status: "superseded"
+    source: "data/raw/xauusdm/m5/exness/XAUUSDm_M5_2020_2026_raw.csv"
+    version: "v1.1.0"
+    path: "data/processed/xauusdm/m5/v1.1.0/data.parquet"
+    format: "Parquet"
+    checksum_sha256: "813686650847846f13488ebe62585ce4cd9ee184b523c77369e6cf3356f6c02b"
+    rows: 370450
+    date_range:
+      start: "2020-01-02T00:00:00Z"
+      end: "2026-10-09T20:55:00Z"
+    columns: ["open", "high", "low", "close", "tick_volume", "volume", "spread"]
+    index: "DatetimeIndex (UTC)"
+    source_checksum: "a7b3c9f2e8d4a1b6c7e9f0a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2"
+    transformations:
+      - "Renamed MT5 column names to standard OHLCV"
+      - "Parsed <DATE> <TIME> to UTC DatetimeIndex"
+      - "Preserved tick_volume and spread from source"
+      - "Sorted chronologically"
+    data_quality:
+      duplicate_timestamps: 0
+      non_standard_intervals: 1862
+      ohlc_violations: 0
+      zero_negative_prices: 0
+      missing_values: 0
+    known_issues:
+      - "SUPERSEDED by v1.2.0: contains 478 daily-interval rows (2020-01-02 -> 2021-07-16) inside the M5 series"
+      - "Volume column is all zeros (Exness limitation)"
+      - "Non-standard intervals from weekend gaps and session breaks"
+    lineage: "raw -> normalized column names -> UTC index -> sorted"
+    superseded_by: "xauusdm_m5_v1.2.0"
+
+  - id: "xauusdm_m15_v1.0.0"
+    instrument: "XAUUSDm"
+    timeframe: "M15"
+    source: "data/processed/xauusdm/m5/v1.1.0/data.parquet"
+    version: "v1.0.0"
+    path: "data/processed/xauusdm/m15/v1.0.0/data.parquet"
+    format: "Parquet"
+    checksum_sha256: "f9d6532eb852f7ad3c002c0dbb0d5b957c518efebca5ffaa3bf517ea7e96e306"
+    rows: 123906
+    date_range:
+      start: "2020-01-02T00:00:00Z"
+      end: "2026-10-09T20:45:00Z"
+    columns: ["open", "high", "low", "close", "tick_volume", "volume", "spread"]
+    index: "DatetimeIndex (UTC)"
+    source_checksum: "813686650847846f13488ebe62585ce4cd9ee184b523c77369e6cf3356f6c02b"
+    transformations:
+      - "Resampled from M5 v1.1.0 using pandas resample('15min')"
+      - "OHLCV aggregation: open=first, high=max, low=min, close=last, volume=sum, spread=mean"
+      - "Dropped incomplete periods (NaN)"
+    data_quality:
+      duplicate_timestamps: 0
+      ohlc_violations: 0
+    known_issues:
+      - "Inherits M5 v1.1.0 issues (2020 daily bars, zero volume)"
+    lineage: "M5 v1.1.0 -> resample 15min -> validated"
+
+  - id: "xauusdm_m30_v1.0.0"
+    instrument: "XAUUSDm"
+    timeframe: "M30"
+    source: "data/processed/xauusdm/m15/v1.0.0/data.parquet"
+    version: "v1.0.0"
+    path: "data/processed/xauusdm/m30/v1.0.0/data.parquet"
+    format: "Parquet"
+    checksum_sha256: "e8958d774f5031b031be83f49bce94c24768b4745c6586fb54c389402f628301"
+    rows: 62219
+    date_range:
+      start: "2020-01-02T00:00:00Z"
+      end: "2026-10-09T20:30:00Z"
+    columns: ["open", "high", "low", "close", "tick_volume", "volume", "spread"]
+    index: "DatetimeIndex (UTC)"
+    source_checksum: "f9d6532eb852f7ad3c002c0dbb0d5b957c518efebca5ffaa3bf517ea7e96e306"
+    transformations:
+      - "Resampled from M15 v1.0.0 using pandas resample('30min')"
+      - "OHLCV aggregation: open=first, high=max, low=min, close=last, volume=sum, spread=mean"
+      - "Dropped incomplete periods (NaN)"
+    data_quality:
+      duplicate_timestamps: 0
+      ohlc_violations: 0
+    lineage: "M5 v1.1.0 -> M15 v1.0.0 -> M30 v1.0.0"
+
+  - id: "xauusdm_h1_v1.1.0"
+    instrument: "XAUUSDm"
+    timeframe: "H1"
+    source: "data/processed/xauusdm/m5/v1.1.0/data.parquet"
+    version: "v1.1.0"
+    path: "data/processed/xauusdm/h1/v1.1.0/data.parquet"
+    format: "Parquet"
+    checksum_sha256: "9e1fd5b00db793f10ba7fb1cb8637a07f493e9b7b8c15f474de1fa3c026cd642"
+    rows: 31376
+    date_range:
+      start: "2020-01-02T00:00:00Z"
+      end: "2026-10-09T20:00:00Z"
+    columns: ["open", "high", "low", "close", "tick_volume", "volume", "spread"]
+    index: "DatetimeIndex (UTC)"
+    source_checksum: "813686650847846f13488ebe62585ce4cd9ee184b523c77369e6cf3356f6c02b"
+    transformations:
+      - "Resampled from M5 v1.1.0 using pandas resample('h')"
+      - "OHLCV aggregation: open=first, high=max, low=min, close=last, volume=sum, spread=mean"
+      - "Dropped incomplete periods (NaN)"
+    data_quality:
+      duplicate_timestamps: 0
+      ohlc_violations: 0
+    known_issues:
+      - "Inherits M5 v1.1.0 issues (2020 daily bars, zero volume)"
+    lineage: "M5 v1.1.0 -> resample 1H -> validated"
+    supersedes: "xauusdm_h1_v1.0.0 (same Exness series, longer coverage)"
+
+  # ============================================================
+  # ACTIVE DATASETS (Assignment 14, Phase B finalisation)
+  # ============================================================
+  - id: "xauusdm_m5_v1.2.0"
+    instrument: "XAUUSDm"
+    timeframe: "M5"
+    status: "active"
+    source: "data/raw/xauusdm/m5/exness/XAUUSDm_M5_2020_2026_raw.csv"
+    version: "v1.2.0"
+    path: "data/processed/xauusdm/m5/v1.2.0/data.parquet"
+    format: "Parquet"
+    checksum_sha256: "813686650847846f13488ebe62585ce4cd9ee184b523c77369e6cf3356f6c02b"
+    rows: 369972
+    date_range:
+      start: "2021-07-16T13:00:00Z"
+      end: "2026-10-09T20:55:00Z"
+    columns: ["open", "high", "low", "close", "tick_volume", "volume", "spread"]
+    index: "DatetimeIndex (UTC)"
+    transformations:
+      - "Read the consolidated Exness M5 export (MT5 History Centre tab-separated format)"
+      - "Combined <DATE> and <TIME> into a single UTC timestamp column"
+      - "Classified daily-interval rows (same time-of-day + whole-day gap) and excluded them"
+      - "Preserved the observed <SPREAD> (points) and <TICKVOL> verbatim"
+      - "Sorted chronologically; no rows dropped other than the 478-row daily block"
+    data_quality:
+      duplicate_timestamps: 0
+      monotonic_increasing: true
+      ohlc_violations: 0
+      zero_negative_prices: 0
+      missing_values: 0
+      negative_spread_rows: 0
+      daily_interval_rows: 0
+      non_five_minute_intervals: 1384
+      gap_classification:
+        session_break_3900s: 1032
+        multi_day_closure: 273
+        single_day_closure: 5
+        in_session_outage: 20
+        max_in_session_outage_missing_bars: 10
+    known_issues:
+      - "20 in-session feed outages (max 10 missing bars) - documented, not filled"
+      - "98 bars carry spread == 0; the cost model substitutes the dataset median spread"
+      - "<VOL> (real volume) is identically zero in the Exness export; tick_volume is the only volume proxy"
+    lineage: "raw consolidated -> daily-block exclusion -> UTC index -> sorted -> validated"
+    supersedes: "xauusdm_m5_v1.1.0 (contained the 478-row daily block inside the M5 series)"
+
+  - id: "xauusdm_d1_v1.0.0"
+    instrument: "XAUUSDm"
+    timeframe: "D1"
+    status: "active_reference_only"
+    source: "data/raw/xauusdm/m5/exness/XAUUSDm_M5_2020_2026_raw.csv"
+    version: "v1.0.0"
+    path: "data/processed/xauusdm/d1/v1.0.0/data.parquet"
+    format: "Parquet"
+    rows: 478
+    date_range:
+      start: "2020-01-02T00:00:00Z"
+      end: "2021-07-16T00:00:00Z"
+    columns: ["open", "high", "low", "close", "tick_volume", "volume", "spread"]
+    index: "DatetimeIndex (UTC)"
+    transformations:
+      - "Extracted the daily-interval block from the consolidated Exness M5 export"
+      - "Preserved unchanged; no interpolation, no resampling"
+    data_quality:
+      duplicate_timestamps: 0
+      ohlc_violations: 0
+      zero_spread_rows: 478
+    known_issues:
+      - "Daily bars only - unusable for M5 research (ATR / Donchian horizons)"
+      - "Excluded from the M5 dataset and from every Assignment 14 backtest"
+    lineage: "raw consolidated -> daily-block extraction -> preserved"
+
+  - id: "xauusdm_h1_v1.2.0"
+    instrument: "XAUUSDm"
+    timeframe: "H1"
+    status: "active"
+    source: "data/processed/xauusdm/m5/v1.2.0/data.parquet"
+    version: "v1.2.0"
+    path: "data/processed/xauusdm/h1/v1.2.0/data.parquet"
+    format: "Parquet"
+    rows: 30898
+    date_range:
+      start: "2021-07-16T13:00:00Z"
+      end: "2026-10-09T20:00:00Z"
+    columns: ["open", "high", "low", "close", "tick_volume", "volume", "spread"]
+    index: "DatetimeIndex (UTC)"
+    transformations:
+      - "Resampled from M5 v1.2.0 with pandas resample('1h')"
+      - "Aggregation: open=first, high=max, low=min, close=last, tick_volume=sum, volume=sum, spread=mean"
+      - "Hours with no M5 bar (the daily session break) are dropped, not filled"
+    data_quality:
+      duplicate_timestamps: 0
+      ohlc_violations: 0
+    known_issues:
+      - "Derived from the same source and the same time frame as the M5 series, which removes the raw-H1 hour-grid offset"
+      - "H1 context is therefore never mixed with the raw Exness H1 export"
+    lineage: "M5 v1.2.0 -> resample 1h -> validated"
+    supersedes: "xauusdm_h1_v1.1.0 (built on the D1-contaminated M5 v1.1.0)"
+
+  # ============================================================
+  # ARCHIVED DATASETS (preserved but not active)
+  # ============================================================
+  - id: "eurusd_m5_v1.0.0"
+    instrument: "EURUSD"
+    timeframe: "M5"
+    status: "archived"
+    path: "data/processed/eurusd/m5/v1.0.0/data.parquet"
+    notes: "Preserved for reference; excluded from active research scope"
+
+  - id: "usdjpy_m5_v1.0.0"
+    instrument: "USDJPY"
+    timeframe: "M5"
+    status: "archived"
+    path: "data/processed/usdjpy/m5/v1.0.0/data.parquet"
+    notes: "Preserved for reference; excluded from active research scope"
+
+  - id: "eurgbp_m5_v1.0.0"
+    instrument: "EURGBP"
+    timeframe: "M5"
+    status: "archived"
+    path: "data/processed/eurgbp/m5/v1.0.0/data.parquet"
+    notes: "Preserved for reference; excluded from active research scope"
+
+  - id: "xauusdm_m5_v1.0.0"
+    instrument: "XAUUSDm (GOLD)"
+    timeframe: "M5"
+    status: "deprecated"
+    path: "data/processed/xauusdm/m5/v1.0.0/data.parquet"
+    notes: "OANDA GOLD source, synthetic volume (1000), no spread. Superseded by v1.1.0"
+
+  - id: "xauusd_h1_v1.0.0"
+    instrument: "XAUUSD"
+    timeframe: "H1"
+    status: "deprecated"
+    path: "data/processed/xauusd/h1/v1.0.0/data.parquet"
+    notes: "OANDA GOLD source, different instrument. Superseded by xauusdm_h1_v1.1.0"
+
+validation_rules:
+  ohlc_check: "high >= low, high >= open, high >= close, low <= open, low <= close"
+  price_positive: "all OHLC > 0"
+  timestamp_monotonic: "strictly increasing"
+  duplicate_timestamps: "zero tolerance"
+  spread_nonnegative: "spread >= 0"
+
+mtf_requirements:
+  active_timeframes: ["1H", "30M", "15M", "5M"]
+  fallback_chain: "5M -> 15M -> 30M -> 1H"
+  notes: |
+    MTF gate requires 15M for execution context (spread + ATR checks).
+    15M is now resampled from 5M (fallback added in mtf_gate.py).
+    30M resampled from 15M, 1H resampled from 30M.
+    All timeframes use closed candles only (no look-ahead).
+
+limitations:
+  - "No M1 data available (execution refinement not possible in Phase 2)"
+  - "2020 M5 data is daily bars, not true 5-minute bars"
+  - "Real volume unavailable from Exness (tick_volume only)"
+  - "No bid/ask data (spread only)"
+  - "No commission/swap/slippage data (must use broker specs)"
+  - "Processed H1 resampled from M5 differs from raw H1 (different source, extended coverage)"

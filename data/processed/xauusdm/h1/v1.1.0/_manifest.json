@@ -1,0 +1,27 @@
+{
+  "dataset": "XAUUSDm_H1",
+  "version": "v1.1.0",
+  "source": "Resampled from data/processed/xauusdm/m5/v1.1.0/data.parquet (Exness M5)",
+  "source_checksum": "813686650847846f13488ebe62585ce4cd9ee184b523c77369e6cf3356f6c02b",
+  "checksum": "9e1fd5b00db793f10ba7fb1cb8637a07f493e9b7b8c15f474de1fa3c026cd642",
+  "rows": 31376,
+  "date_range": {
+    "start": "2020-01-02 00:00:00+00:00",
+    "end": "2026-10-09 20:00:00+00:00"
+  },
+  "columns": [
+    "open",
+    "high",
+    "low",
+    "close",
+    "tick_volume",
+    "volume",
+    "spread"
+  ],
+  "transformations": [
+    "Resampled from M5 v1.1.0 using pandas resample('h')",
+    "OHLCV aggregation: open=first, high=max, low=min, close=last, volume=sum, spread=mean",
+    "Dropped incomplete periods (NaN)"
+  ],
+  "notes": "Authoritative H1 for research. Resampled from Exness M5 for consistency with M5 source. Extends to 2026-10-09 (vs raw H1 ending 2025-10-13). Previous v1.0.0 was resampled from OANDA GOLD M5 (different source)."
+}

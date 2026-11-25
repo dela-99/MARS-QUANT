@@ -1,0 +1,82 @@
+{
+  "dataset": "XAUUSDM_H1",
+  "version": "v1.2.0",
+  "built_by": "mars.libs.data.xauusdm_exness.build_datasets",
+  "source": "data/processed/xauusdm/m5/v1.2.0/data.parquet",
+  "source_checksum": "",
+  "checksum": "276ebcb4d1b061aa4f9e7b3ad4de8b7a5b437cc8b03b88aa57630e7892382a58",
+  "rows": 30898,
+  "date_range": {
+    "start": "2021-07-16 13:00:00+00:00",
+    "end": "2026-10-09 20:00:00+00:00"
+  },
+  "columns": [
+    "open",
+    "high",
+    "low",
+    "close",
+    "tick_volume",
+    "volume",
+    "spread"
+  ],
+  "index": "DatetimeIndex (UTC)",
+  "transformations": [
+    "Resampled from M5 v1.2.0 with pandas resample('1h')",
+    "Aggregation: open=first, high=max, low=min, close=last, tick_volume=sum, volume=sum, spread=mean",
+    "H1 is derived from the SAME source and the SAME time frame as the M5 series, which removes the raw-H1 hour-grid offset"
+  ],
+  "known_issues": [
+    "The raw Exness H1 export sits on a different hourly grid than the M5 CSV export (offset +2h Nov-Mar, +3h Apr-Oct, tracking European DST); it is deliberately NOT mixed into this chain",
+    "Hours that contain no M5 bar (the daily session break) are dropped, not filled"
+  ],
+  "validation": {
+    "rows": 30898,
+    "start": "2021-07-16 13:00:00+00:00",
+    "end": "2026-10-09 20:00:00+00:00",
+    "duplicate_timestamps": 0,
+    "monotonic_increasing": true,
+    "ohlc_violations": 0,
+    "non_positive_prices": 0,
+    "missing_values": 0,
+    "negative_spread_rows": 0,
+    "zero_spread_rows": 8,
+    "non_five_minute_intervals": 0,
+    "daily_interval_rows": 0,
+    "gap_classification": {
+      "session_break": 0,
+      "intraday_closure": 0,
+      "multi_day_closure": 0,
+      "in_session_outage": 0,
+      "max_in_session_outage_missing_bars": 0,
+      "in_session_outage_examples": []
+    },
+    "interval_histogram": {
+      "3600s": 29536,
+      "7200s": 1043,
+      "180000s": 239,
+      "14400s": 17,
+      "18000s": 15,
+      "266400s": 10,
+      "79200s": 5,
+      "183600s": 5,
+      "176400s": 5,
+      "100800s": 4,
+      "190800s": 4,
+      "10800s": 3
+    },
+    "rows_per_year": {
+      "2021": 2717,
+      "2022": 5908,
+      "2023": 5887,
+      "2024": 5911,
+      "2025": 5891,
+      "2026": 4584
+    },
+    "weekend_gaps": 0,
+    "passed": true,
+    "failures": [],
+    "notes": [
+      "8 bars carry spread == 0 (the cost model substitutes the per-bar median spread for those bars)"
+    ]
+  }
+}

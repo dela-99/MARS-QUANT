@@ -1,0 +1,26 @@
+{
+  "dataset": "XAUUSDm_M30",
+  "version": "v1.0.0",
+  "source": "Resampled from data/processed/xauusdm/m5/v1.1.0/data.parquet",
+  "source_checksum": "813686650847846f13488ebe62585ce4cd9ee184b523c77369e6cf3356f6c02b",
+  "checksum": "e8958d774f5031b031be83f49bce94c24768b4745c6586fb54c389402f628301",
+  "rows": 62219,
+  "date_range": {
+    "start": "2020-01-02 00:00:00+00:00",
+    "end": "2026-10-09 20:30:00+00:00"
+  },
+  "columns": [
+    "open",
+    "high",
+    "low",
+    "close",
+    "tick_volume",
+    "volume",
+    "spread"
+  ],
+  "transformations": [
+    "Resampled from M15 v1.0.0 (resampled from M5 v1.1.0) using pandas resample",
+    "OHLCV aggregation: open=first, high=max, low=min, close=last, volume=sum, spread=mean",
+    "Dropped incomplete periods (NaN)"
+  ]
+}

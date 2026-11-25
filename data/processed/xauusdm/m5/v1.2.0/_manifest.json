@@ -1,0 +1,207 @@
+{
+  "dataset": "XAUUSDM_M5",
+  "version": "v1.2.0",
+  "built_by": "mars.libs.data.xauusdm_exness.build_datasets",
+  "source": "data\\raw\\xauusdm\\m5\\exness\\XAUUSDm_M5_2020_2026_raw.csv",
+  "source_checksum": "2175c0fcf6fc119a6700efe73fb8caec4ba2a4c839ec05895d6ec388b5a4dc4e",
+  "checksum": "2ac0588364994368ca44ca7308effa48754bf67e4e64965530b771b2b4c670dc",
+  "rows": 369972,
+  "date_range": {
+    "start": "2021-07-16 13:00:00+00:00",
+    "end": "2026-10-09 20:55:00+00:00"
+  },
+  "columns": [
+    "open",
+    "high",
+    "low",
+    "close",
+    "tick_volume",
+    "volume",
+    "spread"
+  ],
+  "index": "DatetimeIndex (UTC)",
+  "transformations": [
+    "Read consolidated Exness M5 export (tab separated MT5 History Centre format)",
+    "Combined <DATE> and <TIME> into a single UTC timestamp column",
+    "Classified daily-interval rows (same time-of-day + whole-day gap) and excluded them from the M5 dataset",
+    "Preserved observed <SPREAD> (points) and <TICKVOL> verbatim",
+    "Sorted chronologically; no rows dropped other than the daily block"
+  ],
+  "known_issues": [
+    "<VOL> (real volume) is identically zero in the Exness export; tick_volume is the only volume proxy available",
+    "Session break and weekend gaps are genuine market closures and are not filled",
+    "Spread is observed per bar in broker points; the point size used to convert it to price is an offline symbol-config value, not live-verified"
+  ],
+  "validation": {
+    "rows": 369972,
+    "start": "2021-07-16 13:00:00+00:00",
+    "end": "2026-10-09 20:55:00+00:00",
+    "duplicate_timestamps": 0,
+    "monotonic_increasing": true,
+    "ohlc_violations": 0,
+    "non_positive_prices": 0,
+    "missing_values": 0,
+    "negative_spread_rows": 0,
+    "zero_spread_rows": 98,
+    "non_five_minute_intervals": 1384,
+    "daily_interval_rows": 0,
+    "gap_classification": {
+      "session_break": 1033,
+      "intraday_closure": 63,
+      "multi_day_closure": 268,
+      "in_session_outage": 20,
+      "max_in_session_outage_missing_bars": 10,
+      "in_session_outage_examples": [
+        {
+          "after": "2021-07-21 22:50:00+00:00",
+          "before": "2021-07-21 23:20:00+00:00",
+          "gap_seconds": 1800,
+          "missing_bars": 5
+        },
+        {
+          "after": "2022-02-08 02:55:00+00:00",
+          "before": "2022-02-08 03:50:00+00:00",
+          "gap_seconds": 3300,
+          "missing_bars": 10
+        },
+        {
+          "after": "2022-02-28 03:05:00+00:00",
+          "before": "2022-02-28 03:50:00+00:00",
+          "gap_seconds": 2700,
+          "missing_bars": 8
+        },
+        {
+          "after": "2022-03-21 02:55:00+00:00",
+          "before": "2022-03-21 03:50:00+00:00",
+          "gap_seconds": 3300,
+          "missing_bars": 10
+        },
+        {
+          "after": "2022-11-08 10:25:00+00:00",
+          "before": "2022-11-08 10:50:00+00:00",
+          "gap_seconds": 1500,
+          "missing_bars": 4
+        },
+        {
+          "after": "2022-11-08 10:55:00+00:00",
+          "before": "2022-11-08 11:05:00+00:00",
+          "gap_seconds": 600,
+          "missing_bars": 1
+        },
+        {
+          "after": "2023-03-16 16:15:00+00:00",
+          "before": "2023-03-16 16:25:00+00:00",
+          "gap_seconds": 600,
+          "missing_bars": 1
+        },
+        {
+          "after": "2023-04-03 07:20:00+00:00",
+          "before": "2023-04-03 07:40:00+00:00",
+          "gap_seconds": 1200,
+          "missing_bars": 3
+        },
+        {
+          "after": "2023-10-09 23:05:00+00:00",
+          "before": "2023-10-09 23:15:00+00:00",
+          "gap_seconds": 600,
+          "missing_bars": 1
+        },
+        {
+          "after": "2024-03-20 22:15:00+00:00",
+          "before": "2024-03-20 22:25:00+00:00",
+          "gap_seconds": 600,
+          "missing_bars": 1
+        },
+        {
+          "after": "2024-03-28 19:35:00+00:00",
+          "before": "2024-03-28 19:45:00+00:00",
+          "gap_seconds": 600,
+          "missing_bars": 1
+        },
+        {
+          "after": "2024-11-12 19:45:00+00:00",
+          "before": "2024-11-12 19:55:00+00:00",
+          "gap_seconds": 600,
+          "missing_bars": 1
+        },
+        {
+          "after": "2024-12-11 07:55:00+00:00",
+          "before": "2024-12-11 08:05:00+00:00",
+          "gap_seconds": 600,
+          "missing_bars": 1
+        },
+        {
+          "after": "2025-01-08 18:50:00+00:00",
+          "before": "2025-01-08 19:00:00+00:00",
+          "gap_seconds": 600,
+          "missing_bars": 1
+        },
+        {
+          "after": "2025-04-08 18:15:00+00:00",
+          "before": "2025-04-08 18:35:00+00:00",
+          "gap_seconds": 1200,
+          "missing_bars": 3
+        },
+        {
+          "after": "2025-04-14 14:00:00+00:00",
+          "before": "2025-04-14 14:20:00+00:00",
+          "gap_seconds": 1200,
+          "missing_bars": 3
+        },
+        {
+          "after": "2025-11-28 08:10:00+00:00",
+          "before": "2025-11-28 08:55:00+00:00",
+          "gap_seconds": 2700,
+          "missing_bars": 8
+        },
+        {
+          "after": "2025-12-07 23:25:00+00:00",
+          "before": "2025-12-07 23:45:00+00:00",
+          "gap_seconds": 1200,
+          "missing_bars": 3
+        },
+        {
+          "after": "2025-12-17 23:00:00+00:00",
+          "before": "2025-12-17 23:10:00+00:00",
+          "gap_seconds": 600,
+          "missing_bars": 1
+        },
+        {
+          "after": "2026-02-01 23:00:00+00:00",
+          "before": "2026-02-01 23:10:00+00:00",
+          "gap_seconds": 600,
+          "missing_bars": 1
+        }
+      ]
+    },
+    "interval_histogram": {
+      "300s": 368587,
+      "3900s": 1032,
+      "177000s": 191,
+      "176700s": 47,
+      "600s": 10,
+      "263400s": 7,
+      "13800s": 7,
+      "17400s": 6,
+      "12900s": 6,
+      "79500s": 5,
+      "17700s": 5,
+      "97500s": 4
+    },
+    "rows_per_year": {
+      "2021": 32475,
+      "2022": 70700,
+      "2023": 70522,
+      "2024": 70773,
+      "2025": 70530,
+      "2026": 54972
+    },
+    "weekend_gaps": 244,
+    "passed": true,
+    "failures": [],
+    "notes": [
+      "98 bars carry spread == 0 (the cost model substitutes the per-bar median spread for those bars)",
+      "20 in-session feed outages (max 10 missing bars) - documented, not filled; bar-count based indicators are unaffected in structure"
+    ]
+  }
+}

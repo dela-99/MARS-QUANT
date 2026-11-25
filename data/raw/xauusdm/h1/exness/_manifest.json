@@ -1,0 +1,27 @@
+{
+  "dataset": "XAUUSDm_H1",
+  "source": "Exness MT5 export (xauusd_h1_2015_present.parquet)",
+  "source_files": [
+    "data/raw/xauusd_h1_2015_present.parquet",
+    "data/raw/xauusd_h1_2018_present.parquet (overlapping subset)",
+    "data/raw/xauusd_h1_2020_present.parquet (overlapping subset)",
+    "data/raw/xauusd_h1_2025_present.parquet (overlapping subset)"
+  ],
+  "checksum": "9a3f659bd05911d278474ebfee61abc5b1616181950ddb5f6c61c4023018d2c8",
+  "rows": 63239,
+  "date_range": {
+    "start": "2015-01-02 09:00:00+00:00",
+    "end": "2025-09-26 08:00:00+00:00"
+  },
+  "columns": [
+    "time",
+    "open",
+    "high",
+    "low",
+    "close",
+    "tick_volume",
+    "spread",
+    "real_volume"
+  ],
+  "notes": "4 overlapping raw files deduplicated. 83,751 duplicate timestamps removed. 2015 file selected as base (longest coverage). Original files preserved in data/raw/."
+}

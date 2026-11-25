@@ -1,0 +1,41 @@
+{
+  "dataset": "XAUUSDm_M5",
+  "source": "Exness MT5 export",
+  "source_files": [
+    "C:\\Users\\RIDGE\\trading-data\\XAUUSDm_M5_2020_1_12.csv",
+    "C:\\Users\\RIDGE\\trading-data\\XAUUSDm_M5_2021 jan to dec.csv",
+    "C:\\Users\\RIDGE\\trading-data\\XAUUSDm_M5_2022 jan to dec.csv",
+    "C:\\Users\\RIDGE\\trading-data\\XAUUSDm_M5_2023 jan to dec.csv",
+    "C:\\Users\\RIDGE\\trading-data\\XAUUSDm_M5_2024 jan to feb.csv",
+    "C:\\Users\\RIDGE\\trading-data\\XAUUSDm_M5_2025 jan to dec.csv",
+    "C:\\Users\\RIDGE\\trading-data\\XAUUSDm_M5_2026 jan to oct.csv"
+  ],
+  "file_checksums": {
+    "XAUUSDm_M5_2020_1_12.csv": "d4cf24bcc9939e74043d1b22f79ff4f9bdda37e03ca15342103ac79f713d915c",
+    "XAUUSDm_M5_2021 jan to dec.csv": "3a8cf30a2414aa8ddfef447539e608d3525f341d851341380b429313e81f868e",
+    "XAUUSDm_M5_2022 jan to dec.csv": "b6df6a993b11e8a146ce1ca2cf4699c405328d54306990f572c37b4573eee67f",
+    "XAUUSDm_M5_2023 jan to dec.csv": "680c52bb643d2bea3cdd56b2c702b9b97902f12ef0d234718a27f19ae0c437de",
+    "XAUUSDm_M5_2024 jan to feb.csv": "b9643df616478c69ecf27c727b1010b95c5834aded3a2ed2a847383a5ea5a5a7",
+    "XAUUSDm_M5_2025 jan to dec.csv": "e6c3db4f50f3580ccbf2a23c7291ad88cbd1563ee781966d2f4df56abb2c85f9",
+    "XAUUSDm_M5_2026 jan to oct.csv": "a036c2759011a40959119fff7e56f3f75a74705f4151fcf89455181e045783f6"
+  },
+  "consolidated_checksum": "2175c0fcf6fc119a6700efe73fb8caec4ba2a4c839ec05895d6ec388b5a4dc4e",
+  "total_rows": 370450,
+  "date_range": {
+    "start": "2020-01-02 00:00:00",
+    "end": "2026-10-09 20:55:00"
+  },
+  "columns": [
+    "<DATE>",
+    "<TIME>",
+    "<OPEN>",
+    "<HIGH>",
+    "<LOW>",
+    "<CLOSE>",
+    "<TICKVOL>",
+    "<VOL>",
+    "<SPREAD>",
+    "timestamp"
+  ],
+  "notes": "2020 file contains daily bars (86400s intervals) with spread=0. 2021-2026 contain M5 bars (300s intervals) with real spread data. <VOL> column is all zeros (Exness limitation)."
+}

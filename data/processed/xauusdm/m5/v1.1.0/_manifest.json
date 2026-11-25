@@ -1,0 +1,32 @@
+{
+  "dataset": "XAUUSDm_M5",
+  "version": "v1.1.0",
+  "source": "data/raw/xauusdm/m5/exness/XAUUSDm_M5_2020_2026_raw.csv",
+  "source_checksum": "2175c0fcf6fc119a6700efe73fb8caec4ba2a4c839ec05895d6ec388b5a4dc4e",
+  "checksum": "813686650847846f13488ebe62585ce4cd9ee184b523c77369e6cf3356f6c02b",
+  "rows": 370450,
+  "date_range": {
+    "start": "2020-01-02 00:00:00+00:00",
+    "end": "2026-10-09 20:55:00+00:00"
+  },
+  "columns": [
+    "open",
+    "high",
+    "low",
+    "close",
+    "tick_volume",
+    "volume",
+    "spread"
+  ],
+  "transformations": [
+    "Renamed MT5 column names to standard OHLCV",
+    "Parsed <DATE> <TIME> to UTC timestamp index",
+    "Preserved tick_volume and spread from source",
+    "Sorted chronologically"
+  ],
+  "known_issues": [
+    "2020 data is daily bars (not M5) with spread=0",
+    "<VOL> (real volume) is all zeros in Exness export",
+    "Non-standard intervals: weekend gaps, session breaks"
+  ]
+}

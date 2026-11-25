@@ -1,0 +1,69 @@
+{
+  "dataset": "XAUUSDM_D1",
+  "version": "v1.0.0",
+  "built_by": "mars.libs.data.xauusdm_exness.build_datasets",
+  "source": "data\\raw\\xauusdm\\m5\\exness\\XAUUSDm_M5_2020_2026_raw.csv",
+  "source_checksum": "2175c0fcf6fc119a6700efe73fb8caec4ba2a4c839ec05895d6ec388b5a4dc4e",
+  "checksum": "fa81942ec648ee3b00a9082b2664c9d1ba55e9cb9057ce7b0d92c1412b1480a1",
+  "rows": 478,
+  "date_range": {
+    "start": "2020-01-02 00:00:00+00:00",
+    "end": "2021-07-16 00:00:00+00:00"
+  },
+  "columns": [
+    "open",
+    "high",
+    "low",
+    "close",
+    "tick_volume",
+    "volume",
+    "spread"
+  ],
+  "index": "DatetimeIndex (UTC)",
+  "transformations": [
+    "Extracted the daily-interval block from the consolidated Exness M5 export",
+    "Preserved unchanged; no interpolation, no resampling"
+  ],
+  "known_issues": [
+    "Daily bars only - unusable for M5 research (ATR/Donchian horizons)",
+    "spread == 0 on every row: the broker did not record a spread for these bars",
+    "Excluded from the M5 dataset and from every backtest in Assignment 14"
+  ],
+  "validation": {
+    "rows": 478,
+    "start": "2020-01-02 00:00:00+00:00",
+    "end": "2021-07-16 00:00:00+00:00",
+    "duplicate_timestamps": 0,
+    "monotonic_increasing": true,
+    "ohlc_violations": 0,
+    "non_positive_prices": 0,
+    "missing_values": 0,
+    "negative_spread_rows": 0,
+    "zero_spread_rows": 478,
+    "non_five_minute_intervals": 0,
+    "daily_interval_rows": 0,
+    "gap_classification": {
+      "session_break": 0,
+      "intraday_closure": 0,
+      "multi_day_closure": 0,
+      "in_session_outage": 0,
+      "max_in_session_outage_missing_bars": 0,
+      "in_session_outage_examples": []
+    },
+    "interval_histogram": {
+      "86400s": 397,
+      "172800s": 76,
+      "259200s": 4
+    },
+    "rows_per_year": {
+      "2020": 311,
+      "2021": 167
+    },
+    "weekend_gaps": 0,
+    "passed": true,
+    "failures": [],
+    "notes": [
+      "478 bars carry spread == 0 (the cost model substitutes the per-bar median spread for those bars)"
+    ]
+  }
+}
