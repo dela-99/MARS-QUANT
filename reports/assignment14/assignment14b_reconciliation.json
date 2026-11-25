@@ -1,0 +1,168 @@
+{
+  "reconciliation": {
+    "date": "2026-11-25",
+    "strategy_id": "XAU-MTF-DONCHIAN-001",
+    "discrepancy_found": true,
+    "discrepancy_summary": "Summary narrative reported 3 OOS trades and skipped MC; actual artifacts contain 2,389 OOS trades and MC ran successfully",
+    "trade_counts": {
+      "in_sample": 2226,
+      "out_of_sample": 2389,
+      "summary_reported_oos": 3,
+      "in_sample_date_range": ["2021-07-19 01:40:00+00:00", "2024-09-10 23:15:00+00:00"],
+      "out_of_sample_date_range": ["2025-01-02 05:30:00+00:00", "2026-10-09 17:55:00+00:00"],
+      "oos_by_year": {
+        "2025": 1367,
+        "2026": 1022
+      }
+    },
+    "monte_carlo": {
+      "ran": true,
+      "n_simulations": 2000,
+      "seed": 20260924,
+      "input_trades": 2389,
+      "input_source": "oos_res.trades_frame()[\"net_pnl\"]",
+      "input_starting_equity": 10000.0,
+      "charts_generated": [
+        "monte_carlo_equity_fan.png",
+        "monte_carlo_distributions.png"
+      ],
+      "experiments": {
+        "reshuffle": {
+          "terminal_equity_mean": 8019.491000002384,
+          "max_drawdown_mean": -9304.174308570366,
+          "max_drawdown_p05": -13321.965264284268,
+          "max_drawdown_p95": -6117.528742856321
+        },
+        "resample": {
+          "terminal_equity_mean": 8052.191354430951,
+          "terminal_equity_p05": -4637.290785711878,
+          "terminal_equity_p95": 21160.55550714535,
+          "max_drawdown_mean": -10265.420618141716,
+          "max_drawdown_p05": -18159.048485712483,
+          "max_drawdown_p95": -4871.25016428564
+        }
+      },
+      "observed_path": {
+        "terminal_equity": 8019.491000002374,
+        "terminal_return": -0.1980508999997626,
+        "max_drawdown": -9632.81285714094,
+        "max_drawdown_pct": -0.6100939499237701,
+        "mean_trade_pnl": -0.8290117203840962,
+        "n_trades": 2389
+      },
+      "assumptions_recorded": [
+        "Trade outcomes are drawn i.i.d. from the observed distribution.",
+        "Trade sequencing carries no information beyond the outcome multiset (reshuffling) or is replaced by sampling with replacement (resampling).",
+        "Position sizing is proportional to equity, so each simulated trade is scaled by the equity path it occurs on.",
+        "Costs are already embedded in the observed per-trade net P&L and are not re-sampled.",
+        "No regime or volatility clustering is modelled: the i.i.d. assumption is known to understate the tail for breakout systems."
+      ],
+      "limitations_recorded": [
+        "Resampled results are a dispersion estimate, not a forecast.",
+        "The number of observed trades bounds the resolution of the outcome distribution; small samples cannot support strong inference.",
+        "Results describe the strategy as specified, not the strategy family."
+      ]
+    },
+    "metrics_verified": {
+      "in_sample": {
+        "trade_count": 2226,
+        "net_pnl_usd": -9913.540428571592,
+        "net_return": -0.9913540428571592,
+        "profit_factor": 0.5365969055461218,
+        "sharpe": -2.9844214370891917,
+        "max_drawdown_usd": -10492.61542857159,
+        "max_drawdown_pct": -0.9918273032917889,
+        "win_rate": 0.25202156334231807,
+        "expectancy_usd": -4.453522205108532,
+        "verified": true,
+        "match_json": true
+      },
+      "out_of_sample": {
+        "trade_count": 2389,
+        "net_pnl_usd": -1980.5089999976058,
+        "net_return": -0.19805089999976058,
+        "profit_factor": 0.9829652374845608,
+        "sharpe": 0.061226132645217056,
+        "max_drawdown_usd_ledger": -9954.698857140946,
+        "max_drawdown_pct_ledger": -0.6190521104664027,
+        "max_drawdown_usd_mc_observed": -9632.81285714094,
+        "max_drawdown_pct_mc_observed": -0.6100939499237701,
+        "win_rate": 0.312683131017162,
+        "expectancy_usd": -0.8290117203840962,
+        "verified": true,
+        "match_json": true,
+        "drawdown_note": "MC observed DD is trade-sequence path (2,389 steps); ledger DD is mark-to-market bar path (125,502 bars)"
+      }
+    },
+    "parameter_comparison": {
+      "configs_tested": 9,
+      "profitable_in_sample": 0,
+      "frozen_config": {
+        "donchian_lookback": 20,
+        "atr_stop_multiplier": 2.0,
+        "selection_basis": "no candidate passed the in-sample profitability filter; the baseline configuration is frozen unchanged",
+        "selected_from": "baseline"
+      }
+    },
+    "cost_sensitivity": {
+      "observed_spread_only": {"net_pnl_usd": -1980.51, "profitable": false},
+      "spread_x0.5": {"net_pnl_usd": 849.26, "profitable": true},
+      "spread_x2.0": {"net_pnl_usd": -5165.01, "profitable": false},
+      "plus_commission_3usd_rt": {"net_pnl_usd": -2652.82, "profitable": false},
+      "plus_commission_7usd_rt": {"net_pnl_usd": -3543.38, "profitable": false}
+    },
+    "benchmarks": {
+      "buy_and_hold": {"net_pnl_usd": 4240.0, "net_return": 0.424, "note": "corrected units, unlevered full-equity long"},
+      "no_trade": {"net_pnl_usd": 0.0, "net_return": 0.0}
+    },
+    "test_evidence": {
+      "test_xau_mtf_donchian_001": {
+        "tests": 51,
+        "passed": 51,
+        "failed": 0,
+        "areas_covered": 13
+      },
+      "test_xauusdm_dataset_v120": {
+        "tests": 31,
+        "passed": 30,
+        "failed": 1,
+        "failure": "test_all_intervals_are_five_minute_or_a_market_closure: session_break_gaps 1033 vs expected 1032 (pre-existing data expectation mismatch)"
+      }
+    },
+    "dataset_provenance": {
+      "m5_version": "v1.2.0",
+      "m5_rows": 369972,
+      "m5_range": ["2021-07-16 13:00:00+00:00", "2026-10-09 20:55:00+00:00"],
+      "h1_version": "v1.2.0",
+      "h1_rows": 30898,
+      "h1_range": ["2021-07-16 13:00:00+00:00", "2026-10-09 20:00:00+00:00"],
+      "d1_excluded_version": "v1.0.0",
+      "d1_excluded_rows": 478,
+      "h1_source": "resampled_from_m5"
+    },
+    "final_decision": {
+      "decision": "REJECT — NO DEFENSIBLE EDGE",
+      "rationale": "Both in-sample (-99.1% return, PF 0.54, Sharpe -2.98) and out-of-sample (-19.8% return, PF 0.98, Sharpe 0.06) are unprofitable. No parameter variant survived IS profitability filter. Monte Carlo under i.i.d. shows 95% of resampled paths lose money.",
+      "decision_unchanged_from_assignment14": true,
+      "strategy_infeasible_at_30usd": true
+    },
+    "source_to_chart_provenance": {
+      "monte_carlo_equity_fan.png": {
+        "source_file": "mars/apps/research_lab/xau_mtf_donchian_montecarlo.py",
+        "function": "plot_fan_and_distributions()",
+        "input_data": "summary[\"_paths\"][\"reshuffle\"] and summary[\"_paths\"][\"resample\"]",
+        "input_trades": 2389,
+        "x_axis": "trade number (0 to 2389)",
+        "y_axis": "equity (USD)",
+        "observed_line": "summary[\"_paths\"][\"observed\"] (trade-sequence equity path)"
+      },
+      "monte_carlo_distributions.png": {
+        "source_file": "mars/apps/research_lab/xau_mtf_donchian_montecarlo.py",
+        "function": "plot_fan_and_distributions()",
+        "left_panel": "Reshuffle max drawdown distribution (from stored paths)",
+        "center_panel": "Resample max drawdown distribution (from stored paths)",
+        "right_panel": "Resample terminal equity distribution (from stored paths)"
+      }
+    }
+  }
+}

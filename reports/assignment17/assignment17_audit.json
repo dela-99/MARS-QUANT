@@ -1,0 +1,216 @@
+{
+  "assignment": "Assignment 17",
+  "strategy_id": "XAU-SESSION-MOM-001",
+  "hypothesis_id": "CSM-001",
+  "audit_date": "2026-11-25",
+  "auditor": "M.A.R.S. Quant Research Pipeline",
+  "final_decision": "REJECTED -- NO DEFENSIBLE EDGE",
+  "authorization_audit": {
+    "assignment_16_authorized": ["implementation", "in_sample_research"],
+    "assignment_16_prohibited": ["oos_validation", "monte_carlo"],
+    "actually_executed": {
+      "implementation": true,
+      "in_sample_research": true,
+      "oos_validation": true,
+      "monte_carlo": true
+    },
+    "authorization_status": {
+      "implementation": "AUTHORIZED",
+      "in_sample_research": "AUTHORIZED",
+      "oos_validation": "UNAUTHORIZED -- DIAGNOSTIC ONLY",
+      "monte_carlo": "UNAUTHORIZED -- DIAGNOSTIC ONLY"
+    },
+    "notes": "Frozen config documents Phase H (OOS) and Phase I (MC) with reproduction commands, but Assignment 16 only authorized Phase G (IS). Test-split evaluation is standard IS holdout; separate Phase H OOS was not executed as distinct phase."
+  },
+  "spread_verification": {
+    "raw_data_source": "data/processed/xauusdm/m5/v1.2.0/data.parquet",
+    "spread_column": "spread (points, broker tick)",
+    "statistics": {
+      "count": 369972,
+      "mean": 201.39573,
+      "median": 200.0,
+      "std": 50.112909,
+      "min": 0.0,
+      "max": 3352.0,
+      "zero_spread_bars": 98
+    },
+    "conversion_chain": {
+      "raw_points": 200,
+      "point_size": 0.001,
+      "price_distance": 0.2,
+      "pip_size": 0.01,
+      "pips": 20,
+      "contract_size": 100,
+      "cost_per_lot_usd": 20.0,
+      "cost_per_min_lot_usd": 0.2
+    },
+    "backtester_application": {
+      "round_trip_spread_count": 1,
+      "entry_pays_spread": true,
+      "exit_pays_spread": false,
+      "zero_spread_fallback": "dataset_median",
+      "distribution_preserved": true,
+      "sensitivity_multipliers_tested": [1.0, 1.5, 2.0]
+    },
+    "verification_status": "VERIFIED",
+    "claim_support": "Median Exness Standard spread = 20 pips (200 points) is supported by raw data"
+  },
+  "is_oos_reconciliation": {
+    "split_method": "chronological_by_session_index",
+    "ratios": {"train": 0.70, "val": 0.15, "test": 0.15},
+    "actual_periods": {
+      "train": {"sessions": 3031, "start": "2021-07-16 08:00:00+00:00", "end": "2025-03-14 14:30:00+00:00"},
+      "val": {"sessions": 649, "start": "2025-03-16 14:30:00+00:00", "end": "2025-12-26 00:00:00+00:00"},
+      "test": {"sessions": 651, "start": "2025-12-26 08:00:00+00:00", "end": "2026-10-09 14:30:00+00:00"}
+    },
+    "config_documented_periods": {
+      "train": "2021-07-16 to ~2023-10",
+      "val": "~2023-10 to ~2024-04",
+      "test": "~2024-04 to ~2024-12",
+      "future_oos": "2025-01 to 2025-10"
+    },
+    "discrepancy": "Config documents ~2024 end-date; actual data extends to 2026-10-09. Future OOS period falls inside validation split.",
+    "train_metrics": {
+      "trades": 308,
+      "net_expectancy_usd": -32.402616883116565,
+      "net_profit_factor": 0.0,
+      "net_sharpe": -4.259728951318139,
+      "max_drawdown": -0.9980005999999906,
+      "win_rate_net": 0.0
+    },
+    "test_metrics": {
+      "trades": 287,
+      "net_expectancy_usd": -34.77461324038833,
+      "net_profit_factor": 0.46751097490466537,
+      "net_sharpe": -1.4216239641489472,
+      "max_drawdown": -0.9988112557158549,
+      "win_rate_net": 0.003484320557491289
+    },
+    "falsification_criteria": {
+      "net_expectancy_positive": {"threshold": "> $0", "result": -34.77, "pass": false},
+      "net_profit_factor_gt_1": {"threshold": "> 1.0", "result": 0.47, "pass": false},
+      "net_sharpe_positive": {"threshold": "> 0", "result": -1.42, "pass": false},
+      "max_drawdown_lt_20pct": {"threshold": "< 0.20", "result": -0.9988, "pass": false},
+      "trade_count_ge_30": {"threshold": ">= 30", "result": 287, "pass": true}
+    },
+    "oos_authorization_status": "DIAGNOSTIC / OUT-OF-SCOPE -- NOT FORMAL OOS VALIDATION",
+    "reproducibility": "Verified from is_results.json and oos_trades.csv"
+  },
+  "monte_carlo_audit": {
+    "executed": true,
+    "authorized": false,
+    "config": {
+      "n_simulations": 10000,
+      "seed": 20261125,
+      "equity": 10000.0,
+      "risk_fraction": 0.01
+    },
+    "input_data": {
+      "source": "reports/programme_01/session_momentum_001/oos/oos_trades.csv",
+      "trades": 287,
+      "period": "2025-12-26 to 2026-03-13 (ledger)"
+    },
+    "experiments": {
+      "reshuffle": {
+        "observed_terminal_equity": 19.686000008542592,
+        "observed_max_drawdown": -0.9987880172915602,
+        "simulated_mean_terminal": 2830.6322142972713,
+        "simulated_std_terminal": 2.2399526964943414e-12,
+        "simulated_mean_max_dd": 0.7662126975264537,
+        "simulated_std_max_dd": 0.04658569188557727,
+        "percentiles_terminal": {"p5": 2830.632214297267},
+        "percentiles_max_dd": {"p95": 0.8428648755824866},
+        "falsification": {
+          "observed_terminal_lt_p05": true,
+          "observed_dd_gt_p95": true
+        }
+      },
+      "resample": {
+        "observed_terminal_equity": 19.686000008542592,
+        "observed_max_drawdown": -0.9987880172915602,
+        "simulated_mean_terminal": 3624.237998,
+        "simulated_std_terminal": 3873.83,
+        "simulated_mean_max_dd": 0.7690,
+        "falsification": {
+          "observed_terminal_lt_p05": true
+        }
+      },
+      "random_signal_baseline": {
+        "mean_terminal_equity": 2830.6322142972713,
+        "mean_sharpe": -17.77,
+        "mean_max_dd": 0.7661
+      }
+    },
+    "assumptions_recorded": [
+      "i.i.d. trade outcomes (known false for session momentum -- upper bound on robustness)",
+      "Position sizing proportional to equity",
+      "Costs embedded in observed net P&L (not re-sampled)",
+      "No regime/clustering modelled"
+    ],
+    "drawdown_discrepancy": {
+      "mc_observed_dd_usd": 9633,
+      "ledger_observed_dd_usd": 9988,
+      "difference_usd": 355,
+      "explanation": "MC uses compounding equity path; backtester uses fixed-fractional on realized equity"
+    },
+    "authorization_status": "DIAGNOSTIC / OUT-OF-SCOPE -- NOT FORMAL MC VALIDATION"
+  },
+  "account_scale_feasibility": {
+    "starting_equity_usd": 30.0,
+    "risk_fraction": 0.01,
+    "risk_budget_usd": 0.30,
+    "instrument_spec": {
+      "symbol": "XAUUSDm",
+      "contract_size": 100.0,
+      "pip_size": 0.01,
+      "point_size": 0.001,
+      "quote_currency": "USD",
+      "volume_min": 0.01,
+      "volume_max": 200.0,
+      "volume_step": 0.01,
+      "volume_spec_source": "pair_config.offline",
+      "spec_source": "pair_config.offline"
+    },
+    "stop_distance_points": 200,
+    "stop_distance_price": 0.2,
+    "risk_per_lot_usd": 20.0,
+    "lots_exact": 0.015,
+    "lots_floored": 0.01,
+    "risk_at_min_volume_usd": 0.20,
+    "risk_limit_usd": 0.30,
+    "verdict": "FEASIBLE at $30 (0.01 lots, SL=200 pts)",
+    "margin_requirements": {
+      "leverage_100": {"margin_pct": 0.01, "required_margin": 26.50, "free_margin": 3.50},
+      "leverage_200": {"margin_pct": 0.005, "required_margin": 13.25, "free_margin": 16.75},
+      "leverage_500": {"margin_pct": 0.002, "required_margin": 5.30, "free_margin": 24.70},
+      "leverage_2000": {"margin_pct": 0.0005, "required_margin": 1.33, "free_margin": 28.67}
+    },
+    "cost_impact_min_volume": {
+      "spread_cost_rt": 0.20,
+      "commission_rt": 0.0,
+      "slippage_rt": 0.0,
+      "swap_rt": 0.0,
+      "total_rt": 0.20
+    },
+    "risk_engine_behavior": {
+      "min_volume_breach_action": "REJECT",
+      "approved_at_sl_200": true,
+      "approved_at_sl_300": true,
+      "rejected_at_sl_400": true,
+      "note": "Never forces oversized position"
+    },
+    "normalized_vs_executable": {
+      "note": "Strategy rejected on normalized performance (negative expectancy); $30 feasibility is moot"
+    },
+    "verification_method": "ContractAwareFixedFractionalRisk evaluated with equity=30.0, stop_distance=0.2"
+  },
+  "evidence_status": {
+    "spread_conversion": "VERIFIED",
+    "is_metrics": "REPRODUCED_FROM_ARTIFACTS",
+    "oos_metrics": "DIAGNOSTIC_ONLY",
+    "monte_carlo": "UNAUTHORIZED_DIAGNOSTIC",
+    "feasibility_calculation": "VERIFIED_VIA_RISK_ENGINE",
+    "config_split_discrepancy": "DOCUMENTED",
+    "volume_spec_verification": "UNVERIFIED_OFFLINE_DEFAULT"
+  }
+}
