@@ -668,6 +668,27 @@ def main():
         kill_switch_file=kill_switch_path,
     )
 
+    # --- Determine symbols to trade ---
+    if not args.symbols:
+        print("ERROR: No symbols specified. Pass --symbols XAUUSDm,EURUSDm (comma-separated, no spaces)")
+        sys.exit(1)
+
+    # Parse comma-separated symbols
+    symbols = [s.strip() for s in args.symbols.split(",") if s.strip()]
+
+    # Validate each symbol is in PAIR_CONFIG and enabled
+    for symbol in symbols:
+        if symbol not in PAIR_CONFIG:
+            print(f"ERROR: Symbol '{symbol}' not found in PAIR_CONFIG")
+            sys.exit(1)
+        if not PAIR_CONFIG[symbol].get("enabled", False):
+            reason = PAIR_CONFIG[symbol].get("disabled_reason", "No reason provided")
+            print(f"ERROR: Symbol '{symbol}' is disabled in PAIR_CONFIG and cannot be force-enabled.")
+            print(f"       Reason: {reason}")
+            sys.exit(1)
+
+    print(f"Session symbols (validated): {symbols}")
+
     # Configure contract sizes for all session symbols from SYMBOL_CONFIGS (OFFLINE mode)
     # This must be done before any risk calculations use the RiskManager
     for symbol in symbols:
@@ -723,27 +744,6 @@ def main():
     risk_manager.current_equity = live_equity
     risk_manager.peak_equity = live_equity
     risk_manager.daily_pnl = 0.0
-
-    # --- Determine symbols to trade ---
-    if not args.symbols:
-        print("ERROR: No symbols specified. Pass --symbols XAUUSDm,EURUSDm (comma-separated, no spaces)")
-        sys.exit(1)
-
-    # Parse comma-separated symbols
-    symbols = [s.strip() for s in args.symbols.split(",") if s.strip()]
-
-    # Validate each symbol is in PAIR_CONFIG and enabled
-    for symbol in symbols:
-        if symbol not in PAIR_CONFIG:
-            print(f"ERROR: Symbol '{symbol}' not found in PAIR_CONFIG")
-            sys.exit(1)
-        if not PAIR_CONFIG[symbol].get("enabled", False):
-            reason = PAIR_CONFIG[symbol].get("disabled_reason", "No reason provided")
-            print(f"ERROR: Symbol '{symbol}' is disabled in PAIR_CONFIG and cannot be force-enabled.")
-            print(f"       Reason: {reason}")
-            sys.exit(1)
-
-    print(f"Session symbols (validated): {symbols}")
 
     # --- Create and run multi-symbol session ---
     session = MultiSymbolSession(

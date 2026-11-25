@@ -100,6 +100,7 @@ class MTFGate:
     
     # Fallback mapping: if primary timeframe fails, resample from this source
     FALLBACK_RESAMPLE = {
+        '15M': '5M',   # Resample 5M -> 15M if 15M not available (CRITICAL for historical)
         '30M': '15M',  # Resample 15M -> 30M if 30M not available
         '1H': '30M',   # Resample 30M -> 1H if 1H not available
     }
@@ -147,6 +148,7 @@ class MTFGate:
         
         # Determine resample rule
         resample_rules = {
+            '15M': '15min',  # 15 minutes
             '30M': '30min',  # 30 minutes (pandas 2.0+ uses 'min' not 'T')
         }
         rule = resample_rules.get(target_tf)
