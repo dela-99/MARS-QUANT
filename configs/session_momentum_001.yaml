@@ -1,0 +1,290 @@
+# M.A.R.S. Quant — Frozen Strategy Configuration
+# Strategy: XAU-SESSION-MOM-001 (Asian-Session Momentum Continuation)
+# Hypothesis: CSM-001 (Cross-Session Momentum per Wei 2026)
+# Version: 1.0 (FROZEN for IS Research)
+# Date: 2026-11-25
+# Status: FROZEN — No parameter changes permitted during IS research
+
+# ============================================================================
+# Data Configuration
+# ============================================================================
+data:
+  symbol: "XAUUSDm"
+  m5_path: "data/processed/xauusdm/m5/v1.2.0/data.parquet"
+  h1_path: "data/processed/xauusdm/h1/v1.2.0/data.parquet"
+  # Data version locked to v1.2.0 (M5: 369,972 bars, 2021-07-16 to 2026-10-09)
+  # H1 resampled from M5 v1.2.0 (30,898 bars)
+
+# ============================================================================
+# Session Definitions (Fixed UTC — No DST Adjustment)
+# ============================================================================
+sessions:
+  definitions:
+    asia:      {start: "00:00", end: "08:00",   utc: true}
+    europe:    {start: "08:00", end: "14:30",  utc: true}
+    us:        {start: "14:30", end: "24:00",  utc: true}
+  order: ["asia", "europe", "us"]
+  transitions:
+    asia: "europe"
+    europe: "us"
+    us: "asia"  # next day's Asia
+  note: "Fixed UTC definitions mean seasonal distortions during DST transitions (Europe/US sessions shift relative to local market hours). Documented but not silently corrected."
+
+# ============================================================================
+# Signal Configuration (Paper 12 - Frozen Baseline)
+# ============================================================================
+signal:
+  mode: "direction"           # "return" or "direction" — Paper 12 uses direction
+  threshold: 0.0              # Positive previous-session return
+  # Signal Timeline (No Look-Ahead):
+  # Session N-1 closes (e.g., Asia 08:00 UTC) → session_return_{N-1} observable
+  # → signal_for_session_N computed
+  # Session N opens (e.g., Europe 08:00 UTC) → ENTRY at first M5 bar open
+  # Session N closes (e.g., Europe 14:30 UTC) → EXIT at last M5 bar close
+
+# ============================================================================
+# Risk & Position Sizing
+# ============================================================================
+risk:
+  model: "ContractAwareFixedFractionalRisk"
+  risk_fraction: 0.01         # 1% of equity per trade (programme constraint)
+  max_leverage: 1.0           # Unlevered for research normalization
+  starting_equity: 10000.0    # IS normalization equity (NOT live capital)
+  # $30 feasibility uses separate account_feasibility module
+
+# ============================================================================
+# Stop-Loss
+# ============================================================================
+stop_loss:
+  type: "fixed_distance_points"
+  sl_points: 200              # 200 broker points = 0.2 price = 20 pips
+  fill_convention: "gap_aware_conservative"
+  # If bar opens beyond stop → fill at bar_open (worse price)
+  # Else → fill at stop_price
+
+# ============================================================================
+# Exit Priority (Same-Bar Ambiguity)
+# ============================================================================
+exit_priority:
+  same_bar: "worst_price"     # Stop vs session-close → worse price for position
+  # Long: lower of stop_fill vs close
+  end_of_data: "close_price"  # Final bar close if position still open
+
+# ============================================================================
+# Transaction Cost Model
+# ============================================================================
+costs:
+  # Observed (data-driven)
+  spread:
+    source: "observed_bar_spread"
+    multiplier: 1.0           # Sensitivity: 1.0, 1.5, 2.0
+    # Long entry: pays spread (buy at ask = bid + spread)
+    # Long exit: receives bid (no spread)
+    # Round-trip = 1 × observed spread
+    # M5 v1.2.0 stats: Median 200 pts, Mean 201 pts, Max 3,352 pts
+
+  # Assumptions (configurable, clearly labelled)
+  commission_per_lot_round_trip: 0.0      # Exness Standard: no commission
+  slippage_points: 0.0                    # Per side; sensitivity: 5-10 pts
+  swap_per_lot_night: 0.0                 # Intraday holds (exit same session)
+
+# ============================================================================
+# Execution Model
+# ============================================================================
+execution:
+  entry_fill: "next_bar_open"           # Signal at session N-1 close → entry at session N open
+  stop_fill: "gap_aware_conservative"   # Gap opens beyond stop → fill at open
+  exit_fill: "next_bar_open"            # Session close = last M5 bar close
+  same_bar_priority: "worst_price"      # Stop vs session-close → worse price
+  reversal_policy: "opposite_signal_ignored"  # Long-only; no short signals
+
+# ============================================================================
+# Holding Period & Constraints
+# ============================================================================
+holding:
+  period: "exactly_1_session"           # 6.5–9.5 hours = 78–114 M5 bars
+  max_trades_per_session: 1
+  pyramiding: false
+  same_session_reentry: false
+  weekend_gap_risk: "acknowledged"      # US Fri → Asia Mon signal uses Fri US return
+
+# ============================================================================
+# No-Trade Conditions
+# ============================================================================
+no_trade:
+  - condition: "signal == 0"
+    action: "flat"
+    reason: "Previous session return <= 0"
+  - condition: "risk_engine_rejects"
+    action: "flat"
+    reason: "Min volume breach, max volume breach, or computed size <= 0"
+  - condition: "insufficient_bars"
+    action: "flat"
+    threshold: 10
+    reason: "Session has < 10 M5 bars (data quality filter)"
+  - condition: "fomc_day"
+    action: "flat"
+    enabled: false                    # Sensitivity only
+    reason: "Optional FOMC filter"
+  - condition: "high_spread_regime"
+    action: "flat"
+    enabled: false                    # Sensitivity only
+    threshold: "p80_session_median"
+    reason: "Optional high spread filter"
+  - condition: "high_volatility_regime"
+    action: "flat"
+    enabled: false                    # Sensitivity only
+    threshold: "p80_h1_realized_vol"
+    reason: "Optional high vol filter"
+
+# ============================================================================
+# Data Splits (Chronological, Frozen)
+# ============================================================================
+splits:
+  train_ratio: 0.70
+  val_ratio: 0.15
+  test_ratio: 0.15
+  method: "chronological_by_session_index"
+  note: "Split by session index (not calendar) to preserve session sequence integrity"
+  periods:
+    train: "2021-07-16 → ~2023-10 (~2,700 sessions)"
+    val:   "~2023-10 → ~2024-04 (~580 sessions)"
+    test:  "~2024-04 → ~2024-12 (~580 sessions)"
+    future_oos: "2025-01 → 2025-10 (~780 sessions, reserved for Phase H)"
+
+# ============================================================================
+# Parameter Grid (IS Sensitivity Only — No Optimization)
+# ============================================================================
+sensitivity:
+  # One-factor-at-a-time from baseline (Paper 12 config)
+  # Selection rule: FIXED BEFORE RUN — baseline = Paper 12 config
+  sl_points: [200, 300, 500]
+  spread_multiplier: [1.0, 1.5, 2.0]
+  risk_fraction: [0.01]               # Fixed per programme
+  signal_mode: ["direction"]          # Fixed per Paper 12
+  threshold: [0.0]                    # Fixed per Paper 12
+  block_fomc: [false, true]           # Sensitivity only
+  block_high_vol: [false, true]       # Sensitivity only
+  block_high_spread: [false, true]    # Sensitivity only
+
+# ============================================================================
+# Baselines (Predeclared)
+# ============================================================================
+baselines:
+  - name: "Buy-and-Hold"
+    description: "Long XAUUSDm from first test session open to last test session close"
+  - name: "Flat"
+    description: "Zero return (risk-free)"
+  - name: "Random Signal"
+    description: "Permuted signal sequence (Monte Carlo reshuffle baseline)"
+
+# ============================================================================
+# Performance Metrics (Required for All Runs)
+# ============================================================================
+metrics:
+  trade_level:
+    - "trade_count (total, long, win, loss)"
+    - "win_rate (gross, net)"
+    - "expectancy_per_trade (gross, net) in USD and % equity"
+    - "profit_factor (gross, net)"
+    - "average_r_multiple"
+    - "holding_period_distribution (sessions, minutes)"
+  equity_curve:
+    - "total_return (gross, net)"
+    - "annualized_return (gross, net)"
+    - "annualized_volatility (gross, net)"
+    - "sharpe_ratio (risk_free = 0)"
+    - "maximum_drawdown (gross, net, in USD and %)"
+    - "max_drawdown_duration (sessions)"
+    - "calmar_ratio"
+  session_regime_breakdown:
+    - "by_session_type (Asia→Europe, Europe→US, US→Asia)"
+    - "by_year"
+    - "by_volatility_regime (low/med/high H1 realized vol)"
+    - "by_fomc_vs_non_fomc"
+    - "by_spread_regime (low/med/high)"
+  exposure_turnover:
+    - "exposure (fraction of sessions invested)"
+    - "turnover (sum |Δposition| / equity)"
+    - "average_leverage"
+
+# ============================================================================
+# Monte Carlo Validation (Phase I)
+# ============================================================================
+monte_carlo:
+  n_simulations: 10000
+  seed: 20261125
+  equity: 10000.0
+  experiments:
+    - name: "reshuffle"
+      description: "Permute trade order → equity fan, DD distribution (sequence risk)"
+    - name: "resample"
+      description: "Bootstrap trades → terminal equity, DD distribution (outcome dispersion)"
+    - name: "random_signal_baseline"
+      description: "Random signal baseline for comparison"
+  assumptions:
+    - "i.i.d. trade outcomes (known false for session momentum — upper bound on robustness)"
+    - "Position sizing proportional to equity"
+    - "Costs embedded in observed net P&L (not re-sampled)"
+    - "No regime/clustering modelled"
+
+# ============================================================================
+# Falsification Criteria (Pre-Registered)
+# ============================================================================
+falsification:
+  strategy_rejected_if_any_hold_on_oos_or_frozen_is:
+    - criterion: "Net expectancy"
+      threshold: "<= $0.00"
+      rationale: "No edge after costs"
+    - criterion: "Net Profit Factor"
+      threshold: "<= 1.00"
+      rationale: "Losses >= profits"
+    - criterion: "Net Sharpe Ratio"
+      threshold: "<= 0.0"
+      rationale: "No risk-adjusted return"
+    - criterion: "Max Drawdown (net)"
+      threshold: "> 20% equity"
+      rationale: "Excessive risk for $30 account"
+    - criterion: "Trade count (OOS)"
+      threshold: "< 30 trades"
+      rationale: "Insufficient statistical power"
+    - criterion: "Monte Carlo (reshuffle)"
+      threshold: "Observed DD > p95 of sims"
+      rationale: "Sequence-dependent (not robust)"
+    - criterion: "Monte Carlo (resample)"
+      threshold: "Observed terminal equity < p05 of sims"
+      rationale: "Outcome unlikely under i.i.d."
+  advances_only_if: "ALL pass on frozen OOS"
+
+# ============================================================================
+# Version Control & Artifacts
+# ============================================================================
+artifacts:
+  specification: "research/programme_01/strategy_spec_XAU_SESSION_MOM_001.md"
+  strategy_code: "mars/libs/strategies/xau_session_momentum.py"
+  backtester: "mars/apps/backtester/session_momentum_backtest.py"
+  research_pipeline: "mars/apps/research_lab/session_momentum_research.py"
+  monte_carlo: "mars/apps/research_lab/session_momentum_montecarlo.py"
+  config: "configs/session_momentum_001.yaml"  # THIS FILE (git tagged)
+  instrument_spec: "configs/instrument_spec_xauusdm.yaml"
+  data_version: "data/processed/xauusdm/m5/v1.2.0/"
+  is_results: "reports/programme_01/session_momentum_001/is/"
+  oos_results: "reports/programme_01/session_momentum_001/oos/"
+  mc_results: "reports/programme_01/session_momentum_001/mc/"
+
+# ============================================================================
+# Reproduction Commands
+# ============================================================================
+reproduction:
+  is_research: |
+    python -m mars.apps.research_lab.session_momentum_research --phase is
+  oos_research: |
+    python -m mars.apps.research_lab.session_momentum_research --phase oos --frozen
+  monte_carlo: |
+    python -m mars.apps.research_lab.session_momentum_montecarlo \
+      --trades reports/programme_01/session_momentum_001/oos/oos_trades.csv \
+      --equity 10000 --n_sims 10000
+  account_feasibility: |
+    python -m mars.apps.research_lab.account_feasibility \
+      --strategy session_momentum_001 --equity 30 \
+      --spec configs/instrument_spec_xauusdm.yaml

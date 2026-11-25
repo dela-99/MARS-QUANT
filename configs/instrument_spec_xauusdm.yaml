@@ -1,0 +1,103 @@
+# M.A.R.S. Quant — Instrument Specification (Exness XAUUSDm Standard)
+# Source: pair_config.offline (verified offline symbol configuration)
+# Used by: ContractAwareFixedFractionalRisk for sizing and cost conversion
+# Version: 1.0
+# Date: 2026-11-25
+
+instrument:
+  symbol: "XAUUSDm"
+  name: "Spot Gold vs USD (Exness Standard)"
+  asset_class: "commodity"
+  quote_currency: "USD"
+  base_currency: "XAU"
+
+# Contract Specification
+contract:
+  contract_size: 100.0        # Troy ounces per standard lot
+  pip_size: 0.01              # 1 pip = $0.01 per oz price move
+  point_size: 0.001           # Broker tick; spread column quoted in points
+  # 1 pip = 10 points
+  # 1 point = $0.001 per oz = $0.10 per lot (100 oz * $0.001)
+  # 1 pip  = $0.01 per oz  = $1.00 per lot (100 oz * $0.01)
+
+# Volume Constraints (Hard Rules from Exness)
+volume:
+  min: 0.01                   # Minimum lot size
+  max: 200.0                  # Maximum lot size
+  step: 0.01                  # Lot step increment
+  source: "pair_config.offline"
+  note: "Min volume breach → REJECT trade (never force oversized position)"
+
+# Margin & Leverage
+margin:
+  margin_currency: "USD"
+  leverage_max: 1000          # Exness Standard max leverage
+  leverage_default: 100       # Typical for gold
+  margin_rate: 0.01           # 1% margin requirement at 1:100
+  note: "Margin calculated in quote currency (USD)"
+
+# Cost Structure (Exness Standard Account)
+costs:
+  account_type: "Standard"
+  commission_per_lot_round_trip: 0.0    # No commission on Standard
+  swap_long_per_lot_night: -0.50        # Approx USD (varies daily)
+  swap_short_per_lot_night: -0.20       # Approx USD (varies daily)
+  spread:
+    typical_pips: 20.0                  # Observed median: 200 points = 20 pips
+    typical_points: 200
+    min_points: 0
+    max_points: 3352
+    unit: "points (0.001 price)"
+    note: "Median 200 points = 20 pips suggests Standard account (Raw Spread ~0.3 pips)"
+
+# Session Definitions (Fixed UTC)
+sessions_utc:
+  asia:     {start: "00:00", end: "08:00"}
+  europe:   {start: "08:00", end: "14:30"}
+  us:       {start: "14:30", end: "24:00"}
+  note: "No DST adjustment — seasonal distortions documented but not corrected"
+
+# Data Provenance
+data:
+  source: "Exness MT5 History Centre export"
+  timeframe: "M5"
+  version: "v1.2.0"
+  rows: 369972
+  date_range:
+    start: "2021-07-16T13:00:00Z"
+    end: "2026-10-09T20:55:00Z"
+  columns: ["open", "high", "low", "close", "tick_volume", "volume", "spread"]
+  spread_stats:
+    mean: 201.0
+    median: 200.0
+    std: 150.0
+    min: 0.0
+    max: 3352.0
+    zero_spread_bars: 98
+  known_issues:
+    - "20 in-session feed outages (max 10 missing bars) - documented, not filled"
+    - "98 bars carry spread == 0; cost model substitutes dataset median spread"
+    - "<VOL> (real volume) identically zero in Exness export; tick_volume only"
+    - "2020 M5 data is daily bars, excluded from v1.2.0"
+
+# $30 Account Feasibility (Per Programme Constraint)
+feasibility:
+  starting_equity_usd: 30.0
+  risk_fraction: 0.01
+  risk_budget_usd: 0.30
+  stop_distance_points: 200
+  stop_distance_price: 0.2
+  risk_per_lot_usd: 20.0      # 0.2 * 100 * 1.0 (USD quote)
+  lots_exact: 0.015
+  lots_floored: 0.01
+  risk_at_min_volume_usd: 0.20
+  risk_limit_usd: 0.30
+  verdict: "FEASIBLE at $30 (0.01 lots, SL=200 pts)"
+  note: "If SL increased beyond 300 points, min-volume breach occurs at $30 equity"
+
+# Version Control
+version:
+  spec_version: "1.0"
+  created: "2026-11-25"
+  source: "pair_config.offline"
+  verified: true
