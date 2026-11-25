@@ -228,5 +228,6 @@ audit_backups/
 
 # Large research outputs — use Git LFS
 reports/assignment14/ledger/equity_curve_*.csv
+reports/programme_01/**/mc_results.json
 
 .jcode_learning_*.py
