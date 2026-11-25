@@ -1,0 +1,81 @@
+{
+  "equity_usd": 30.0,
+  "tier": "Tier 0 ($0-100)",
+  "tier_limits": {
+    "max_per_trade_risk_pct": 0.07,
+    "max_aggregate_risk_pct": 0.07,
+    "max_concurrent_trades": 1,
+    "max_risk_per_trade_usd": 2.1,
+    "max_aggregate_risk_usd": 2.1
+  },
+  "xauusd_specs": {
+    "contract_size": 100.0,
+    "min_lot": 0.01,
+    "pip_size": 0.01,
+    "pip_value_per_lot": 1.0,
+    "pip_value_per_min_lot": 0.01
+  },
+  "backtest_requirements": {
+    "position_lots": 1.0,
+    "catastrophic_stop_pips": 1000,
+    "risk_at_catastrophic_stop_per_lot_usd": 1000.0,
+    "total_risk_at_backtest_size_usd": 1000.0
+  },
+  "feasibility_analysis": {
+    "1_lot": {
+      "risk_usd": 1000.0,
+      "risk_pct_of_equity": 33.333333333333336,
+      "within_tier_limit": false,
+      "verdict": "IMPOSSIBLE - 33,333% of equity"
+    },
+    "min_lot_catastrophic_stop": {
+      "risk_usd": 10.0,
+      "risk_pct_of_equity": 0.3333333333333333,
+      "within_tier_limit": false,
+      "verdict": "IMPOSSIBLE - 333% of equity (exceeds 7% tier limit)"
+    },
+    "min_lot_max_allowable_stop": {
+      "max_stop_pips": 210.0,
+      "risk_usd": 2.1,
+      "risk_pct_of_equity": 0.07,
+      "within_tier_limit": true,
+      "verdict": "Max 210 pip stop at min lot (0.01) to stay within 7% tier limit"
+    },
+    "min_lot_typical_atr_stop": {
+      "typical_atr_pips": 300,
+      "typical_stop_pips": 750,
+      "risk_usd": 7.5,
+      "risk_pct_of_equity": 0.25,
+      "within_tier_limit": false,
+      "verdict": "IMPOSSIBLE - Typical 2.5 ATR stop (750 pips) = $7.50 = 25% of equity"
+    }
+  },
+  "margin_analysis": {
+    "gold_price_assumed": 2000.0,
+    "notional_per_lot": 200000.0,
+    "margin_per_lot_100x": 2000.0,
+    "margin_per_min_lot_100x": 20.0,
+    "margin_per_min_lot_500x": 4.0,
+    "equity": 30.0,
+    "margin_usage_at_min_lot_100x": 0.6666666666666666,
+    "margin_usage_at_min_lot_500x": 0.13333333333333333,
+    "verdict": "At 1:100 leverage, min lot uses $20 margin = 67% of $30 equity. At 1:500, $4 = 13%"
+  },
+  "cost_analysis": {
+    "spread_pips": 1.0,
+    "spread_cost_per_min_lot_usd": 0.01,
+    "commission_per_lot_usd": 0.5,
+    "commission_per_min_lot_usd": 0.005,
+    "round_trip_cost_min_lot_usd": 0.03,
+    "cost_as_pct_of_equity": 0.001,
+    "verdict": "Round-trip cost at min lot: $0.0300 (0.10% of equity) - negligible"
+  },
+  "overall_verdict": {
+    "can_trade_at_backtest_size": false,
+    "can_trade_at_min_lot_with_strategy_stops": false,
+    "can_trade_at_min_lot_with_reduced_stops": true,
+    "max_allowable_stop_pips_at_min_lot": 210,
+    "strategy_compatibility": "INCOMPATIBLE - MA-TSM-001 requires wider stops (ATR-based) than $30 equity allows under tiered risk rules",
+    "recommendation": "Strategy CANNOT safely operate at $30 with current risk rules. Options: 1) Increase capital, 2) Modify risk tiers for micro accounts, 3) Use different strategy with tighter stops, 4) Accept higher risk (not recommended)"
+  }
+}
