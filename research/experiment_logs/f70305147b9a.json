@@ -1,0 +1,558 @@
+{
+  "experiment_id": "f70305147b9a",
+  "hypothesis_id": "VOL-REGIME-SESSION-005",
+  "name": "XAU-VOL-REGIME-SESSION-005 IS Research",
+  "description": "In-sample research for Volatility-Regime-Filtered Session Momentum",
+  "dataset_ids": [
+    "data/processed/xauusdm/m5/v1.2.0/data.parquet",
+    "data/processed/xauusdm/h1/v1.2.0/data.parquet"
+  ],
+  "feature_versions": [],
+  "parameters": {
+    "baseline_params": {
+      "signal_mode": "direction",
+      "threshold": 0.0,
+      "risk_fraction": 0.01,
+      "sl_points": 200,
+      "spread_multiplier": 1.0,
+      "commission_per_lot": 0.0,
+      "slippage_points": 0.0,
+      "block_fomc": false,
+      "block_high_vol": false,
+      "block_high_spread": false,
+      "starting_equity": 10000.0,
+      "symbol": "XAUUSDm",
+      "timeframe": "m5"
+    },
+    "candidate_params": {
+      "signal_mode": "direction",
+      "threshold": 0.0,
+      "vol_lookback_bars": 20,
+      "vol_percentile_threshold": 40.0,
+      "spread_percentile_threshold": 40.0,
+      "fomc_filter": true,
+      "risk_fraction": 0.01,
+      "sl_points": 200,
+      "spread_multiplier": 1.0,
+      "commission_per_lot": 0.0,
+      "slippage_points": 0.0,
+      "starting_equity": 10000.0,
+      "feasibility_equity": 30.0,
+      "symbol": "XAUUSDm",
+      "timeframe": "m5",
+      "is_start": "2021-10-01",
+      "is_end": "2024-12-31",
+      "burn_in_start": "2021-07-16",
+      "burn_in_end": "2021-09-30"
+    },
+    "sensitivity_grid": {
+      "spread_multiplier": "[1.0, 1.5, 2.0]",
+      "vol_percentile_threshold": "[30, 40, 50]",
+      "spread_percentile_threshold": "[30, 40, 50]",
+      "fomc_filter": "[True, False]",
+      "sl_points": "[150, 200, 250, 300]",
+      "dst_shift_hours": "[-1, 0, 1]"
+    }
+  },
+  "metrics": {
+    "model_a": {
+      "trade_metrics": {
+        "n_trades": 331,
+        "n_wins_gross": 0,
+        "n_wins_net": 0,
+        "win_rate_gross": 0.0,
+        "win_rate_net": 0.0,
+        "expectancy_gross_usd": -15.07576132930825,
+        "expectancy_net_usd": -30.151522658613388,
+        "expectancy_gross_pct": -0.001507576132930825,
+        "expectancy_net_pct": -0.0030151522658613387,
+        "profit_factor_gross": 0.0,
+        "profit_factor_net": 0.0,
+        "avg_r_multiple": -2.035287009063666,
+        "avg_holding_minutes": 0.0,
+        "avg_holding_sessions": 0.0,
+        "gross_profit_usd": 0.0,
+        "gross_loss_usd": 4990.077000001031,
+        "net_profit_usd": 0.0,
+        "net_loss_usd": 9980.154000001032,
+        "avg_win_usd": 0.0,
+        "avg_loss_usd": -30.151522658613388
+      },
+      "equity_metrics": {
+        "total_return": -0.9980154000001028,
+        "annualized_return": -0.8526089935505075,
+        "annualized_vol": 0.19367716346682054,
+        "sharpe": -4.402217475146834,
+        "max_drawdown": -0.9980154000001028,
+        "max_drawdown_usd": -9980.154000001028,
+        "max_drawdown_duration_bars": 229449,
+        "calmar": -0.8543044461542574
+      },
+      "by_session": {
+        "n_trades": {
+          "Asia->Europe": 106,
+          "Europe->US": 101,
+          "US->Asia": 124
+        },
+        "win_rate": {
+          "Asia->Europe": 0.0,
+          "Europe->US": 0.0,
+          "US->Asia": 0.0
+        },
+        "avg_pnl": {
+          "Asia->Europe": -26.6546,
+          "Europe->US": -30.6812,
+          "US->Asia": -32.7094
+        },
+        "total_pnl": {
+          "Asia->Europe": -2825.384,
+          "Europe->US": -3098.8,
+          "US->Asia": -4055.97
+        },
+        "avg_r": {
+          "Asia->Europe": -2.0133,
+          "Europe->US": -2.0198,
+          "US->Asia": -2.0667
+        }
+      },
+      "by_year": {
+        "n_trades": {
+          "2021": 114,
+          "2022": 217
+        },
+        "win_rate": {
+          "2021": 0.0,
+          "2022": 0.0
+        },
+        "avg_pnl": {
+          "2021": -79.4208,
+          "2022": -4.2681
+        },
+        "total_pnl": {
+          "2021": -9053.97,
+          "2022": -926.184
+        },
+        "avg_r": {
+          "2021": -2.055,
+          "2022": -2.0249
+        }
+      },
+      "by_regime": {
+        "n_trades": {
+          "true": 331
+        },
+        "win_rate": {
+          "true": 0.0
+        },
+        "avg_pnl": {
+          "true": -30.1515
+        },
+        "total_pnl": {
+          "true": -9980.154
+        }
+      },
+      "exposure_metrics": {
+        "exposure": 0.001441983053431789,
+        "turnover": 485.42,
+        "avg_leverage": 73.3262839879154
+      },
+      "cost_metrics": {
+        "total_spread_cost": 4990.077,
+        "total_commission": 0.0,
+        "total_swap": 0.0,
+        "total_costs": 4990.077,
+        "avg_spread_cost_per_trade": 15.075761329305136,
+        "avg_commission_per_trade": 0.0,
+        "cost_as_pct_of_gross_pnl": 0.9999999999997935
+      },
+      "rejected_signals": 1054,
+      "regime_stats": {
+        "n_base_signals": 331,
+        "n_regime_filtered": 0,
+        "n_vol_filtered": 0,
+        "n_spread_filtered": 0,
+        "n_fomc_filtered": 0
+      },
+      "run_record": {
+        "strategy_id": "XAU-SESSION-MOM-001",
+        "params": {
+          "signal_mode": "direction",
+          "threshold": 0.0,
+          "risk_fraction": 0.01,
+          "sl_points": 200,
+          "spread_multiplier": 1.0,
+          "commission_per_lot": 0.0,
+          "slippage_points": 0.0,
+          "block_fomc": false,
+          "block_high_vol": false,
+          "block_high_spread": false,
+          "starting_equity": 10000.0,
+          "symbol": "XAUUSDm",
+          "timeframe": "m5"
+        },
+        "cost_model": {
+          "spread_multiplier": 1.0,
+          "commission_per_lot_round_trip": 0.0,
+          "slippage_points": 0.0,
+          "swap_per_lot_night": 0.0,
+          "use_observed_spread": true,
+          "fallback_spread_points": 200.0,
+          "cost_source": "observed_bar_spread"
+        },
+        "execution_model": {
+          "entry_fill": "next_bar_open",
+          "stop_fill": "gap_aware_conservative",
+          "same_bar_priority": "worst_price",
+          "exit_fill": "next_bar_open",
+          "reversal_policy": "opposite_signal_ignored"
+        },
+        "instrument_spec": {
+          "symbol": "XAUUSDm",
+          "contract_size": 100.0,
+          "pip_size": 0.01,
+          "point_size": 0.001,
+          "quote_currency": "USD",
+          "volume_min": 0.01,
+          "volume_max": 200.0,
+          "volume_step": 0.01,
+          "volume_spec_source": "pair_config.offline",
+          "spec_source": "pair_config.offline",
+          "pip_value_per_lot_usd": 1.0,
+          "point_value_per_lot_usd": 0.1
+        },
+        "starting_equity": 10000.0,
+        "final_equity": 19.845999998972406,
+        "total_bars": 229545,
+        "bars_in_market": 331,
+        "trades": 331,
+        "rejected_signals": 1054
+      }
+    },
+    "model_b": {
+      "trade_metrics": {
+        "n_trades": 334,
+        "n_wins_gross": 0,
+        "n_wins_net": 0,
+        "win_rate_gross": 0.0,
+        "win_rate_net": 0.0,
+        "expectancy_gross_usd": -14.940718562877516,
+        "expectancy_net_usd": -29.88136526946434,
+        "expectancy_gross_pct": -0.0014940718562877517,
+        "expectancy_net_pct": -0.002988136526946434,
+        "profit_factor_gross": 0.0,
+        "profit_factor_net": 0.0,
+        "avg_r_multiple": -2.014610778443297,
+        "avg_holding_minutes": 0.5089820359281437,
+        "avg_holding_sessions": 0.001060379241516966,
+        "gross_profit_usd": 0.0,
+        "gross_loss_usd": 4990.20000000109,
+        "net_profit_usd": 0.0,
+        "net_loss_usd": 9980.37600000109,
+        "avg_win_usd": 0.0,
+        "avg_loss_usd": -29.88136526946434
+      },
+      "equity_metrics": {
+        "total_return": -0.9980376000001092,
+        "annualized_return": -0.8531183003601861,
+        "annualized_vol": 0.20674557527808726,
+        "sharpe": -4.126416244762106,
+        "max_drawdown": -0.9980376000001091,
+        "max_drawdown_usd": -9980.376000001092,
+        "max_drawdown_duration_bars": 228717,
+        "calmar": -0.8547957515429206
+      },
+      "by_session": {
+        "n_trades": {
+          "Asia->Europe": 79,
+          "Europe->US": 136,
+          "US->Asia": 119
+        },
+        "win_rate": {
+          "Asia->Europe": 0.0,
+          "Europe->US": 0.0,
+          "US->Asia": 0.0
+        },
+        "avg_pnl": {
+          "Asia->Europe": -26.962,
+          "Europe->US": -27.397,
+          "US->Asia": -34.6587
+        },
+        "total_pnl": {
+          "Asia->Europe": -2129.995,
+          "Europe->US": -3725.99,
+          "US->Asia": -4124.391
+        },
+        "avg_r": {
+          "Asia->Europe": -1.9997,
+          "Europe->US": -2.0143,
+          "US->Asia": -2.0248
+        }
+      },
+      "by_year": {
+        "n_trades": {
+          "2021": 42,
+          "2022": 106,
+          "2023": 164,
+          "2024": 22
+        },
+        "win_rate": {
+          "2021": 0.0,
+          "2022": 0.0,
+          "2023": 0.0,
+          "2024": 0.0
+        },
+        "avg_pnl": {
+          "2021": -139.1524,
+          "2022": -34.6038,
+          "2023": -2.7999,
+          "2024": -0.3994
+        },
+        "total_pnl": {
+          "2021": -5844.4,
+          "2022": -3668.0,
+          "2023": -459.189,
+          "2024": -8.787
+        },
+        "avg_r": {
+          "2021": -2.0714,
+          "2022": -2.0189,
+          "2023": -1.9997,
+          "2024": -1.997
+        }
+      },
+      "by_regime": {
+        "n_trades": {
+          "true": 334
+        },
+        "win_rate": {
+          "true": 0.0
+        },
+        "avg_pnl": {
+          "true": -29.8814
+        },
+        "total_pnl": {
+          "true": -9980.376
+        }
+      },
+      "exposure_metrics": {
+        "exposure": 0.001603171491428696,
+        "turnover": 486.90000000000003,
+        "avg_leverage": 72.88922155688623
+      },
+      "cost_metrics": {
+        "total_spread_cost": 4990.176,
+        "total_commission": 0.0,
+        "total_swap": 0.0,
+        "total_costs": 4990.176,
+        "avg_spread_cost_per_trade": 14.940646706586827,
+        "avg_commission_per_trade": 0.0,
+        "cost_as_pct_of_gross_pnl": 0.9999951905733057
+      },
+      "rejected_signals": 124,
+      "regime_stats": {
+        "n_base_signals": 118351,
+        "n_regime_filtered": 77730,
+        "n_vol_filtered": 0,
+        "n_spread_filtered": 0,
+        "n_fomc_filtered": 0
+      },
+      "run_record": {
+        "strategy_id": "XAU-VOL-REGIME-SESSION-005",
+        "params": {
+          "signal_mode": "direction",
+          "threshold": 0.0,
+          "vol_lookback_bars": 20,
+          "vol_percentile_threshold": 40.0,
+          "spread_percentile_threshold": 40.0,
+          "fomc_filter": true,
+          "risk_fraction": 0.01,
+          "sl_points": 200,
+          "spread_multiplier": 1.0,
+          "commission_per_lot": 0.0,
+          "slippage_points": 0.0,
+          "starting_equity": 10000.0,
+          "feasibility_equity": 30.0,
+          "symbol": "XAUUSDm",
+          "timeframe": "m5",
+          "is_start": "2021-10-01",
+          "is_end": "2024-12-31",
+          "burn_in_start": "2021-07-16",
+          "burn_in_end": "2021-09-30"
+        },
+        "cost_model": {
+          "spread_multiplier": 1.0,
+          "commission_per_lot_round_trip": 0.0,
+          "slippage_points": 0.0,
+          "swap_per_lot_night": 0.0,
+          "use_observed_spread": true,
+          "fallback_spread_points": 200.0,
+          "cost_source": "observed_bar_spread"
+        },
+        "execution_model": {
+          "entry_fill": "next_bar_open",
+          "stop_fill": "gap_aware_conservative",
+          "same_bar_priority": "worst_price",
+          "exit_fill": "next_bar_open",
+          "reversal_policy": "opposite_signal_ignored"
+        },
+        "instrument_spec": {
+          "symbol": "XAUUSDm",
+          "contract_size": 100.0,
+          "pip_size": 0.01,
+          "point_size": 0.001,
+          "quote_currency": "USD",
+          "volume_min": 0.01,
+          "volume_max": 200.0,
+          "volume_step": 0.01,
+          "volume_spec_source": "pair_config.offline",
+          "spec_source": "pair_config.offline",
+          "pip_value_per_lot_usd": 1.0,
+          "point_value_per_lot_usd": 0.1
+        },
+        "starting_equity": 10000.0,
+        "final_equity": 19.623999998908563,
+        "total_bars": 229545,
+        "bars_in_market": 368,
+        "trades": 334,
+        "rejected_signals": 124,
+        "regime_stats": {
+          "n_base_signals": 118351,
+          "n_regime_filtered": 77730,
+          "n_vol_filtered": 0,
+          "n_spread_filtered": 0,
+          "n_fomc_filtered": 0
+        }
+      }
+    },
+    "model_c": {
+      "n_permutations": 10000,
+      "seed": 20261126,
+      "observed_expectancy": -29.88136526946434,
+      "null_mean": -29.881365269464347,
+      "null_std": 2.578105204026817e-15,
+      "p_value": 0.1305,
+      "null_percentiles": {
+        "p5": -29.881365269464347,
+        "p50": -29.881365269464347,
+        "p95": -29.88136526946434,
+        "p975": -29.88136526946434,
+        "p99": -29.88136526946434
+      },
+      "verdict": "FAIL_TO_REJECT_NULL",
+      "interpretation": "Cannot reject null that regime filter is random"
+    },
+    "interaction": {
+      "regression_equation": "PnL = β_0 + β_1×Signal + β_2×Regime + β_3×(Signal×Regime) + ε",
+      "dependent_variable": "net_pnl_per_session",
+      "independent_variables": [
+        "signal",
+        "regime",
+        "interaction"
+      ],
+      "interaction_term": "Signal × Regime",
+      "n_observations": 2684,
+      "coefficients": {
+        "const": -1.658512411749782e-16,
+        "signal": -6.459117588183993e-15,
+        "regime": 1.8452030332475697e-14,
+        "interaction": -21.79121397380156
+      },
+      "standard_errors": {
+        "const": 2.2541020357469172e-8,
+        "signal": 4.46794599719817e-8,
+        "regime": null,
+        "interaction": 3.1599822258282937
+      },
+      "t_values": {
+        "const": -7.357752157835299e-9,
+        "signal": -1.4456570406702493e-7,
+        "regime": null,
+        "interaction": -6.895992577328391
+      },
+      "p_values_two_sided": {
+        "const": 0.9999999941293631,
+        "signal": 0.9999998846532567,
+        "regime": null,
+        "interaction": 5.348998843977576e-12
+      },
+      "p_value_one_sided_interaction": 0.9999999999973255,
+      "interaction_ci": [
+        -27.98477913642502,
+        -15.597648811178106
+      ],
+      "r_squared": 0.17614813220276848,
+      "r_squared_adj": 0.17522590996269682,
+      "durbin_watson": 1.4098227854765275,
+      "breusch_pagan_lm": 230.27233520050117,
+      "breusch_pagan_p": 1.2076262849146439e-49,
+      "model_diagnostics": {
+        "serial_correlation": "checked via Durbin-Watson",
+        "heteroskedasticity": "checked via Breusch-Pagan",
+        "standard_errors": "HAC (Newey-West, maxlags=5)"
+      },
+      "fc_005_2_result": {
+        "beta_3": -21.79121397380156,
+        "se": 3.1599822258282937,
+        "p_one_sided": 0.9999999999973255,
+        "pass": false
+      }
+    },
+    "falsification": {
+      "checks": {
+        "fc_005_1_expectancy_positive": {
+          "threshold": "> $0.0",
+          "observed": "$-29.88",
+          "pass": false
+        },
+        "fc_005_2_interaction": {
+          "threshold": "β_3 > 0, p < 0.05 (one-sided)",
+          "observed": "β_3 = -21.7912, p = 1.0000",
+          "pass": false
+        },
+        "fc_005_3_oos_expectancy": {
+          "threshold": "> $0.0",
+          "observed": "NOT_RUN_IN_ASSIGNMENT_21",
+          "pass": null,
+          "note": "OOS validation requires separate Assignment 22+ authorization"
+        },
+        "fc_005_4_cost_sensitivity": {
+          "threshold_1x": "> $0.0 at 1.0×",
+          "observed_1x": "$-29.88",
+          "pass_1x": false,
+          "threshold_1_5x": "> $0.0 at 1.5×",
+          "observed_1_5x": "$-45.36",
+          "pass_1_5x": false
+        },
+        "min_trades_is": {
+          "threshold": "≥ 50",
+          "observed": "334",
+          "pass": true
+        },
+        "min_trades_oos": {
+          "threshold": "≥ 20",
+          "observed": "NOT_RUN_IN_ASSIGNMENT_21",
+          "pass": null,
+          "note": "OOS validation requires separate Assignment 22+ authorization"
+        },
+        "max_dd_is": {
+          "threshold": "< 30% ($29.94 at $30 equity)",
+          "observed": "-99.80% ($29.94 at $30 equity)",
+          "pass": false
+        },
+        "min_expectancy_is": {
+          "threshold": "> $0.05/trade",
+          "observed": "$-29.88/trade",
+          "pass": false
+        }
+      },
+      "all_pass": false,
+      "verdict": "REJECTED — NO DEFENSIBLE EDGE"
+    }
+  },
+  "artifacts": [],
+  "status": "created",
+  "seed": 20261125,
+  "created_at": "2026-11-25T14:11:34.741458Z",
+  "completed_at": null,
+  "notes": ""
+}
