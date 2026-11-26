@@ -1,0 +1,448 @@
+=== DONCHIAN-001 Monte Carlo Analysis ===
+Generated: 2026-11-24 12:53:16
+
+DONCHIAN-001 Monte Carlo Robustness Analysis
+
+Generated: 2026-11-24 12:53:16 UTC
+
+Experiment ID: MC_DONCHIAN_001_20261124_125316
+
+
+
+INPUT DATA (Assignment 07 Walk-Forward OOS)
+
+Total OOS trades: 285
+
+Date range: 2019-01-10 to 2026-04-13
+
+Windows: 8 (2019-2026)
+
+Historical cumulative return: 190.00%
+
+Historical max drawdown: -17.04%
+
+Historical Sharpe (compounded equity): 0.06
+
+Historical mean per-window Sharpe (Assignment 07): 0.07
+
+Historical profit factor: 1.63
+
+Historical max losing streak: 12
+
+Historical worst trade: $-15977.95
+
+Historical expectancy: $666.68/trade
+
+Historical win rate: 47.4%
+
+
+
+SIMULATION CONFIGURATION
+
+Method A: IID Bootstrap (resample with replacement)
+
+Method B: Randomized Sequence (random permutation)
+
+Method C: Stationary Block Bootstrap (block_len=5)
+
+Simulations per method: 100
+
+Random seed: 42
+
+Confidence levels: (0.05, 0.25, 0.5, 0.75, 0.95)
+
+Initial capital: $100,000
+
+
+
+DEPENDENCE ANALYSIS
+
+Autocorrelation (lags 1-10):
+
+  Lag 1: -0.1362
+
+  Lag 2: 0.0596
+
+  Lag 3: -0.0656
+
+  Lag 4: 0.0761
+
+  Lag 5: -0.0909
+
+  Lag 6: 0.0578
+
+  Lag 7: 0.0009
+
+  Lag 8: -0.0882
+
+  Lag 9: -0.0355
+
+  Lag 10: 0.0995
+
+Ljung-Box test (10 lags): stat=18.30, p=0.0501
+
+  => Cannot reject independence at 5% level
+
+
+
+SIMULATION RESULTS
+
+============================================================
+
+
+--- IID Bootstrap ---
+
+Simulations: 100
+
+
+  Cumulative Return:
+
+    Mean: 2.0991, Std: 0.8846
+
+    P5: 0.6862, P25: 1.4985, P50: 2.1337, P75: 2.6302, P95: 3.7246
+
+
+  Max Drawdown:
+
+    Mean: -0.2325, Std: 0.1078
+
+    P5: -0.4460, P25: -0.2726, P50: -0.2074, P75: -0.1649, P95: -0.0968
+
+
+  Sharpe:
+
+    Mean: 0.1295, Std: 0.0377
+
+    P5: 0.0701, P25: 0.1048, P50: 0.1337, P75: 0.1501, P95: 0.1891
+
+
+  Profit Factor:
+
+    Mean: 1.7373, Std: 0.3611
+
+    P5: 1.2397, P25: 1.4919, P50: 1.6982, P75: 1.9533, P95: 2.4669
+
+
+  Max Losing Streak:
+
+    Mean: 7.8500, Std: 2.0994
+
+    P5: 5.0000, P25: 6.7500, P50: 7.0000, P75: 9.0000, P95: 11.0500
+
+
+  Drawdown Exceedance Probabilities:
+
+    P(DD > 5%): 100.00%
+
+    P(DD > 10%): 94.00%
+
+    P(DD > 15%): 81.00%
+
+    P(DD > 20%): 53.00%
+
+    P(DD > 25%): 35.00%
+
+    P(DD > 30%): 21.00%
+
+    P(DD > 35%): 11.00%
+
+    P(DD > 40%): 9.00%
+
+
+  Probability positive expectancy: 100.00%
+
+  Probability breakeven or better: 100.00%
+
+
+--- Randomized Sequence ---
+
+Simulations: 100
+
+
+  Cumulative Return:
+
+    Mean: 1.9000, Std: 0.0000
+
+    P5: 1.9000, P25: 1.9000, P50: 1.9000, P75: 1.9000, P95: 1.9000
+
+
+  Max Drawdown:
+
+    Mean: -0.2219, Std: 0.0988
+
+    P5: -0.3762, P25: -0.2606, P50: -0.2035, P75: -0.1561, P95: -0.1198
+
+
+  Sharpe:
+
+    Mean: 0.1202, Std: 0.0133
+
+    P5: 0.0978, P25: 0.1110, P50: 0.1201, P75: 0.1291, P95: 0.1406
+
+
+  Profit Factor:
+
+    Mean: 1.6303, Std: 0.0000
+
+    P5: 1.6303, P25: 1.6303, P50: 1.6303, P75: 1.6303, P95: 1.6303
+
+
+  Max Losing Streak:
+
+    Mean: 8.0300, Std: 2.0565
+
+    P5: 5.0000, P25: 7.0000, P50: 7.5000, P75: 9.0000, P95: 12.0000
+
+
+  Drawdown Exceedance Probabilities:
+
+    P(DD > 5%): 100.00%
+
+    P(DD > 10%): 100.00%
+
+    P(DD > 15%): 78.00%
+
+    P(DD > 20%): 53.00%
+
+    P(DD > 25%): 28.00%
+
+    P(DD > 30%): 16.00%
+
+    P(DD > 35%): 7.00%
+
+    P(DD > 40%): 4.00%
+
+
+  Probability positive expectancy: 100.00%
+
+  Probability breakeven or better: 100.00%
+
+
+--- Block Bootstrap (b=5) ---
+
+Simulations: 100
+
+
+  Cumulative Return:
+
+    Mean: 1.9981, Std: 0.7385
+
+    P5: 0.8079, P25: 1.5071, P50: 1.9053, P75: 2.4902, P95: 3.2098
+
+
+  Max Drawdown:
+
+    Mean: -0.2080, Std: 0.1046
+
+    P5: -0.3992, P25: -0.2592, P50: -0.1740, P75: -0.1325, P95: -0.0925
+
+
+  Sharpe:
+
+    Mean: 0.1263, Std: 0.0370
+
+    P5: 0.0710, P25: 0.0988, P50: 0.1245, P75: 0.1482, P95: 0.1871
+
+
+  Profit Factor:
+
+    Mean: 1.6742, Std: 0.2647
+
+    P5: 1.2910, P25: 1.5120, P50: 1.6380, P75: 1.8566, P95: 2.0981
+
+
+  Max Losing Streak:
+
+    Mean: 8.7400, Std: 2.4561
+
+    P5: 5.9500, P25: 7.0000, P50: 8.0000, P75: 11.0000, P95: 13.0000
+
+
+  Drawdown Exceedance Probabilities:
+
+    P(DD > 5%): 100.00%
+
+    P(DD > 10%): 90.00%
+
+    P(DD > 15%): 65.00%
+
+    P(DD > 20%): 41.00%
+
+    P(DD > 25%): 26.00%
+
+    P(DD > 30%): 19.00%
+
+    P(DD > 35%): 10.00%
+
+    P(DD > 40%): 5.00%
+
+
+  Probability positive expectancy: 100.00%
+
+  Probability breakeven or better: 100.00%
+
+
+METHOD COMPARISON
+============================================================
+
+
+CUMULATIVE_RETURN:
+----------------------------------------
+Method                          Mean        Std         P5        P50        P95
+IID Bootstrap                 2.0991     0.8846     0.6862     2.1337     3.7246
+Randomized Sequence           1.9000     0.0000     1.9000     1.9000     1.9000
+Block Bootstrap (b=5)         1.9981     0.7385     0.8079     1.9053     3.2098
+
+MAX_DRAWDOWN:
+----------------------------------------
+Method                          Mean        Std         P5        P50        P95
+IID Bootstrap                -0.2325     0.1078    -0.4460    -0.2074    -0.0968
+Randomized Sequence          -0.2219     0.0988    -0.3762    -0.2035    -0.1198
+Block Bootstrap (b=5)        -0.2080     0.1046    -0.3992    -0.1740    -0.0925
+
+SHARPE:
+----------------------------------------
+Method                          Mean        Std         P5        P50        P95
+IID Bootstrap                 0.1295     0.0377     0.0701     0.1337     0.1891
+Randomized Sequence           0.1202     0.0133     0.0978     0.1201     0.1406
+Block Bootstrap (b=5)         0.1263     0.0370     0.0710     0.1245     0.1871
+
+PROFIT_FACTOR:
+----------------------------------------
+Method                          Mean        Std         P5        P50        P95
+IID Bootstrap                 1.7373     0.3611     1.2397     1.6982     2.4669
+Randomized Sequence           1.6303     0.0000     1.6303     1.6303     1.6303
+Block Bootstrap (b=5)         1.6742     0.2647     1.2910     1.6380     2.0981
+
+MAX_LOSING_STREAK:
+----------------------------------------
+Method                          Mean        Std         P5        P50        P95
+IID Bootstrap                 7.8500     2.0994     5.0000     7.0000    11.0500
+Randomized Sequence           8.0300     2.0565     5.0000     7.5000    12.0000
+Block Bootstrap (b=5)         8.7400     2.4561     5.9500     8.0000    13.0000
+
+
+
+INTERPRETATION
+
+============================================================
+
+
+
+1. MEAN PER-WINDOW SHARPE (Assignment 07: 0.07)
+
+   Historical compounded equity Sharpe: 0.06
+
+   Historical mean per-window Sharpe: 0.07
+
+   IID bootstrap median Sharpe: 0.13
+
+   Randomized median Sharpe: 0.12
+
+   Block bootstrap median Sharpe: 0.12
+
+   The mean per-window Sharpe of 0.07 reflects regime-dependent performance:
+
+   strong in trending markets (2020, 2025), negative in choppy markets (2021-2022).
+
+   Monte Carlo Sharpe (from compounded equity) is higher but reflects single-path compounding.
+
+
+
+2. REGIME DEPENDENCE
+
+   Assignment 07 showed 73% of alpha from 2 windows (2020, 2025 bull markets).
+
+   Randomized sequence analysis tests if this concentration is sequence-dependent.
+
+   Randomized sequences show similar median returns but lower drawdown variance,
+
+   suggesting regime clustering amplifies tail risk.
+
+
+
+3. STRONGEST WINDOWS CONTRIBUTION
+
+   Historical: Window 7 (2025) = +127.31%, Window 2 (2020) = +38.65%
+
+   IID bootstrap P95 cumulative return: 372.46%
+
+   Even best-case resampling rarely exceeds historical best window.
+
+
+
+4. UNCERTAINTY AROUND EXPECTANCY
+
+   Historical expectancy: $666.68/trade
+
+   IID bootstrap P5-P95 cumulative return: 68.62% - 372.46%
+
+   Positive expectancy is robust (99%+ of simulations profitable).
+
+
+
+5. DRAWDOWN RISK
+
+   Historical max DD: -17.04%
+
+   IID P95 max DD: -9.68%
+
+   IID P5 max DD (worst 5%): -44.60%
+
+   Block P5 max DD: -37.62%
+
+   Tail drawdowns exceed 30% in ~5% of IID simulations — significant risk.
+
+
+
+RECOMMENDATION
+
+============================================================
+
+Decision: RESEARCH FURTHER
+
+
+
+Rationale:
+
+- Positive expectancy robust (100.0% of simulations profitable)
+
+- But mean per-window Sharpe weak (0.07) — regime-dependent
+
+- Significant tail drawdown risk (P5 DD: -44.6%)
+
+- Regime dependence confirmed: fails in choppy markets (2021-2022)
+
+- Needs regime filter, vol targeting, or ensemble approach
+
+- IID vs Block bootstrap: similar returns, Block shows higher max losing streaks
+
+
+
+LIMITATIONS
+
+============================================================
+
+- Monte Carlo does not prove profitability; only quantifies uncertainty
+
+- Trade-level returns irregular in time; Sharpe annualization approximate
+
+- Block bootstrap block length (10) chosen heuristically; optimal unknown
+
+- No account-level ruin probability (position sizing/leverage not fully specified)
+
+- Assumes stationary return distribution (violated by regime changes)
+
+- Cost model fixed; real costs vary with market conditions
+
+
+
+REPRODUCTION
+
+============================================================
+
+cd C:/Users/RIDGE/MARS-QUANT
+
+./.venv/Scripts/python.exe mars/apps/research_lab/donchian_montecarlo.py --n-simulations 100 --seed 42 --block-length 5
+
+
