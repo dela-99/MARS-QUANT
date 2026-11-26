@@ -1,6 +1,6 @@
 """Inspect audit DB schema and current data shape for the dashboard."""
 import sqlite3
-c = sqlite3.connect(r"C:\Users\RIDGE\AppData\Local\Temp\mt5_audit_real.db")
+c = sqlite3.connect(r"C:\Users\RIDGE\MARS-QUANT\mt5_audit_backup.db")
 cur = c.cursor()
 
 print("=== TABLES ===")

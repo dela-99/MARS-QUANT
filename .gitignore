@@ -225,6 +225,7 @@ audit_backups/
 # Audit databases
 *_audit*.db
 *_audit*.db-*
+mt5_audit_backup.db*
 
 # Large research outputs — use Git LFS
 reports/assignment14/ledger/equity_curve_*.csv
