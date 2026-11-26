@@ -216,6 +216,16 @@ artifacts/
 MARS_TIERED_RISK_VERIFICATION/
 apply_fixes.py
 
+# Debug/one-off utility scripts (not part of production codebase)
+check_parens.py
+fix_test_file.py
+inspect_db2.py
+test_syntax.py
+
+# Large research outputs — preserved locally with SHA-256 manifests
+research_output/
+results/
+
 # risk/kill-switch state files
 risk_kill_switch*.json
 risk_kill_switch*.db
