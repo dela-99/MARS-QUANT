@@ -196,7 +196,7 @@ def check_spread(
 ) -> list[ValidationIssue]:
     """
     Validate spread column if present.
- 
+
     If no spread column, reports info only (not an error).
     """
     issues: list[ValidationIssue] = []
@@ -209,7 +209,7 @@ def check_spread(
             )
         )
         return issues
- 
+
     neg = df["spread"] < 0
     if neg.any():
         issues.append(
@@ -220,7 +220,7 @@ def check_spread(
                 count=int(neg.sum()),
             )
         )
- 
+
     if "close" in df.columns:
         pct = df["spread"] / df["close"].replace(0, np.nan)
         wide = pct > max_spread_pct
@@ -234,4 +234,151 @@ def check_spread(
                     count=n_wide,
                 )
             )
+    return issues
+
+
+# ============================================================================
+# Tick Data Validation
+# ============================================================================
+
+
+def check_tick_schema(df: pd.DataFrame) -> list[ValidationIssue]:
+    """Validate tick data has required columns and DatetimeIndex."""
+    issues: list[ValidationIssue] = []
+    required = ("bid", "ask")
+    missing = [c for c in required if c not in df.columns]
+    if missing:
+        issues.append(
+            ValidationIssue(
+                code="TICK_SCHEMA_MISSING_COLUMNS",
+                severity="error",
+                message=f"Missing required tick columns: {missing}",
+                count=len(missing),
+            )
+        )
+    if not isinstance(df.index, pd.DatetimeIndex):
+        issues.append(
+            ValidationIssue(
+                code="TICK_SCHEMA_INDEX_NOT_DATETIME",
+                severity="error",
+                message="Tick index must be a DatetimeIndex (UTC preferred).",
+            )
+        )
+    return issues
+
+
+def check_tick_integrity(df: pd.DataFrame) -> list[ValidationIssue]:
+    """Validate bid <= ask, positive prices, monotonic timestamps."""
+    issues: list[ValidationIssue] = []
+
+    if "bid" not in df.columns or "ask" not in df.columns:
+        return issues
+
+    # Bid <= Ask
+    bad_order = df["bid"] > df["ask"]
+    if bad_order.any():
+        issues.append(
+            ValidationIssue(
+                code="TICK_BID_GREATER_THAN_ASK",
+                severity="error",
+                message=f"{int(bad_order.sum())} ticks with bid > ask.",
+                count=int(bad_order.sum()),
+                examples=[str(t) for t in df.index[bad_order][:5]],
+            )
+        )
+
+    # Positive prices
+    for col in ("bid", "ask", "last"):
+        if col in df.columns:
+            non_pos = df[col] <= 0
+            if non_pos.any():
+                issues.append(
+                    ValidationIssue(
+                        code=f"TICK_{col.upper()}_NONPOSITIVE",
+                        severity="error",
+                        message=f"{int(non_pos.sum())} ticks with non-positive {col}.",
+                        count=int(non_pos.sum()),
+                        examples=[str(t) for t in df.index[non_pos][:5]],
+                    )
+                )
+
+    # Monotonic timestamps
+    if not df.index.is_monotonic_increasing:
+        issues.append(
+            ValidationIssue(
+                code="TICK_TIMESTAMP_NOT_MONOTONIC",
+                severity="warning",
+                message="Tick timestamps are not monotonically increasing.",
+            )
+        )
+
+    # Duplicate timestamps
+    dup_mask = df.index.duplicated(keep=False)
+    n_dup = int(dup_mask.sum())
+    if n_dup:
+        issues.append(
+            ValidationIssue(
+                code="TICK_DUPLICATE_TIMESTAMPS",
+                severity="warning",
+                message=f"Found {n_dup} ticks with duplicate timestamps.",
+                count=n_dup,
+                examples=[str(t) for t in df.index[dup_mask][:5]],
+            )
+        )
+
+    # Spread sanity
+    if "spread" in df.columns:
+        neg_spread = df["spread"] < 0
+        if neg_spread.any():
+            issues.append(
+                ValidationIssue(
+                    code="TICK_SPREAD_NEGATIVE",
+                    severity="error",
+                    message=f"{int(neg_spread.sum())} ticks with negative spread.",
+                    count=int(neg_spread.sum()),
+                )
+            )
+        # Extremely wide spread (>10% of mid price)
+        if "bid" in df.columns and "ask" in df.columns:
+            mid = (df["bid"] + df["ask"]) / 2
+            wide = df["spread"] > mid * 0.1
+            if wide.any():
+                issues.append(
+                    ValidationIssue(
+                        code="TICK_SPREAD_EXTREME",
+                        severity="warning",
+                        message=f"{int(wide.sum())} ticks with spread > 10% of mid price.",
+                        count=int(wide.sum()),
+                    )
+                )
+
+    return issues
+
+
+def check_m1_ohlc_consistency(df: pd.DataFrame) -> list[ValidationIssue]:
+    """
+    OHLC consistency check for M1 timeframe.
+    Same logic as check_ohlc_consistency but for M1 frequency expectations.
+    """
+    issues: list[ValidationIssue] = []
+    required = ("open", "high", "low", "close")
+    for col in required:
+        if col not in df.columns:
+            return issues
+
+    high_ok = (df["high"] >= df[["open", "close"]].max(axis=1)) & (df["high"] >= df["low"])
+    low_ok = (df["low"] <= df[["open", "close"]].min(axis=1)) & (df["low"] <= df["high"])
+    bad = ~(high_ok & low_ok)
+    n_bad = int(bad.sum())
+    if n_bad:
+        examples = [str(t) for t in df.index[bad][:5]]
+        issues.append(
+            ValidationIssue(
+                code="M1_OHLC_INCONSISTENT",
+                severity="error",
+                message=f"{n_bad} M1 bars fail OHLC consistency.",
+                count=n_bad,
+                examples=examples,
+            )
+        )
     return issues
