@@ -473,5 +473,46 @@
     ],
     "extra": {},
     "created_at": "2026-09-16T10:17:23.021966Z"
+  },
+  "xauusdm_m1_1.0.0_f7004618": {
+    "dataset_id": "xauusdm_m1_1.0.0_f7004618",
+    "layer": "processed",
+    "symbol": "XAUUSDM",
+    "timeframe": "M1",
+    "version": "1.0.0",
+    "source": "exness_mt5",
+    "timezone": "UTC",
+    "start_ts": "2025-11-25T00:00:00Z",
+    "end_ts": "2026-11-25T00:00:00Z",
+    "row_count": 353632,
+    "columns": [
+      "open",
+      "high",
+      "low",
+      "close",
+      "volume",
+      "spread"
+    ],
+    "fingerprint": {
+      "algorithm": "sha256",
+      "digest": "6495680ed2bf7b18db4f65885e01a37d069a49992ffc467bb4c51284ab6b9aa7",
+      "row_count": 353632,
+      "column_names": [
+        "timestamp",
+        "open",
+        "high",
+        "low",
+        "close",
+        "volume",
+        "spread"
+      ],
+      "created_at": "2026-11-25T16:50:59.311913Z"
+    },
+    "parent_dataset_id": null,
+    "tags": [
+      "ingestion_pipeline"
+    ],
+    "extra": {},
+    "created_at": "2026-11-25T16:50:59.315074Z"
   }
 }
