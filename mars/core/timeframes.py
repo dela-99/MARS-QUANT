@@ -24,6 +24,7 @@ class Timeframe(str, Enum):
     M15 = "M15"
     M5 = "M5"
     M3 = "M3"
+    M1 = "M1"
  
     @property
     def minutes(self) -> int:
@@ -43,15 +44,18 @@ TIMEFRAME_MINUTES: Final[dict[Timeframe, int]] = {
     Timeframe.M15: 15,
     Timeframe.M5: 5,
     Timeframe.M3: 3,
+    Timeframe.M1: 1,
 }
  
 # Default top-down stack used by MultiTimeframeFeatureEngine
+# M1 is the execution timeframe (finest granularity)
 SUPPORTED_TIMEFRAMES: Final[tuple[Timeframe, ...]] = (
     Timeframe.H1,
     Timeframe.M30,
     Timeframe.M15,
     Timeframe.M5,
     Timeframe.M3,
+    Timeframe.M1,
 )
  
 # Context roles in the AlignmentEngine (top-down)
@@ -61,9 +65,16 @@ TIMEFRAME_ROLES: Final[dict[Timeframe, str]] = {
     Timeframe.M15: "execution_context",
     Timeframe.M5: "confirmation_context",
     Timeframe.M3: "entry_timing_context",
+    Timeframe.M1: "execution_timing",
 }
  
  
+# Backward compatibility constants (used by Assignment 22 strategy/backtester)
+M1_MINUTES = 1
+M5_MINUTES = 5
+H1_MINUTES = 60
+
+
 def parse_timeframe(value: str) -> Timeframe:
     """Parse a string (case-insensitive) into a Timeframe enum."""
     key = value.strip().upper()

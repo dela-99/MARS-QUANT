@@ -88,6 +88,20 @@ def load_verified_m1_m5_h1(repo_root: Path) -> Tuple[pd.DataFrame, pd.DataFrame,
     elif len(m1):
         m1.index = m1.index.tz_convert("UTC")
     
+    # Ensure all DataFrames have timestamp column (not just index) while preserving DatetimeIndex
+    def _ensure_timestamp_col(df: pd.DataFrame) -> pd.DataFrame:
+        if len(df) and "timestamp" not in df.columns:
+            # Add timestamp column as copy of index, keep DatetimeIndex intact
+            df = df.copy()
+            df["timestamp"] = df.index
+        # Remove index name to avoid ambiguity with column name
+        df.index.name = None
+        return df
+    
+    m1 = _ensure_timestamp_col(m1)
+    m5 = _ensure_timestamp_col(m5)
+    h1 = _ensure_timestamp_col(h1)
+    
     # Coverage metadata
     m1_true_start = m1.index[0] if len(m1) else None
     m1_true_end = m1.index[-1] if len(m1) else None
