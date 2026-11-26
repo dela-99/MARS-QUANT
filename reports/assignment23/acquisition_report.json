@@ -1,0 +1,154 @@
+{
+  "symbol": "XAUUSDm",
+  "date_range": {
+    "start": "2025-11-25 00:00:00",
+    "end": "2026-11-25 00:00:00"
+  },
+  "version": "1.0.0",
+  "timestamp": "2026-11-25T17:16:15.754519Z",
+  "m1_validation": {
+    "rows": 353632,
+    "start": "2025-11-25 00:00:00+00:00",
+    "end": "2026-11-25 00:00:00+00:00",
+    "columns": [
+      "open",
+      "high",
+      "low",
+      "close",
+      "volume",
+      "spread"
+    ],
+    "validation_passed": false,
+    "validation_summary": {
+      "passed": false,
+      "row_count": 353632,
+      "n_errors": 1,
+      "n_warnings": 2,
+      "issues": [
+        {
+          "code": "SCHEMA_INDEX_NOT_DATETIME",
+          "severity": "error",
+          "message": "Index must be a DatetimeIndex (UTC preferred).",
+          "count": 1,
+          "examples": []
+        },
+        {
+          "code": "BAD_TICK_EXTREME_RETURN",
+          "severity": "warning",
+          "message": "371 bars with |z-return| > 8.0.",
+          "count": 371,
+          "examples": [
+            "15934",
+            "31960",
+            "36534",
+            "50291",
+            "53791"
+          ]
+        },
+        {
+          "code": "SPREAD_WIDE",
+          "severity": "warning",
+          "message": "353632 bars with spread > 1.00% of close.",
+          "count": 353632,
+          "examples": []
+        }
+      ]
+    },
+    "spread_stats": {
+      "mean": 244.1697894986879,
+      "median": 240.0,
+      "min": 160.0,
+      "max": 4000.0,
+      "zero_count": 0,
+      "nan_count": 0
+    }
+  },
+  "alignment": {
+    "aligned_rows": 89340,
+    "m5_signal_rows": 17897,
+    "m1_execution_rows": 89340,
+    "lookahead_checks": {
+      "passed": true,
+      "checks": {
+        "entry_after_signal": {
+          "passed": true,
+          "violations": 0
+        },
+        "first_signal_row": {
+          "row": 3
+        }
+      }
+    },
+    "test_window": "2026-07-11 \u2192 2026-10-09"
+  },
+  "feasibility": {
+    "m5_execution": {
+      "equity_usd": 30.0,
+      "risk_fraction": 0.01,
+      "risk_budget_usd": 0.3,
+      "min_lot": 0.01,
+      "max_lot": 200.0,
+      "lot_step": 0.01,
+      "contract_size": 100.0,
+      "point_size": 0.001,
+      "pip_size": 0.01,
+      "leverage": 2000,
+      "avg_stop_distance_price": 10.168471317755031,
+      "avg_spread_points": 256.5734405624584,
+      "risk_per_lot_usd": 1016.8471317755032,
+      "lots_exact": 0.0002950295974933558,
+      "lots_floored": 0.0,
+      "feasible": false,
+      "rejection_reason": "min volume breach: 0.01 lots risks $10.17 > budget $0.30",
+      "risk_at_min_lot_usd": 10.168471317755031,
+      "risk_at_min_lot_multiple_of_budget": 33.89490439251677,
+      "entry_price": 4356.705002771401,
+      "margin_required_usd": 2.178352501385701,
+      "free_margin_after_entry_usd": 27.8216474986143,
+      "margin_level_pct": 1377.1875755148124,
+      "spread_cost_per_trade_usd": 0.25657344056245845,
+      "commission_per_trade_usd": 0.0,
+      "swap_estimate_per_trade_usd": -0.0,
+      "total_cost_per_trade_usd": 0.25657344056245845,
+      "min_equity_required_usd": 1016.8471317755032,
+      "summary": "Strategy INFEASIBLE at $30.00. Min lot risk ($10.17) exceeds budget ($0.30) by 33.9x. Minimum equity required: $1016.85."
+    },
+    "m1_execution": {
+      "equity_usd": 30.0,
+      "risk_fraction": 0.01,
+      "risk_budget_usd": 0.3,
+      "min_lot": 0.01,
+      "max_lot": 200.0,
+      "lot_step": 0.01,
+      "contract_size": 100.0,
+      "point_size": 0.001,
+      "pip_size": 0.01,
+      "leverage": 2000,
+      "avg_stop_distance_price": 10.168471317755031,
+      "avg_spread_points": 256.5734405624584,
+      "risk_per_lot_usd": 1016.8471317755032,
+      "lots_exact": 0.0002950295974933558,
+      "lots_floored": 0.0,
+      "feasible": false,
+      "rejection_reason": "min volume breach: 0.01 lots risks $10.17 > budget $0.30",
+      "risk_at_min_lot_usd": 10.168471317755031,
+      "risk_at_min_lot_multiple_of_budget": 33.89490439251677,
+      "entry_price": 4356.705002771401,
+      "margin_required_usd": 2.178352501385701,
+      "free_margin_after_entry_usd": 27.8216474986143,
+      "margin_level_pct": 1377.1875755148124,
+      "spread_cost_per_trade_usd": 0.25657344056245845,
+      "commission_per_trade_usd": 0.0,
+      "swap_estimate_per_trade_usd": -0.0,
+      "total_cost_per_trade_usd": 0.25657344056245845,
+      "min_equity_required_usd": 1016.8471317755032,
+      "summary": "Strategy INFEASIBLE at $30.00. Min lot risk ($10.17) exceeds budget ($0.30) by 33.9x. Minimum equity required: $1016.85."
+    },
+    "min_equity_required_usd": 1016.8471317755032,
+    "input_params": {
+      "avg_stop_distance": 10.168471317755031,
+      "avg_spread_points": 256.5734405624584,
+      "avg_price": 4356.705002771401
+    }
+  }
+}

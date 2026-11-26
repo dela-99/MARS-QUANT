@@ -1,0 +1,301 @@
+{
+  "assignment": "20",
+  "phase": "F",
+  "title": "Formal Specification Audit and Pre-Backtest Feasibility",
+  "date": "2026-11-25",
+  "status": "COMPLETE",
+  "candidates": {
+    "XAU-VOL-REGIME-SESSION-005": {
+      "id": "XAU-VOL-REGIME-SESSION-005",
+      "name": "Volatility-Regime-Filtered Session Momentum",
+      "priority": "PRIMARY",
+      "parent_mechanisms": ["Mechanism 4 (Volatility-Conditioned Predictability)", "Mechanism 2 (Cross-Session Momentum)"],
+      "distinction_from_rejected": "Adds regime filter to XAU-SESSION-MOM-001 (rejected unconditional); tests hypothesis that session momentum only works in low-vol/low-spread/non-FOMC regimes",
+      "specification_audit": {
+        "status": "CLEAN",
+        "parameter_freeze_verified": true,
+        "instrument_alignment": true,
+        "data_version_consistency": true,
+        "session_definitions_verified": true,
+        "cost_model_verified": true,
+        "research_periods_non_overlapping": true,
+        "falsification_criteria_preregistered": true,
+        "discrepancies": []
+      },
+      "regime_validation_design": {
+        "comparison_type": "three_way",
+        "arms": [
+          "unconditional_baseline",
+          "regime_filtered",
+          "null_permutation"
+        ],
+        "unconditional_baseline": {
+          "description": "Recreates XAU-SESSION-MOM-001 (Assignment 17 rejected)",
+          "signal": "Asian session return > 0",
+          "expected_performance": {
+            "is_net_expectancy": -34.77,
+            "source": "Assignment 17 Audit"
+          }
+        },
+        "regime_filtered": {
+          "signal": "Asian session return > 0",
+          "filters": {
+            "volatility": "H1 realized vol (20-bar) <= 40th percentile",
+            "spread": "Asian session avg spread <= 40th percentile (IS distribution)",
+            "fomc": "Exclude FOMC days"
+          },
+          "combined_gate": "ALL filters must be favorable"
+        },
+        "null_comparison": {
+          "primary_method": "regime_label_permutation",
+          "permutations": 10000,
+          "test_statistic": "net_expectancy",
+          "decision_rule": "p < 0.05 one-sided"
+        },
+        "statistical_tests": {
+          "primary": {
+            "name": "interaction_regression",
+            "model": "PnL ~ Signal + Regime + Signal*Regime",
+            "hypothesis": "beta_interaction > 0, p < 0.05 one-sided",
+            "falsification_criterion": "FC-005-2"
+          },
+          "secondary": {
+            "name": "conditional_expectancy_comparison",
+            "test": "Welch t-test",
+            "comparison": "E[PnL|Signal=1,Regime=1] vs E[PnL|Signal=1,Regime=0]"
+          }
+        },
+        "sensitivity_analyses": [
+          {"name": "spread_multiplier", "values": [1.0, 1.5, 2.0], "base": 1.0, "gate_ref": "FC-005-4"},
+          {"name": "vol_percentile_threshold", "values": [30, 40, 50], "base": 40},
+          {"name": "spread_percentile_threshold", "values": [30, 40, 50], "base": 40},
+          {"name": "fomc_filter", "values": ["ON", "OFF"], "base": "ON"},
+          {"name": "sl_distance_pts", "values": [150, 200, 250, 300], "base": 200},
+          {"name": "dst_adjusted_sessions", "values": [-1, 0, 1], "base": 0, "unit": "hours"}
+        ],
+        "phase_k_criteria": [
+          {"id": "FC-005-1", "criterion": "IS Conditional Expectancy > $0.00", "must_pass": true},
+          {"id": "FC-005-2", "criterion": "Regime Interaction beta > 0, p < 0.05", "must_pass": true},
+          {"id": "FC-005-3", "criterion": "OOS Expectancy > $0.00", "must_pass": true},
+          {"id": "FC-005-4", "criterion": "Cost Sensitivity PASS at 1.0x AND 1.5x", "must_pass": true},
+          {"id": "MIN_TRADES_IS", "criterion": "IS trades >= 50 after filter", "must_pass": true},
+          {"id": "MIN_TRADES_OOS", "criterion": "OOS trades >= 20", "must_pass": true},
+          {"id": "MAX_DD_IS", "criterion": "IS Max DD < 30% at $30 equity", "must_pass": true},
+          {"id": "MIN_EXPECTANCY_IS", "criterion": "IS Net Expectancy > $0.05/trade", "must_pass": true}
+        ]
+      },
+      "transaction_cost_audit": {
+        "cost_model": "verified_assignment_17",
+        "spread_median_pts": 200,
+        "spread_median_pips": 20,
+        "cost_per_001_lot_rt_usd": 0.20,
+        "commission_per_lot_rt_usd": 0.0,
+        "slippage_base_pts": 0,
+        "swap_intraday_usd": 0.0,
+        "zero_spread_handling": "substitute_median_200_pts",
+        "sensitivity_multipliers": [1.0, 1.5, 2.0],
+        "backtester_application": "entry_at_ask_exit_at_bid_1x_spread_per_rt"
+      },
+      "account_scale_verification": {
+        "starting_equity_usd": 30.0,
+        "risk_fraction": 0.01,
+        "risk_budget_usd": 0.30,
+        "min_lot": 0.01,
+        "sl_cap_pts": 200,
+        "sl_cap_price": 0.20,
+        "risk_per_lot_usd": 20.0,
+        "lots_exact": 0.015,
+        "lots_floored": 0.01,
+        "risk_at_min_volume_usd": 0.20,
+        "verdict": "FEASIBLE",
+        "max_sl_before_breach_pts": 300,
+        "margin_at_1_200_usd": 13.25,
+        "free_margin_usd": 16.75,
+        "rt_cost_usd": 0.20,
+        "cost_as_pct_of_risk": 100.0
+      },
+      "is_oos_control": {
+        "periods": {
+          "burn_in": {"start": "2021-07-16", "end": "2021-09-30", "sessions_est": 60},
+          "in_sample": {"start": "2021-10-01", "end": "2024-12-31", "sessions_est": 840},
+          "out_of_sample": {"start": "2025-01-01", "end": "2025-10-09", "sessions_est": 220},
+          "reserve": {"start": "2025-10-10", "end": "2026-10-09", "sessions_est": 260}
+        },
+        "threshold_freezing": "IS percentile values frozen at 2024-12-31, applied to OOS",
+        "min_trade_counts": {"is": 50, "oos": 20},
+        "h1_data_source": "resampled_from_m5_v1.2.0",
+        "no_optimization_post_freeze": true
+      },
+      "decision": {
+        "authorization": "AUTHORIZED_FOR_PHASE_G",
+        "conditions": [],
+        "phase_g_start": "immediate",
+        "resource_priority": "HIGH"
+      }
+    },
+    "XAU-ASIAN-VOL-BREAKOUT-007": {
+      "id": "XAU-ASIAN-VOL-BREAKOUT-007",
+      "name": "Asian Session Volatility Breakout",
+      "priority": "SECONDARY",
+      "parent_mechanisms": ["Mechanism 1 (Session Decomposition)", "Mechanism 4 (Volatility Regimes)"],
+      "distinction_from_rejected": "Tests breakout direction (close vs midpoint) in high-vol Asian sessions, not return continuation (001) or session-open momentum (002)",
+      "specification_audit": {
+        "status": "CLEAN",
+        "parameter_freeze_verified": true,
+        "instrument_alignment": true,
+        "data_version_consistency": true,
+        "session_definitions_verified": true,
+        "cost_model_verified": true,
+        "research_periods_non_overlapping": true,
+        "falsification_criteria_preregistered": true,
+        "hard_gate_documented": "FC-007-2",
+        "discrepancies": []
+      },
+      "fc007_2_spread_vol_analysis": {
+        "status": "HARD_GATE",
+        "correlation_type": "pearson",
+        "variables": {
+          "vol_asia": "H1 realized volatility (20-bar trailing) over Asian session 00:00-08:00 UTC",
+          "spread_0800": "M5 spread (points) at first bar 08:00 UTC (Europe open)"
+        },
+        "population": "IS period sessions (2021-10-16 to 2024-12-31)",
+        "expected_sample_size": 770,
+        "thresholds": {
+          "pass": {"correlation_max": 0.3, "action": "proceed_to_full_backtest"},
+          "indeterminate": {"correlation_min": 0.3, "correlation_max": 0.5, "action": "proceed_with_caution"},
+          "fail": {"correlation_min": 0.5, "action": "TERMINATE_CANDIDATE_007_IMMEDIATELY"}
+        },
+        "execution_order": "Phase G Week 2 (first diagnostic)",
+        "diagnostic_extensions": [
+          "correlation_by_vol_quintile",
+          "correlation_by_spread_quintile",
+          "spearman_rank_correlation",
+          "rolling_100_session_correlation",
+          "conditional_expectancy_by_correlation_regime"
+        ],
+        "power_analysis": {
+          "n": 770,
+          "power_at_rho_03": "99%",
+          "power_at_rho_02": "85%",
+          "se_rho": 0.036
+        }
+      },
+      "transaction_cost_audit": {
+        "cost_model": "verified_assignment_17",
+        "spread_median_pts": 200,
+        "spread_median_pips": 20,
+        "cost_per_001_lot_rt_usd": 0.20,
+        "commission_per_lot_rt_usd": 0.0,
+        "slippage_base_pts": 0,
+        "swap_intraday_usd": 0.0,
+        "zero_spread_handling": "substitute_median_200_pts",
+        "sensitivity_multipliers": [1.0, 1.5, 2.0],
+        "backtester_application": "entry_at_ask_exit_at_bid_1x_spread_per_rt"
+      },
+      "account_scale_verification": {
+        "starting_equity_usd": 30.0,
+        "risk_fraction": 0.01,
+        "risk_budget_usd": 0.30,
+        "min_lot": 0.01,
+        "sl_hard_cap_pts": 200,
+        "sl_cap_rule": "If Asia extreme > 300 pts -> use 200 pts fixed",
+        "risk_per_lot_usd": 20.0,
+        "lots_exact": 0.015,
+        "lots_floored": 0.01,
+        "risk_at_min_volume_usd": 0.20,
+        "verdict": "FEASIBLE",
+        "max_sl_before_breach_pts": 300,
+        "margin_at_1_200_usd": 13.25,
+        "free_margin_usd": 16.75,
+        "rt_cost_usd": 0.20,
+        "cost_as_pct_of_risk": 100.0
+      },
+      "is_oos_control": {
+        "periods": {
+          "burn_in": {"start": "2021-07-16", "end": "2021-10-15", "sessions_est": 60},
+          "in_sample": {"start": "2021-10-16", "end": "2024-12-31", "sessions_est": 780},
+          "out_of_sample": {"start": "2025-01-01", "end": "2025-10-09", "sessions_est": 220},
+          "reserve": {"start": "2025-10-10", "end": "2026-10-09", "sessions_est": 260}
+        },
+        "threshold_freezing": "Trailing 60-session methodology frozen; percentile (60th) applied continuously",
+        "min_trade_counts": {"is_per_direction": 40, "oos_per_direction": 15},
+        "h1_data_source": "resampled_from_m5_v1.2.0",
+        "no_optimization_post_freeze": true
+      },
+      "decision": {
+        "authorization": "CONDITIONALLY_AUTHORIZED_FOR_PHASE_G",
+        "conditions": [
+          "FC-007-2 MUST PASS (spread-vol correlation <= 0.3) before full backtest",
+          "FC-007-2 diagnostic executes first in Phase G Week 2",
+          "If FC-007-2 FAIL (correlation > 0.5) -> Candidate 007 TERMINATED immediately"
+        ],
+        "phase_g_start": "Week 1 setup, Week 2 FC-007-2 diagnostic",
+        "resource_priority": "MEDIUM"
+      }
+    }
+  },
+  "shared_infrastructure": {
+    "backtest_framework": "session_momentum_backtest.py pattern",
+    "risk_engine": "ContractAwareFixedFractionalRisk",
+    "cost_model": "per_bar_observed_spread_1x_rt_configurable_multiplier",
+    "outputs": "machine_readable_json_trades_equity_metrics + markdown_report",
+    "validation_pipeline": [
+      "Phase F: Formal specification -> frozen config YAML",
+      "Phase G: In-sample research -> is_report.md, is_results.json",
+      "Phase H: Frozen OOS validation -> oos_report.md, oos_results.json",
+      "Phase I: Monte Carlo (10000+ reshuffle/resample) -> mc_report.md, mc_results.json",
+      "Phase J: $30 feasibility re-verification",
+      "Phase K: Research decision (all falsification criteria PASS -> advance to live sim)"
+    ],
+    "reproducibility": {
+      "parameters_frozen_in_yaml": true,
+      "random_seeds": {"is": 20261125, "mc": 20261126},
+      "data_version_pinned": ["M5 v1.2.0", "H1 v1.2.0"],
+      "git_commit_hash_recorded": true,
+      "environment": "Python 3.11+, pandas, numpy"
+    }
+  },
+  "programme_02_compliance": {
+    "max_candidates_identified": 5,
+    "max_candidates_advance": 2,
+    "candidates_advancing": 2,
+    "candidates_not_advancing": 1,
+    "candidates_failed_gate_a": 2,
+    "no_revival_of_rejected": true,
+    "learn_from_rejections": true,
+    "all_quantitative_sourced": true,
+    "fact_assumption_estimate_distinguished": true,
+    "zero_candidates_manufactured": true,
+    "original_docs_preserved": true
+  },
+  "key_findings": {
+    "spread_unit_verified": "200 pts = 20 pips = $0.20 per 0.01 lot RT",
+    "cost_model_verified": "Assignment 17 Audit Section B",
+    "xauusdm_feasible_at_30_usd": true,
+    "min_cash_risk_per_trade_usd": 0.20,
+    "max_sl_before_min_volume_breach_pts": 300,
+    "candidate_005_comparison_design": "unconditional_vs_regime_vs_null_preregistered",
+    "candidate_007_hard_gate": "FC-007-2 spread-vol correlation <= 0.3",
+    "assignment_17_lessons_incorporated": [
+      "authorized OOS/MC phases in Research-to-Trade Process",
+      "fixed calendar splits not proportional",
+      "documented MC assumptions",
+      "no unauthorized phase execution"
+    ]
+  },
+  "deliverables": [
+    "ASSIGNMENT_20_FORMAL_SPECIFICATION_AUDIT.md",
+    "CANDIDATE_005_REGIME_VALIDATION_DESIGN.md",
+    "CANDIDATE_007_FC007_2_SPREAD_VOL_ANALYSIS.md",
+    "TRANSACTION_COST_AND_EXECUTION_AUDIT.md",
+    "ACCOUNT_SCALE_VERIFICATION.md",
+    "IS_OOS_CONTROL_VERIFICATION.md",
+    "ASSIGNMENT_20_DECISION_REPORT.md",
+    "assignment20_results.json"
+  ],
+  "sign_off": {
+    "completed_date": "2026-11-25",
+    "author": "M.A.R.S. Quant Research Pipeline",
+    "classification": "Internal"
+  }
+}
